@@ -1,0 +1,37 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=48GB
+#PBS -l walltime=02:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -N BaseNewSmoke
+set -euo pipefail
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
+LOGROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs
+PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+METHOD=${METHOD:?Submit with -v METHOD=GinAR, RAFT, or SARAF}
+case "$METHOD" in GinAR|RAFT|SARAF) ;; *) echo "Invalid METHOD=$METHOD"; exit 2;; esac
+mkdir -p "$LOGROOT"; STAMP=$(date +%Y%m%d_%H%M%S); LOG="$LOGROOT/${METHOD}.gpu_smoke.${PBS_JOBID}.${STAMP}.live.log"; touch "$LOG"
+export PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 BASELINE_TIMESTAMP_STREAM=1
+export PYTHONPATH="$ROOT:/scratch/mh20/zw1165/Speed_LLM_RAG/Protocol:/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench:${PYTHONPATH:-}"
+unset TRANSFORMERS_CACHE || true
+exec > >("$PY" -u "$ROOT/timestamp_stream.py" | tee -a "$LOG") 2>&1
+trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"; exit $rc' EXIT
+cd "$ROOT"
+echo "START $METHOD GPU SMOKE v0.4.0 job=$PBS_JOBID"
+nvidia-smi
+"$PY" scripts/verify_official_sources.py
+"$PY" scripts/validate_cache.py --stage development
+if [ "$METHOD" = "GinAR" ]; then
+  "$PY" baseline/runners/ginar_runner.py --stage development --seed 10 --smoke
+elif [ "$METHOD" = "RAFT" ]; then
+  "$PY" scripts/retrieval_leakage_audit.py --stage development
+  "$PY" baseline/runners/raft_runner.py --stage development --seed 10 --smoke
+else
+  "$PY" scripts/retrieval_leakage_audit.py --stage development
+  "$PY" baseline/runners/saraf_runner.py --stage development --seed 10 --smoke
+fi
+echo "NEW MAIN GPU SMOKE PASS method=$METHOD"

@@ -1,0 +1,29 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q normal
+#PBS -l ncpus=4
+#PBS -l mem=32GB
+#PBS -l walltime=06:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -N SharedProtocol
+#PBS -j oe
+set -euo pipefail
+: "${STAGE:=development}"
+case "$STAGE" in development|formal) ;; *) echo "Use build_evaluation_protocol.pbs for STAGE=$STAGE" >&2; exit 2;; esac
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG
+PROJ="$ROOT/Protocol"
+LOGROOT="$ROOT/Protocol_logs"
+PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+mkdir -p "$LOGROOT"
+STAMP=$(date +%Y%m%d_%H%M%S)
+LOG="$LOGROOT/ProtocolBuild.${STAGE}.${PBS_JOBID}.${STAMP}.live.log"
+touch "$LOG"
+export PYTHONPATH="$PROJ:$ROOT/TraffiDent_SupportBench:${PYTHONPATH:-}"
+export PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+exec > >("$PY" -u "$PROJ/timestamp_stream.py" | tee -a "$LOG") 2>&1
+trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"' EXIT
+cd "$PROJ"
+echo "START SharedProtocol stage=$STAGE job=$PBS_JOBID host=$(hostname)"
+"$PY" scripts/preflight.py
+"$PY" scripts/build_protocol.py --stage "$STAGE"
+"$PY" scripts/validate_protocol.py --stage "$STAGE"

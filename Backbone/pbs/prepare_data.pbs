@@ -1,0 +1,37 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q normal
+#PBS -l ncpus=4
+#PBS -l mem=32GB
+#PBS -l walltime=06:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -N BackbonePrep
+#PBS -j oe
+set -euo pipefail
+: "${STAGE:=screening}"
+case "$STAGE" in screening|formal) ;; *) echo "Unknown STAGE=$STAGE" >&2; exit 2;; esac
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG
+PROJ="$ROOT/Backbone"
+LOGROOT="$ROOT/Backbone_logs"
+ENVROOT=/scratch/mh20/zw1165/envs/TFP
+PYTHON="$ENVROOT/bin/python"
+mkdir -p "$LOGROOT"
+STAMP=$(date +%Y%m%d_%H%M%S)
+LOG="$LOGROOT/BackbonePrep.${STAGE}.${PBS_JOBID}.${STAMP}.live.log"
+touch "$LOG"
+if [[ ! -x "$PYTHON" ]]; then echo "ERROR: Python not executable: $PYTHON" | tee -a "$LOG"; exit 3; fi
+cd "$PROJ"
+export PATH="$ENVROOT/bin:$PATH"
+# Transformers v5 removes TRANSFORMERS_CACHE; Backbone does not rely on it.
+unset TRANSFORMERS_CACHE || true
+export PYTHONPATH="$PROJ:$ROOT/Protocol:$ROOT/TraffiDent_SupportBench:${PYTHONPATH:-}"
+export BACKBONE_TIMESTAMP_STREAM=1 PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+exec > >("$PYTHON" -u "$PROJ/timestamp_stream.py" | tee -a "$LOG") 2>&1
+trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"' EXIT
+echo "START BackbonePrep stage=$STAGE job=$PBS_JOBID host=$(hostname)"
+echo "PYTHON=$PYTHON"
+"$PYTHON" -V
+set -x
+"$PYTHON" -u scripts/preflight.py
+"$PYTHON" -u scripts/prepare_data.py --stage "$STAGE"
+"$PYTHON" -u scripts/validate_cache.py --stage "$STAGE"

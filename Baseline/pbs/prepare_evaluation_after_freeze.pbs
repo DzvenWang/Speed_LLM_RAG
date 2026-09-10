@@ -1,0 +1,24 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q normal
+#PBS -l ncpus=4
+#PBS -l mem=24GB
+#PBS -l walltime=02:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -N BaselineTestPrep
+set -euo pipefail
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
+LOGROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs
+PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+FREEZE=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_exps/FROZEN_BASELINE_PROTOCOL.json
+if [ ! -f "$FREEZE" ]; then echo "REFUSE: missing $FREEZE"; exit 2; fi
+mkdir -p "$LOGROOT"; STAMP=$(date +%Y%m%d_%H%M%S); LOG="$LOGROOT/BaselineTestPrep.${PBS_JOBID}.${STAMP}.live.log"; touch "$LOG"
+export PYTHONDONTWRITEBYTECODE=1 BASELINE_TIMESTAMP_STREAM=1
+exec > >("$PY" -u "$ROOT/timestamp_stream.py" | tee -a "$LOG") 2>&1
+trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"; exit $rc' EXIT
+cd "$ROOT"
+echo "START Baseline evaluation-only cache v0.4.0 job=$PBS_JOBID"
+"$PY" scripts/preflight.py
+"$PY" scripts/prepare_data.py --stage evaluation
+"$PY" scripts/validate_cache.py --stage evaluation

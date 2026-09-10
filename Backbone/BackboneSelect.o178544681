@@ -1,0 +1,633 @@
+[2026-09-09 19:44:52] START BackboneSelect stage=screening model=STAEformer seed=10 job=178544681.gadi-pbs host=gadi-gpu-v100-0071.gadi.nci.org.au
+[2026-09-09 19:44:52] PYTHON=/scratch/mh20/zw1165/envs/TFP/bin/python
+[2026-09-09 19:44:52] Python 3.11.11
+[2026-09-09 19:44:52] + nvidia-smi
+[2026-09-09 19:44:52] Wed Sep  9 19:44:51 2026       
+[2026-09-09 19:44:52] +-----------------------------------------------------------------------------------------+
+[2026-09-09 19:44:52] | NVIDIA-SMI 580.173.02             Driver Version: 580.173.02     CUDA Version: 13.0     |
+[2026-09-09 19:44:52] +-----------------------------------------+------------------------+----------------------+
+[2026-09-09 19:44:52] | GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+[2026-09-09 19:44:52] | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+[2026-09-09 19:44:52] |                                         |                        |               MIG M. |
+[2026-09-09 19:44:52] |=========================================+========================+======================|
+[2026-09-09 19:44:52] |   0  Tesla V100-SXM2-32GB           On  |   00000000:B2:00.0 Off |                    0 |
+[2026-09-09 19:44:52] | N/A   40C    P0             42W /  300W |       0MiB /  32768MiB |      0%      Default |
+[2026-09-09 19:44:52] |                                         |                        |                  N/A |
+[2026-09-09 19:44:52] +-----------------------------------------+------------------------+----------------------+
+[2026-09-09 19:44:52] 
+[2026-09-09 19:44:52] +-----------------------------------------------------------------------------------------+
+[2026-09-09 19:44:52] | Processes:                                                                              |
+[2026-09-09 19:44:52] |  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+[2026-09-09 19:44:52] |        ID   ID                                                               Usage      |
+[2026-09-09 19:44:52] |=========================================================================================|
+[2026-09-09 19:44:52] |  No running processes found                                                             |
+[2026-09-09 19:44:52] +-----------------------------------------------------------------------------------------+
+[2026-09-09 19:44:52] + /scratch/mh20/zw1165/envs/TFP/bin/python -u scripts/verify_official_sources.py
+[2026-09-09 19:44:54] PASS source STAEformer fc49d39b2f1a8e3cf37b6289d7240680e1690f3f tree-lock-no-git
+[2026-09-09 19:44:55] PASS source HimNet 2a9aa44d1864f6fb60bdf9d14bafd6c1681e81a5 tree-lock-no-git
+[2026-09-09 19:44:55] PASS source BigST 830cb529354c0cda75c1660d1a0af2ffc7e66abb tree-lock-no-git
+[2026-09-09 19:44:56] PASS source STDN e24a60fa9485fb9805df9c171d67ab60840d757d tree-lock-no-git
+[2026-09-09 19:44:56] SOURCE LOCK PASS
+[2026-09-09 19:44:56] + /scratch/mh20/zw1165/envs/TFP/bin/python -u scripts/validate_cache.py --stage screening
+[2026-09-09 19:45:29] /scratch/mh20/zw1165/envs/TFP/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[2026-09-09 19:45:29]   import pynvml  # type: ignore[import]
+[2026-09-09 19:45:40] PASS screening val rows 5000 families {'predictive_regional_outage': 1000, 'regional_outage': 1000, 'directional_outage': 1000, 'temporal_outage': 1000, 'predictive_directional_outage': 1000}
+[2026-09-09 19:45:41] PASS screening train rows 12000 families {'predictive_regional_outage': 2400, 'predictive_directional_outage': 2400, 'regional_outage': 2400, 'temporal_outage': 2400, 'directional_outage': 2400}
+[2026-09-09 19:45:41] PASS Shared Protocol stage hash 60de891db0ea5b72a4c0fd9f4a7e30fcaf96d04f2085994516a0f4048a9915bb
+[2026-09-09 19:45:41] CACHE VALIDATION PASS
+[2026-09-09 19:45:54] + /scratch/mh20/zw1165/envs/TFP/bin/python -u scripts/run_experiment.py --model STAEformer --stage screening --seed 10 --run-stamp 20260909_194451
+[2026-09-09 19:45:55] /scratch/mh20/zw1165/envs/TFP/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[2026-09-09 19:45:55]   import pynvml  # type: ignore[import]
+[2026-09-09 19:45:56] PASS source STAEformer fc49d39b2f1a8e3cf37b6289d7240680e1690f3f tree-lock-no-git
+[2026-09-09 19:45:57] PASS source HimNet 2a9aa44d1864f6fb60bdf9d14bafd6c1681e81a5 tree-lock-no-git
+[2026-09-09 19:45:57] PASS source BigST 830cb529354c0cda75c1660d1a0af2ffc7e66abb tree-lock-no-git
+[2026-09-09 19:45:57] PASS source STDN e24a60fa9485fb9805df9c171d67ab60840d757d tree-lock-no-git
+[2026-09-09 19:45:57] SOURCE LOCK PASS
+[2026-09-09 19:45:58] /scratch/mh20/zw1165/envs/TFP/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[2026-09-09 19:45:58]   import pynvml  # type: ignore[import]
+[2026-09-09 19:45:59] PASS screening val rows 5000 families {'predictive_regional_outage': 1000, 'regional_outage': 1000, 'directional_outage': 1000, 'temporal_outage': 1000, 'predictive_directional_outage': 1000}
+[2026-09-09 19:45:59] PASS screening train rows 12000 families {'predictive_regional_outage': 2400, 'predictive_directional_outage': 2400, 'regional_outage': 2400, 'temporal_outage': 2400, 'directional_outage': 2400}
+[2026-09-09 19:45:59] PASS Shared Protocol stage hash 60de891db0ea5b72a4c0fd9f4a7e30fcaf96d04f2085994516a0f4048a9915bb
+[2026-09-09 19:45:59] CACHE VALIDATION PASS
+[2026-09-09 19:46:03] run_dir=/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_exps/STAEformer/TraffiDent_Net_06/screening/20260909_194451_seed10
+[2026-09-09 19:46:21] stage=screening model=STAEformer seed=10 device=cuda:0 batch_size=16 params=1,432,740 vendor_commit=fc49d39b2f1a8e3cf37b6289d7240680e1690f3f
+[2026-09-09 19:46:21] official_recipe=STAEformer/model/STAEformer.yaml:PEMS04 optimizer=adam lr=0.001 eps=1e-08 wd=0.0005 scheduler=multistep train_loss=huber
+[2026-09-09 19:46:57] epoch=001 batch=00100/00750 train_loss=3.388805
+[2026-09-09 19:47:15] epoch=001 batch=00200/00750 train_loss=2.481714
+[2026-09-09 19:47:32] epoch=001 batch=00300/00750 train_loss=2.266415
+[2026-09-09 19:47:48] epoch=001 batch=00400/00750 train_loss=2.122512
+[2026-09-09 19:48:05] epoch=001 batch=00500/00750 train_loss=1.991731
+[2026-09-09 19:48:21] epoch=001 batch=00600/00750 train_loss=1.834113
+[2026-09-09 19:48:37] epoch=001 batch=00700/00750 train_loss=1.843462
+[2026-09-09 19:49:06] epoch=001 train_loss=2.246272 val_MAE=2.375080 val_support_MAE=1.917870 lr=1.000e-03 time=164.7s
+[2026-09-09 19:49:22] epoch=002 batch=00100/00750 train_loss=1.724969
+[2026-09-09 19:49:38] epoch=002 batch=00200/00750 train_loss=1.778419
+[2026-09-09 19:49:53] epoch=002 batch=00300/00750 train_loss=1.773331
+[2026-09-09 19:50:09] epoch=002 batch=00400/00750 train_loss=1.741134
+[2026-09-09 19:50:25] epoch=002 batch=00500/00750 train_loss=1.754834
+[2026-09-09 19:50:40] epoch=002 batch=00600/00750 train_loss=1.735628
+[2026-09-09 19:50:56] epoch=002 batch=00700/00750 train_loss=1.773295
+[2026-09-09 19:51:24] epoch=002 train_loss=1.749475 val_MAE=2.316715 val_support_MAE=1.829950 lr=1.000e-03 time=137.8s
+[2026-09-09 19:51:40] epoch=003 batch=00100/00750 train_loss=1.711216
+[2026-09-09 19:51:55] epoch=003 batch=00200/00750 train_loss=1.703059
+[2026-09-09 19:52:11] epoch=003 batch=00300/00750 train_loss=1.728273
+[2026-09-09 19:52:27] epoch=003 batch=00400/00750 train_loss=1.690750
+[2026-09-09 19:52:42] epoch=003 batch=00500/00750 train_loss=1.669784
+[2026-09-09 19:52:58] epoch=003 batch=00600/00750 train_loss=1.626209
+[2026-09-09 19:53:14] epoch=003 batch=00700/00750 train_loss=1.667508
+[2026-09-09 19:53:42] epoch=003 train_loss=1.683648 val_MAE=2.247410 val_support_MAE=1.849684 lr=1.000e-03 time=137.7s
+[2026-09-09 19:53:57] epoch=004 batch=00100/00750 train_loss=1.592417
+[2026-09-09 19:54:13] epoch=004 batch=00200/00750 train_loss=1.628635
+[2026-09-09 19:54:29] epoch=004 batch=00300/00750 train_loss=1.600441
+[2026-09-09 19:54:44] epoch=004 batch=00400/00750 train_loss=1.549004
+[2026-09-09 19:55:00] epoch=004 batch=00500/00750 train_loss=1.508942
+[2026-09-09 19:55:16] epoch=004 batch=00600/00750 train_loss=1.496127
+[2026-09-09 19:55:31] epoch=004 batch=00700/00750 train_loss=1.523881
+[2026-09-09 19:55:59] epoch=004 train_loss=1.552630 val_MAE=2.149860 val_support_MAE=1.852794 lr=1.000e-03 time=137.7s
+[2026-09-09 19:56:15] epoch=005 batch=00100/00750 train_loss=1.467974
+[2026-09-09 19:56:31] epoch=005 batch=00200/00750 train_loss=1.523917
+[2026-09-09 19:56:46] epoch=005 batch=00300/00750 train_loss=1.472207
+[2026-09-09 19:57:02] epoch=005 batch=00400/00750 train_loss=1.481007
+[2026-09-09 19:57:18] epoch=005 batch=00500/00750 train_loss=1.482205
+[2026-09-09 19:57:34] epoch=005 batch=00600/00750 train_loss=1.421926
+[2026-09-09 19:57:49] epoch=005 batch=00700/00750 train_loss=1.452282
+[2026-09-09 19:58:17] epoch=005 train_loss=1.467415 val_MAE=2.163171 val_support_MAE=1.863361 lr=1.000e-03 time=137.7s
+[2026-09-09 19:58:33] epoch=006 batch=00100/00750 train_loss=1.424773
+[2026-09-09 19:58:49] epoch=006 batch=00200/00750 train_loss=1.439047
+[2026-09-09 19:59:04] epoch=006 batch=00300/00750 train_loss=1.477286
+[2026-09-09 19:59:20] epoch=006 batch=00400/00750 train_loss=1.454362
+[2026-09-09 19:59:36] epoch=006 batch=00500/00750 train_loss=1.421418
+[2026-09-09 19:59:51] epoch=006 batch=00600/00750 train_loss=1.385021
+[2026-09-09 20:00:07] epoch=006 batch=00700/00750 train_loss=1.404404
+[2026-09-09 20:00:35] epoch=006 train_loss=1.425354 val_MAE=2.046332 val_support_MAE=1.737589 lr=1.000e-03 time=137.8s
+[2026-09-09 20:00:51] epoch=007 batch=00100/00750 train_loss=1.405371
+[2026-09-09 20:01:06] epoch=007 batch=00200/00750 train_loss=1.412662
+[2026-09-09 20:01:22] epoch=007 batch=00300/00750 train_loss=1.361946
+[2026-09-09 20:01:38] epoch=007 batch=00400/00750 train_loss=1.382307
+[2026-09-09 20:01:53] epoch=007 batch=00500/00750 train_loss=1.387035
+[2026-09-09 20:02:09] epoch=007 batch=00600/00750 train_loss=1.401570
+[2026-09-09 20:02:25] epoch=007 batch=00700/00750 train_loss=1.338794
+[2026-09-09 20:02:53] epoch=007 train_loss=1.391071 val_MAE=2.022966 val_support_MAE=1.727742 lr=1.000e-03 time=137.7s
+[2026-09-09 20:03:08] epoch=008 batch=00100/00750 train_loss=1.379566
+[2026-09-09 20:03:24] epoch=008 batch=00200/00750 train_loss=1.325855
+[2026-09-09 20:03:40] epoch=008 batch=00300/00750 train_loss=1.348211
+[2026-09-09 20:03:55] epoch=008 batch=00400/00750 train_loss=1.340923
+[2026-09-09 20:04:11] epoch=008 batch=00500/00750 train_loss=1.353528
+[2026-09-09 20:04:27] epoch=008 batch=00600/00750 train_loss=1.333848
+[2026-09-09 20:04:43] epoch=008 batch=00700/00750 train_loss=1.383429
+[2026-09-09 20:05:10] epoch=008 train_loss=1.354357 val_MAE=2.040213 val_support_MAE=1.764296 lr=1.000e-03 time=137.8s
+[2026-09-09 20:05:26] epoch=009 batch=00100/00750 train_loss=1.322863
+[2026-09-09 20:05:42] epoch=009 batch=00200/00750 train_loss=1.345266
+[2026-09-09 20:05:58] epoch=009 batch=00300/00750 train_loss=1.368911
+[2026-09-09 20:06:13] epoch=009 batch=00400/00750 train_loss=1.340073
+[2026-09-09 20:06:29] epoch=009 batch=00500/00750 train_loss=1.312037
+[2026-09-09 20:06:45] epoch=009 batch=00600/00750 train_loss=1.308883
+[2026-09-09 20:07:00] epoch=009 batch=00700/00750 train_loss=1.309618
+[2026-09-09 20:07:28] epoch=009 train_loss=1.328135 val_MAE=1.955392 val_support_MAE=1.706565 lr=1.000e-03 time=137.7s
+[2026-09-09 20:07:44] epoch=010 batch=00100/00750 train_loss=1.269562
+[2026-09-09 20:08:00] epoch=010 batch=00200/00750 train_loss=1.301951
+[2026-09-09 20:08:15] epoch=010 batch=00300/00750 train_loss=1.376615
+[2026-09-09 20:08:31] epoch=010 batch=00400/00750 train_loss=1.295074
+[2026-09-09 20:08:47] epoch=010 batch=00500/00750 train_loss=1.296582
+[2026-09-09 20:09:02] epoch=010 batch=00600/00750 train_loss=1.278794
+[2026-09-09 20:09:18] epoch=010 batch=00700/00750 train_loss=1.294061
+[2026-09-09 20:09:46] epoch=010 train_loss=1.303521 val_MAE=1.936192 val_support_MAE=1.704819 lr=1.000e-03 time=137.7s
+[2026-09-09 20:10:02] epoch=011 batch=00100/00750 train_loss=1.274073
+[2026-09-09 20:10:17] epoch=011 batch=00200/00750 train_loss=1.284353
+[2026-09-09 20:10:33] epoch=011 batch=00300/00750 train_loss=1.298884
+[2026-09-09 20:10:49] epoch=011 batch=00400/00750 train_loss=1.244945
+[2026-09-09 20:11:04] epoch=011 batch=00500/00750 train_loss=1.276729
+[2026-09-09 20:11:20] epoch=011 batch=00600/00750 train_loss=1.309350
+[2026-09-09 20:11:36] epoch=011 batch=00700/00750 train_loss=1.249668
+[2026-09-09 20:12:04] epoch=011 train_loss=1.278734 val_MAE=1.905823 val_support_MAE=1.678332 lr=1.000e-03 time=137.7s
+[2026-09-09 20:12:19] epoch=012 batch=00100/00750 train_loss=1.253178
+[2026-09-09 20:12:35] epoch=012 batch=00200/00750 train_loss=1.247453
+[2026-09-09 20:12:51] epoch=012 batch=00300/00750 train_loss=1.287604
+[2026-09-09 20:13:06] epoch=012 batch=00400/00750 train_loss=1.231210
+[2026-09-09 20:13:22] epoch=012 batch=00500/00750 train_loss=1.251105
+[2026-09-09 20:13:38] epoch=012 batch=00600/00750 train_loss=1.275992
+[2026-09-09 20:13:53] epoch=012 batch=00700/00750 train_loss=1.312430
+[2026-09-09 20:14:21] epoch=012 train_loss=1.265124 val_MAE=1.893558 val_support_MAE=1.668817 lr=1.000e-03 time=137.7s
+[2026-09-09 20:14:37] epoch=013 batch=00100/00750 train_loss=1.258943
+[2026-09-09 20:14:53] epoch=013 batch=00200/00750 train_loss=1.231821
+[2026-09-09 20:15:08] epoch=013 batch=00300/00750 train_loss=1.268937
+[2026-09-09 20:15:24] epoch=013 batch=00400/00750 train_loss=1.230531
+[2026-09-09 20:15:40] epoch=013 batch=00500/00750 train_loss=1.242256
+[2026-09-09 20:15:55] epoch=013 batch=00600/00750 train_loss=1.290832
+[2026-09-09 20:16:11] epoch=013 batch=00700/00750 train_loss=1.251320
+[2026-09-09 20:16:39] epoch=013 train_loss=1.253247 val_MAE=1.868768 val_support_MAE=1.657739 lr=1.000e-03 time=137.7s
+[2026-09-09 20:16:55] epoch=014 batch=00100/00750 train_loss=1.219766
+[2026-09-09 20:17:10] epoch=014 batch=00200/00750 train_loss=1.268752
+[2026-09-09 20:17:26] epoch=014 batch=00300/00750 train_loss=1.244901
+[2026-09-09 20:17:42] epoch=014 batch=00400/00750 train_loss=1.271982
+[2026-09-09 20:17:57] epoch=014 batch=00500/00750 train_loss=1.245670
+[2026-09-09 20:18:13] epoch=014 batch=00600/00750 train_loss=1.237024
+[2026-09-09 20:18:29] epoch=014 batch=00700/00750 train_loss=1.222318
+[2026-09-09 20:18:57] epoch=014 train_loss=1.244263 val_MAE=1.868691 val_support_MAE=1.653023 lr=1.000e-03 time=137.7s
+[2026-09-09 20:19:12] epoch=015 batch=00100/00750 train_loss=1.234797
+[2026-09-09 20:19:28] epoch=015 batch=00200/00750 train_loss=1.232931
+[2026-09-09 20:19:44] epoch=015 batch=00300/00750 train_loss=1.228365
+[2026-09-09 20:19:59] epoch=015 batch=00400/00750 train_loss=1.273753
+[2026-09-09 20:20:15] epoch=015 batch=00500/00750 train_loss=1.229689
+[2026-09-09 20:20:31] epoch=015 batch=00600/00750 train_loss=1.246799
+[2026-09-09 20:20:47] epoch=015 batch=00700/00750 train_loss=1.238785
+[2026-09-09 20:21:14] epoch=015 train_loss=1.237000 val_MAE=1.860560 val_support_MAE=1.647615 lr=1.000e-04 time=137.7s
+[2026-09-09 20:21:30] epoch=016 batch=00100/00750 train_loss=1.208826
+[2026-09-09 20:21:46] epoch=016 batch=00200/00750 train_loss=1.200506
+[2026-09-09 20:22:01] epoch=016 batch=00300/00750 train_loss=1.194741
+[2026-09-09 20:22:17] epoch=016 batch=00400/00750 train_loss=1.195899
+[2026-09-09 20:22:33] epoch=016 batch=00500/00750 train_loss=1.188101
+[2026-09-09 20:22:49] epoch=016 batch=00600/00750 train_loss=1.159502
+[2026-09-09 20:23:04] epoch=016 batch=00700/00750 train_loss=1.154833
+[2026-09-09 20:23:32] epoch=016 train_loss=1.186470 val_MAE=1.818961 val_support_MAE=1.619927 lr=1.000e-04 time=137.7s
+[2026-09-09 20:23:48] epoch=017 batch=00100/00750 train_loss=1.196554
+[2026-09-09 20:24:04] epoch=017 batch=00200/00750 train_loss=1.162593
+[2026-09-09 20:24:19] epoch=017 batch=00300/00750 train_loss=1.171686
+[2026-09-09 20:24:35] epoch=017 batch=00400/00750 train_loss=1.171994
+[2026-09-09 20:24:51] epoch=017 batch=00500/00750 train_loss=1.176202
+[2026-09-09 20:25:06] epoch=017 batch=00600/00750 train_loss=1.165336
+[2026-09-09 20:25:22] epoch=017 batch=00700/00750 train_loss=1.210940
+[2026-09-09 20:25:50] epoch=017 train_loss=1.178849 val_MAE=1.812911 val_support_MAE=1.617546 lr=1.000e-04 time=137.7s
+[2026-09-09 20:26:06] epoch=018 batch=00100/00750 train_loss=1.207190
+[2026-09-09 20:26:21] epoch=018 batch=00200/00750 train_loss=1.180883
+[2026-09-09 20:26:37] epoch=018 batch=00300/00750 train_loss=1.166706
+[2026-09-09 20:26:53] epoch=018 batch=00400/00750 train_loss=1.214558
+[2026-09-09 20:27:08] epoch=018 batch=00500/00750 train_loss=1.151899
+[2026-09-09 20:27:24] epoch=018 batch=00600/00750 train_loss=1.168470
+[2026-09-09 20:27:40] epoch=018 batch=00700/00750 train_loss=1.142861
+[2026-09-09 20:28:07] epoch=018 train_loss=1.175830 val_MAE=1.808387 val_support_MAE=1.613502 lr=1.000e-04 time=137.6s
+[2026-09-09 20:28:23] epoch=019 batch=00100/00750 train_loss=1.152665
+[2026-09-09 20:28:39] epoch=019 batch=00200/00750 train_loss=1.205605
+[2026-09-09 20:28:55] epoch=019 batch=00300/00750 train_loss=1.199410
+[2026-09-09 20:29:10] epoch=019 batch=00400/00750 train_loss=1.181350
+[2026-09-09 20:29:26] epoch=019 batch=00500/00750 train_loss=1.156482
+[2026-09-09 20:29:42] epoch=019 batch=00600/00750 train_loss=1.159895
+[2026-09-09 20:29:57] epoch=019 batch=00700/00750 train_loss=1.168477
+[2026-09-09 20:30:25] epoch=019 train_loss=1.172916 val_MAE=1.802693 val_support_MAE=1.609102 lr=1.000e-04 time=137.6s
+[2026-09-09 20:30:41] epoch=020 batch=00100/00750 train_loss=1.170561
+[2026-09-09 20:30:57] epoch=020 batch=00200/00750 train_loss=1.155786
+[2026-09-09 20:31:12] epoch=020 batch=00300/00750 train_loss=1.171291
+[2026-09-09 20:31:28] epoch=020 batch=00400/00750 train_loss=1.176119
+[2026-09-09 20:31:44] epoch=020 batch=00500/00750 train_loss=1.196559
+[2026-09-09 20:31:59] epoch=020 batch=00600/00750 train_loss=1.163822
+[2026-09-09 20:32:15] epoch=020 batch=00700/00750 train_loss=1.156939
+[2026-09-09 20:32:43] epoch=020 train_loss=1.170261 val_MAE=1.802612 val_support_MAE=1.606601 lr=1.000e-04 time=137.6s
+[2026-09-09 20:32:58] epoch=021 batch=00100/00750 train_loss=1.145113
+[2026-09-09 20:33:14] epoch=021 batch=00200/00750 train_loss=1.191376
+[2026-09-09 20:33:30] epoch=021 batch=00300/00750 train_loss=1.162262
+[2026-09-09 20:33:46] epoch=021 batch=00400/00750 train_loss=1.161588
+[2026-09-09 20:34:01] epoch=021 batch=00500/00750 train_loss=1.154681
+[2026-09-09 20:34:17] epoch=021 batch=00600/00750 train_loss=1.161195
+[2026-09-09 20:34:33] epoch=021 batch=00700/00750 train_loss=1.201938
+[2026-09-09 20:35:00] epoch=021 train_loss=1.167691 val_MAE=1.805540 val_support_MAE=1.611732 lr=1.000e-04 time=137.6s
+[2026-09-09 20:35:16] epoch=022 batch=00100/00750 train_loss=1.159794
+[2026-09-09 20:35:32] epoch=022 batch=00200/00750 train_loss=1.153583
+[2026-09-09 20:35:47] epoch=022 batch=00300/00750 train_loss=1.166507
+[2026-09-09 20:36:03] epoch=022 batch=00400/00750 train_loss=1.184336
+[2026-09-09 20:36:19] epoch=022 batch=00500/00750 train_loss=1.176833
+[2026-09-09 20:36:35] epoch=022 batch=00600/00750 train_loss=1.193930
+[2026-09-09 20:36:50] epoch=022 batch=00700/00750 train_loss=1.148912
+[2026-09-09 20:37:18] epoch=022 train_loss=1.165883 val_MAE=1.796023 val_support_MAE=1.605391 lr=1.000e-04 time=137.7s
+[2026-09-09 20:37:34] epoch=023 batch=00100/00750 train_loss=1.182576
+[2026-09-09 20:37:49] epoch=023 batch=00200/00750 train_loss=1.171088
+[2026-09-09 20:38:05] epoch=023 batch=00300/00750 train_loss=1.133795
+[2026-09-09 20:38:21] epoch=023 batch=00400/00750 train_loss=1.145458
+[2026-09-09 20:38:37] epoch=023 batch=00500/00750 train_loss=1.166302
+[2026-09-09 20:38:52] epoch=023 batch=00600/00750 train_loss=1.199540
+[2026-09-09 20:39:08] epoch=023 batch=00700/00750 train_loss=1.150428
+[2026-09-09 20:39:36] epoch=023 train_loss=1.164338 val_MAE=1.810854 val_support_MAE=1.618189 lr=1.000e-04 time=137.6s
+[2026-09-09 20:39:51] epoch=024 batch=00100/00750 train_loss=1.156082
+[2026-09-09 20:40:07] epoch=024 batch=00200/00750 train_loss=1.183281
+[2026-09-09 20:40:23] epoch=024 batch=00300/00750 train_loss=1.161714
+[2026-09-09 20:40:38] epoch=024 batch=00400/00750 train_loss=1.201438
+[2026-09-09 20:40:54] epoch=024 batch=00500/00750 train_loss=1.174208
+[2026-09-09 20:41:10] epoch=024 batch=00600/00750 train_loss=1.141986
+[2026-09-09 20:41:26] epoch=024 batch=00700/00750 train_loss=1.124624
+[2026-09-09 20:41:53] epoch=024 train_loss=1.162116 val_MAE=1.796834 val_support_MAE=1.608150 lr=1.000e-04 time=137.7s
+[2026-09-09 20:42:09] epoch=025 batch=00100/00750 train_loss=1.168338
+[2026-09-09 20:42:25] epoch=025 batch=00200/00750 train_loss=1.132299
+[2026-09-09 20:42:40] epoch=025 batch=00300/00750 train_loss=1.148570
+[2026-09-09 20:42:56] epoch=025 batch=00400/00750 train_loss=1.174250
+[2026-09-09 20:43:12] epoch=025 batch=00500/00750 train_loss=1.187588
+[2026-09-09 20:43:28] epoch=025 batch=00600/00750 train_loss=1.173902
+[2026-09-09 20:43:43] epoch=025 batch=00700/00750 train_loss=1.152629
+[2026-09-09 20:44:11] epoch=025 train_loss=1.161136 val_MAE=1.795625 val_support_MAE=1.604788 lr=1.000e-04 time=137.7s
+[2026-09-09 20:44:27] epoch=026 batch=00100/00750 train_loss=1.157879
+[2026-09-09 20:44:42] epoch=026 batch=00200/00750 train_loss=1.166256
+[2026-09-09 20:44:58] epoch=026 batch=00300/00750 train_loss=1.146661
+[2026-09-09 20:45:14] epoch=026 batch=00400/00750 train_loss=1.182340
+[2026-09-09 20:45:30] epoch=026 batch=00500/00750 train_loss=1.135118
+[2026-09-09 20:45:45] epoch=026 batch=00600/00750 train_loss=1.158571
+[2026-09-09 20:46:01] epoch=026 batch=00700/00750 train_loss=1.145046
+[2026-09-09 20:46:29] epoch=026 train_loss=1.159798 val_MAE=1.800398 val_support_MAE=1.608949 lr=1.000e-04 time=137.6s
+[2026-09-09 20:46:44] epoch=027 batch=00100/00750 train_loss=1.168276
+[2026-09-09 20:47:00] epoch=027 batch=00200/00750 train_loss=1.148711
+[2026-09-09 20:47:16] epoch=027 batch=00300/00750 train_loss=1.176001
+[2026-09-09 20:47:31] epoch=027 batch=00400/00750 train_loss=1.133352
+[2026-09-09 20:47:47] epoch=027 batch=00500/00750 train_loss=1.148917
+[2026-09-09 20:48:03] epoch=027 batch=00600/00750 train_loss=1.182827
+[2026-09-09 20:48:19] epoch=027 batch=00700/00750 train_loss=1.153730
+[2026-09-09 20:48:46] epoch=027 train_loss=1.158071 val_MAE=1.791468 val_support_MAE=1.604401 lr=1.000e-04 time=137.7s
+[2026-09-09 20:49:02] epoch=028 batch=00100/00750 train_loss=1.179748
+[2026-09-09 20:49:18] epoch=028 batch=00200/00750 train_loss=1.153262
+[2026-09-09 20:49:33] epoch=028 batch=00300/00750 train_loss=1.137069
+[2026-09-09 20:49:49] epoch=028 batch=00400/00750 train_loss=1.175198
+[2026-09-09 20:50:05] epoch=028 batch=00500/00750 train_loss=1.153357
+[2026-09-09 20:50:21] epoch=028 batch=00600/00750 train_loss=1.166249
+[2026-09-09 20:50:36] epoch=028 batch=00700/00750 train_loss=1.139287
+[2026-09-09 20:51:04] epoch=028 train_loss=1.156557 val_MAE=1.794713 val_support_MAE=1.606731 lr=1.000e-04 time=137.7s
+[2026-09-09 20:51:20] epoch=029 batch=00100/00750 train_loss=1.141103
+[2026-09-09 20:51:36] epoch=029 batch=00200/00750 train_loss=1.166376
+[2026-09-09 20:51:51] epoch=029 batch=00300/00750 train_loss=1.132531
+[2026-09-09 20:52:07] epoch=029 batch=00400/00750 train_loss=1.176737
+[2026-09-09 20:52:23] epoch=029 batch=00500/00750 train_loss=1.166609
+[2026-09-09 20:52:38] epoch=029 batch=00600/00750 train_loss=1.125387
+[2026-09-09 20:52:55] epoch=029 batch=00700/00750 train_loss=1.167167
+[2026-09-09 20:53:23] epoch=029 train_loss=1.154887 val_MAE=1.793461 val_support_MAE=1.604836 lr=1.000e-04 time=139.2s
+[2026-09-09 20:53:40] epoch=030 batch=00100/00750 train_loss=1.144886
+[2026-09-09 20:53:56] epoch=030 batch=00200/00750 train_loss=1.153231
+[2026-09-09 20:54:12] epoch=030 batch=00300/00750 train_loss=1.120317
+[2026-09-09 20:54:27] epoch=030 batch=00400/00750 train_loss=1.169906
+[2026-09-09 20:54:43] epoch=030 batch=00500/00750 train_loss=1.158958
+[2026-09-09 20:55:01] epoch=030 batch=00600/00750 train_loss=1.151317
+[2026-09-09 20:55:19] epoch=030 batch=00700/00750 train_loss=1.177057
+[2026-09-09 20:55:47] epoch=030 train_loss=1.153535 val_MAE=1.793796 val_support_MAE=1.606913 lr=1.000e-05 time=144.2s
+[2026-09-09 20:56:05] epoch=031 batch=00100/00750 train_loss=1.144035
+[2026-09-09 20:56:22] epoch=031 batch=00200/00750 train_loss=1.132066
+[2026-09-09 20:56:38] epoch=031 batch=00300/00750 train_loss=1.153611
+[2026-09-09 20:56:54] epoch=031 batch=00400/00750 train_loss=1.168300
+[2026-09-09 20:57:11] epoch=031 batch=00500/00750 train_loss=1.129309
+[2026-09-09 20:57:28] epoch=031 batch=00600/00750 train_loss=1.144719
+[2026-09-09 20:57:44] epoch=031 batch=00700/00750 train_loss=1.145977
+[2026-09-09 20:58:12] epoch=031 train_loss=1.146497 val_MAE=1.786990 val_support_MAE=1.601580 lr=1.000e-05 time=144.7s
+[2026-09-09 20:58:28] epoch=032 batch=00100/00750 train_loss=1.147030
+[2026-09-09 20:58:44] epoch=032 batch=00200/00750 train_loss=1.163117
+[2026-09-09 20:58:59] epoch=032 batch=00300/00750 train_loss=1.137134
+[2026-09-09 20:59:15] epoch=032 batch=00400/00750 train_loss=1.148733
+[2026-09-09 20:59:31] epoch=032 batch=00500/00750 train_loss=1.133364
+[2026-09-09 20:59:46] epoch=032 batch=00600/00750 train_loss=1.134401
+[2026-09-09 21:00:02] epoch=032 batch=00700/00750 train_loss=1.139464
+[2026-09-09 21:00:30] epoch=032 train_loss=1.145768 val_MAE=1.788214 val_support_MAE=1.602675 lr=1.000e-05 time=137.7s
+[2026-09-09 21:00:46] epoch=033 batch=00100/00750 train_loss=1.156616
+[2026-09-09 21:01:01] epoch=033 batch=00200/00750 train_loss=1.146948
+[2026-09-09 21:01:17] epoch=033 batch=00300/00750 train_loss=1.113059
+[2026-09-09 21:01:33] epoch=033 batch=00400/00750 train_loss=1.164544
+[2026-09-09 21:01:48] epoch=033 batch=00500/00750 train_loss=1.145421
+[2026-09-09 21:02:04] epoch=033 batch=00600/00750 train_loss=1.130962
+[2026-09-09 21:02:20] epoch=033 batch=00700/00750 train_loss=1.165374
+[2026-09-09 21:02:48] epoch=033 train_loss=1.144911 val_MAE=1.790410 val_support_MAE=1.603887 lr=1.000e-05 time=137.6s
+[2026-09-09 21:03:03] epoch=034 batch=00100/00750 train_loss=1.158101
+[2026-09-09 21:03:19] epoch=034 batch=00200/00750 train_loss=1.129134
+[2026-09-09 21:03:35] epoch=034 batch=00300/00750 train_loss=1.128933
+[2026-09-09 21:03:50] epoch=034 batch=00400/00750 train_loss=1.148125
+[2026-09-09 21:04:06] epoch=034 batch=00500/00750 train_loss=1.145687
+[2026-09-09 21:04:22] epoch=034 batch=00600/00750 train_loss=1.168342
+[2026-09-09 21:04:38] epoch=034 batch=00700/00750 train_loss=1.133186
+[2026-09-09 21:05:06] epoch=034 train_loss=1.144849 val_MAE=1.787061 val_support_MAE=1.600793 lr=1.000e-05 time=137.9s
+[2026-09-09 21:05:21] epoch=035 batch=00100/00750 train_loss=1.164128
+[2026-09-09 21:05:37] epoch=035 batch=00200/00750 train_loss=1.141289
+[2026-09-09 21:05:53] epoch=035 batch=00300/00750 train_loss=1.115759
+[2026-09-09 21:06:08] epoch=035 batch=00400/00750 train_loss=1.123172
+[2026-09-09 21:06:24] epoch=035 batch=00500/00750 train_loss=1.131565
+[2026-09-09 21:06:40] epoch=035 batch=00600/00750 train_loss=1.167687
+[2026-09-09 21:06:55] epoch=035 batch=00700/00750 train_loss=1.172868
+[2026-09-09 21:07:23] epoch=035 train_loss=1.144318 val_MAE=1.787057 val_support_MAE=1.601411 lr=1.000e-05 time=137.6s
+[2026-09-09 21:07:39] epoch=036 batch=00100/00750 train_loss=1.147352
+[2026-09-09 21:07:55] epoch=036 batch=00200/00750 train_loss=1.123880
+[2026-09-09 21:08:11] epoch=036 batch=00300/00750 train_loss=1.151540
+[2026-09-09 21:08:26] epoch=036 batch=00400/00750 train_loss=1.147411
+[2026-09-09 21:08:42] epoch=036 batch=00500/00750 train_loss=1.155794
+[2026-09-09 21:08:58] epoch=036 batch=00600/00750 train_loss=1.137285
+[2026-09-09 21:09:14] epoch=036 batch=00700/00750 train_loss=1.167875
+[2026-09-09 21:09:42] epoch=036 train_loss=1.144249 val_MAE=1.786642 val_support_MAE=1.601064 lr=1.000e-05 time=138.5s
+[2026-09-09 21:09:57] epoch=037 batch=00100/00750 train_loss=1.165630
+[2026-09-09 21:10:13] epoch=037 batch=00200/00750 train_loss=1.133998
+[2026-09-09 21:10:29] epoch=037 batch=00300/00750 train_loss=1.173327
+[2026-09-09 21:10:45] epoch=037 batch=00400/00750 train_loss=1.127616
+[2026-09-09 21:11:00] epoch=037 batch=00500/00750 train_loss=1.140211
+[2026-09-09 21:11:16] epoch=037 batch=00600/00750 train_loss=1.120582
+[2026-09-09 21:11:32] epoch=037 batch=00700/00750 train_loss=1.163020
+[2026-09-09 21:12:00] epoch=037 train_loss=1.143843 val_MAE=1.787489 val_support_MAE=1.601828 lr=1.000e-05 time=138.4s
+[2026-09-09 21:12:16] epoch=038 batch=00100/00750 train_loss=1.115857
+[2026-09-09 21:12:32] epoch=038 batch=00200/00750 train_loss=1.139848
+[2026-09-09 21:12:47] epoch=038 batch=00300/00750 train_loss=1.165289
+[2026-09-09 21:13:03] epoch=038 batch=00400/00750 train_loss=1.164085
+[2026-09-09 21:13:19] epoch=038 batch=00500/00750 train_loss=1.143070
+[2026-09-09 21:13:34] epoch=038 batch=00600/00750 train_loss=1.133691
+[2026-09-09 21:13:50] epoch=038 batch=00700/00750 train_loss=1.147094
+[2026-09-09 21:14:18] epoch=038 train_loss=1.143783 val_MAE=1.786154 val_support_MAE=1.600931 lr=1.000e-05 time=137.7s
+[2026-09-09 21:14:34] epoch=039 batch=00100/00750 train_loss=1.149447
+[2026-09-09 21:14:51] epoch=039 batch=00200/00750 train_loss=1.133042
+[2026-09-09 21:15:07] epoch=039 batch=00300/00750 train_loss=1.153691
+[2026-09-09 21:15:24] epoch=039 batch=00400/00750 train_loss=1.113311
+[2026-09-09 21:15:40] epoch=039 batch=00500/00750 train_loss=1.158641
+[2026-09-09 21:15:56] epoch=039 batch=00600/00750 train_loss=1.158197
+[2026-09-09 21:16:14] epoch=039 batch=00700/00750 train_loss=1.146496
+[2026-09-09 21:16:45] epoch=039 train_loss=1.143869 val_MAE=1.786199 val_support_MAE=1.600316 lr=1.000e-05 time=147.5s
+[2026-09-09 21:17:04] epoch=040 batch=00100/00750 train_loss=1.115564
+[2026-09-09 21:17:22] epoch=040 batch=00200/00750 train_loss=1.130349
+[2026-09-09 21:17:40] epoch=040 batch=00300/00750 train_loss=1.187470
+[2026-09-09 21:18:00] epoch=040 batch=00400/00750 train_loss=1.159206
+[2026-09-09 21:18:20] epoch=040 batch=00500/00750 train_loss=1.148294
+[2026-09-09 21:18:39] epoch=040 batch=00600/00750 train_loss=1.113066
+[2026-09-09 21:18:57] epoch=040 batch=00700/00750 train_loss=1.136018
+[2026-09-09 21:19:27] epoch=040 train_loss=1.143562 val_MAE=1.785431 val_support_MAE=1.600197 lr=1.000e-05 time=161.8s
+[2026-09-09 21:19:46] epoch=041 batch=00100/00750 train_loss=1.134802
+[2026-09-09 21:20:03] epoch=041 batch=00200/00750 train_loss=1.124101
+[2026-09-09 21:20:20] epoch=041 batch=00300/00750 train_loss=1.152976
+[2026-09-09 21:20:36] epoch=041 batch=00400/00750 train_loss=1.123759
+[2026-09-09 21:20:53] epoch=041 batch=00500/00750 train_loss=1.151484
+[2026-09-09 21:21:09] epoch=041 batch=00600/00750 train_loss=1.183939
+[2026-09-09 21:21:25] epoch=041 batch=00700/00750 train_loss=1.141610
+[2026-09-09 21:21:54] epoch=041 train_loss=1.143513 val_MAE=1.787866 val_support_MAE=1.602119 lr=1.000e-05 time=146.2s
+[2026-09-09 21:22:09] epoch=042 batch=00100/00750 train_loss=1.135191
+[2026-09-09 21:22:25] epoch=042 batch=00200/00750 train_loss=1.128277
+[2026-09-09 21:22:41] epoch=042 batch=00300/00750 train_loss=1.143964
+[2026-09-09 21:22:57] epoch=042 batch=00400/00750 train_loss=1.147190
+[2026-09-09 21:23:12] epoch=042 batch=00500/00750 train_loss=1.109372
+[2026-09-09 21:23:28] epoch=042 batch=00600/00750 train_loss=1.157983
+[2026-09-09 21:23:44] epoch=042 batch=00700/00750 train_loss=1.170594
+[2026-09-09 21:24:12] epoch=042 train_loss=1.143327 val_MAE=1.787159 val_support_MAE=1.601948 lr=1.000e-05 time=138.0s
+[2026-09-09 21:24:27] epoch=043 batch=00100/00750 train_loss=1.161627
+[2026-09-09 21:24:43] epoch=043 batch=00200/00750 train_loss=1.144161
+[2026-09-09 21:24:59] epoch=043 batch=00300/00750 train_loss=1.160644
+[2026-09-09 21:25:14] epoch=043 batch=00400/00750 train_loss=1.118488
+[2026-09-09 21:25:30] epoch=043 batch=00500/00750 train_loss=1.142968
+[2026-09-09 21:25:46] epoch=043 batch=00600/00750 train_loss=1.130196
+[2026-09-09 21:26:01] epoch=043 batch=00700/00750 train_loss=1.138765
+[2026-09-09 21:26:29] epoch=043 train_loss=1.143066 val_MAE=1.786149 val_support_MAE=1.601367 lr=1.000e-05 time=137.6s
+[2026-09-09 21:26:45] epoch=044 batch=00100/00750 train_loss=1.151220
+[2026-09-09 21:27:01] epoch=044 batch=00200/00750 train_loss=1.153310
+[2026-09-09 21:27:16] epoch=044 batch=00300/00750 train_loss=1.121503
+[2026-09-09 21:27:32] epoch=044 batch=00400/00750 train_loss=1.156672
+[2026-09-09 21:27:48] epoch=044 batch=00500/00750 train_loss=1.145826
+[2026-09-09 21:28:03] epoch=044 batch=00600/00750 train_loss=1.127679
+[2026-09-09 21:28:19] epoch=044 batch=00700/00750 train_loss=1.132797
+[2026-09-09 21:28:47] epoch=044 train_loss=1.143102 val_MAE=1.787602 val_support_MAE=1.602873 lr=1.000e-05 time=137.7s
+[2026-09-09 21:29:03] epoch=045 batch=00100/00750 train_loss=1.143665
+[2026-09-09 21:29:18] epoch=045 batch=00200/00750 train_loss=1.144619
+[2026-09-09 21:29:34] epoch=045 batch=00300/00750 train_loss=1.162903
+[2026-09-09 21:29:50] epoch=045 batch=00400/00750 train_loss=1.159903
+[2026-09-09 21:30:05] epoch=045 batch=00500/00750 train_loss=1.141778
+[2026-09-09 21:30:21] epoch=045 batch=00600/00750 train_loss=1.131502
+[2026-09-09 21:30:37] epoch=045 batch=00700/00750 train_loss=1.135752
+[2026-09-09 21:31:05] epoch=045 train_loss=1.142767 val_MAE=1.786236 val_support_MAE=1.600768 lr=1.000e-05 time=137.7s
+[2026-09-09 21:31:20] epoch=046 batch=00100/00750 train_loss=1.146094
+[2026-09-09 21:31:36] epoch=046 batch=00200/00750 train_loss=1.136895
+[2026-09-09 21:31:52] epoch=046 batch=00300/00750 train_loss=1.145733
+[2026-09-09 21:32:07] epoch=046 batch=00400/00750 train_loss=1.160165
+[2026-09-09 21:32:23] epoch=046 batch=00500/00750 train_loss=1.151085
+[2026-09-09 21:32:39] epoch=046 batch=00600/00750 train_loss=1.129746
+[2026-09-09 21:32:54] epoch=046 batch=00700/00750 train_loss=1.117572
+[2026-09-09 21:33:22] epoch=046 train_loss=1.142178 val_MAE=1.785063 val_support_MAE=1.601070 lr=1.000e-05 time=137.6s
+[2026-09-09 21:33:38] epoch=047 batch=00100/00750 train_loss=1.159242
+[2026-09-09 21:33:54] epoch=047 batch=00200/00750 train_loss=1.127932
+[2026-09-09 21:34:09] epoch=047 batch=00300/00750 train_loss=1.133050
+[2026-09-09 21:34:25] epoch=047 batch=00400/00750 train_loss=1.132483
+[2026-09-09 21:34:41] epoch=047 batch=00500/00750 train_loss=1.140308
+[2026-09-09 21:34:56] epoch=047 batch=00600/00750 train_loss=1.151069
+[2026-09-09 21:35:12] epoch=047 batch=00700/00750 train_loss=1.139911
+[2026-09-09 21:35:40] epoch=047 train_loss=1.142901 val_MAE=1.786259 val_support_MAE=1.601455 lr=1.000e-05 time=137.6s
+[2026-09-09 21:35:56] epoch=048 batch=00100/00750 train_loss=1.109607
+[2026-09-09 21:36:11] epoch=048 batch=00200/00750 train_loss=1.160209
+[2026-09-09 21:36:27] epoch=048 batch=00300/00750 train_loss=1.143072
+[2026-09-09 21:36:43] epoch=048 batch=00400/00750 train_loss=1.180182
+[2026-09-09 21:36:58] epoch=048 batch=00500/00750 train_loss=1.096784
+[2026-09-09 21:37:14] epoch=048 batch=00600/00750 train_loss=1.155448
+[2026-09-09 21:37:30] epoch=048 batch=00700/00750 train_loss=1.143860
+[2026-09-09 21:37:58] epoch=048 train_loss=1.141504 val_MAE=1.786125 val_support_MAE=1.602048 lr=1.000e-05 time=137.6s
+[2026-09-09 21:38:13] epoch=049 batch=00100/00750 train_loss=1.151980
+[2026-09-09 21:38:29] epoch=049 batch=00200/00750 train_loss=1.131378
+[2026-09-09 21:38:45] epoch=049 batch=00300/00750 train_loss=1.139710
+[2026-09-09 21:39:00] epoch=049 batch=00400/00750 train_loss=1.143349
+[2026-09-09 21:39:16] epoch=049 batch=00500/00750 train_loss=1.121718
+[2026-09-09 21:39:32] epoch=049 batch=00600/00750 train_loss=1.165195
+[2026-09-09 21:39:47] epoch=049 batch=00700/00750 train_loss=1.137289
+[2026-09-09 21:40:15] epoch=049 train_loss=1.141924 val_MAE=1.785660 val_support_MAE=1.601029 lr=1.000e-05 time=137.6s
+[2026-09-09 21:40:31] epoch=050 batch=00100/00750 train_loss=1.167562
+[2026-09-09 21:40:47] epoch=050 batch=00200/00750 train_loss=1.145420
+[2026-09-09 21:41:02] epoch=050 batch=00300/00750 train_loss=1.123928
+[2026-09-09 21:41:18] epoch=050 batch=00400/00750 train_loss=1.128966
+[2026-09-09 21:41:34] epoch=050 batch=00500/00750 train_loss=1.125084
+[2026-09-09 21:41:49] epoch=050 batch=00600/00750 train_loss=1.156312
+[2026-09-09 21:42:05] epoch=050 batch=00700/00750 train_loss=1.122145
+[2026-09-09 21:42:33] epoch=050 train_loss=1.141460 val_MAE=1.784515 val_support_MAE=1.599579 lr=1.000e-06 time=137.6s
+[2026-09-09 21:42:48] epoch=051 batch=00100/00750 train_loss=1.147487
+[2026-09-09 21:43:04] epoch=051 batch=00200/00750 train_loss=1.164595
+[2026-09-09 21:43:20] epoch=051 batch=00300/00750 train_loss=1.129839
+[2026-09-09 21:43:35] epoch=051 batch=00400/00750 train_loss=1.098562
+[2026-09-09 21:43:51] epoch=051 batch=00500/00750 train_loss=1.128988
+[2026-09-09 21:44:07] epoch=051 batch=00600/00750 train_loss=1.173721
+[2026-09-09 21:44:23] epoch=051 batch=00700/00750 train_loss=1.141737
+[2026-09-09 21:44:50] epoch=051 train_loss=1.140895 val_MAE=1.785649 val_support_MAE=1.600838 lr=1.000e-06 time=137.6s
+[2026-09-09 21:45:06] epoch=052 batch=00100/00750 train_loss=1.127018
+[2026-09-09 21:45:22] epoch=052 batch=00200/00750 train_loss=1.155392
+[2026-09-09 21:45:37] epoch=052 batch=00300/00750 train_loss=1.127568
+[2026-09-09 21:45:53] epoch=052 batch=00400/00750 train_loss=1.159553
+[2026-09-09 21:46:09] epoch=052 batch=00500/00750 train_loss=1.155363
+[2026-09-09 21:46:24] epoch=052 batch=00600/00750 train_loss=1.142116
+[2026-09-09 21:46:40] epoch=052 batch=00700/00750 train_loss=1.099648
+[2026-09-09 21:47:08] epoch=052 train_loss=1.140820 val_MAE=1.785834 val_support_MAE=1.600989 lr=1.000e-06 time=137.6s
+[2026-09-09 21:47:24] epoch=053 batch=00100/00750 train_loss=1.127856
+[2026-09-09 21:47:39] epoch=053 batch=00200/00750 train_loss=1.133958
+[2026-09-09 21:47:55] epoch=053 batch=00300/00750 train_loss=1.127159
+[2026-09-09 21:48:11] epoch=053 batch=00400/00750 train_loss=1.142214
+[2026-09-09 21:48:26] epoch=053 batch=00500/00750 train_loss=1.154845
+[2026-09-09 21:48:42] epoch=053 batch=00600/00750 train_loss=1.136243
+[2026-09-09 21:48:58] epoch=053 batch=00700/00750 train_loss=1.144830
+[2026-09-09 21:49:26] epoch=053 train_loss=1.140853 val_MAE=1.785496 val_support_MAE=1.600863 lr=1.000e-06 time=137.6s
+[2026-09-09 21:49:41] epoch=054 batch=00100/00750 train_loss=1.171415
+[2026-09-09 21:49:57] epoch=054 batch=00200/00750 train_loss=1.128305
+[2026-09-09 21:50:13] epoch=054 batch=00300/00750 train_loss=1.111515
+[2026-09-09 21:50:28] epoch=054 batch=00400/00750 train_loss=1.129309
+[2026-09-09 21:50:44] epoch=054 batch=00500/00750 train_loss=1.134417
+[2026-09-09 21:51:00] epoch=054 batch=00600/00750 train_loss=1.145353
+[2026-09-09 21:51:15] epoch=054 batch=00700/00750 train_loss=1.157327
+[2026-09-09 21:51:43] epoch=054 train_loss=1.140744 val_MAE=1.785431 val_support_MAE=1.600660 lr=1.000e-06 time=137.6s
+[2026-09-09 21:51:59] epoch=055 batch=00100/00750 train_loss=1.120304
+[2026-09-09 21:52:15] epoch=055 batch=00200/00750 train_loss=1.154483
+[2026-09-09 21:52:30] epoch=055 batch=00300/00750 train_loss=1.129354
+[2026-09-09 21:52:46] epoch=055 batch=00400/00750 train_loss=1.160408
+[2026-09-09 21:53:02] epoch=055 batch=00500/00750 train_loss=1.139919
+[2026-09-09 21:53:17] epoch=055 batch=00600/00750 train_loss=1.153346
+[2026-09-09 21:53:33] epoch=055 batch=00700/00750 train_loss=1.117836
+[2026-09-09 21:54:01] epoch=055 train_loss=1.140634 val_MAE=1.785558 val_support_MAE=1.600955 lr=1.000e-06 time=137.6s
+[2026-09-09 21:54:16] epoch=056 batch=00100/00750 train_loss=1.123198
+[2026-09-09 21:54:32] epoch=056 batch=00200/00750 train_loss=1.150241
+[2026-09-09 21:54:48] epoch=056 batch=00300/00750 train_loss=1.143239
+[2026-09-09 21:55:04] epoch=056 batch=00400/00750 train_loss=1.193857
+[2026-09-09 21:55:19] epoch=056 batch=00500/00750 train_loss=1.144655
+[2026-09-09 21:55:35] epoch=056 batch=00600/00750 train_loss=1.091183
+[2026-09-09 21:55:51] epoch=056 batch=00700/00750 train_loss=1.143521
+[2026-09-09 21:56:18] epoch=056 train_loss=1.140442 val_MAE=1.785429 val_support_MAE=1.600741 lr=1.000e-06 time=137.6s
+[2026-09-09 21:56:34] epoch=057 batch=00100/00750 train_loss=1.141970
+[2026-09-09 21:56:50] epoch=057 batch=00200/00750 train_loss=1.152359
+[2026-09-09 21:57:05] epoch=057 batch=00300/00750 train_loss=1.143386
+[2026-09-09 21:57:21] epoch=057 batch=00400/00750 train_loss=1.146627
+[2026-09-09 21:57:37] epoch=057 batch=00500/00750 train_loss=1.114403
+[2026-09-09 21:57:52] epoch=057 batch=00600/00750 train_loss=1.146450
+[2026-09-09 21:58:08] epoch=057 batch=00700/00750 train_loss=1.148724
+[2026-09-09 21:58:36] epoch=057 train_loss=1.140600 val_MAE=1.785909 val_support_MAE=1.601176 lr=1.000e-06 time=137.6s
+[2026-09-09 21:58:52] epoch=058 batch=00100/00750 train_loss=1.117003
+[2026-09-09 21:59:07] epoch=058 batch=00200/00750 train_loss=1.138001
+[2026-09-09 21:59:23] epoch=058 batch=00300/00750 train_loss=1.158890
+[2026-09-09 21:59:39] epoch=058 batch=00400/00750 train_loss=1.121819
+[2026-09-09 21:59:54] epoch=058 batch=00500/00750 train_loss=1.149660
+[2026-09-09 22:00:10] epoch=058 batch=00600/00750 train_loss=1.138398
+[2026-09-09 22:00:26] epoch=058 batch=00700/00750 train_loss=1.170529
+[2026-09-09 22:00:54] epoch=058 train_loss=1.140712 val_MAE=1.785629 val_support_MAE=1.601045 lr=1.000e-06 time=137.6s
+[2026-09-09 22:01:09] epoch=059 batch=00100/00750 train_loss=1.154513
+[2026-09-09 22:01:25] epoch=059 batch=00200/00750 train_loss=1.139839
+[2026-09-09 22:01:41] epoch=059 batch=00300/00750 train_loss=1.090894
+[2026-09-09 22:01:56] epoch=059 batch=00400/00750 train_loss=1.134626
+[2026-09-09 22:02:12] epoch=059 batch=00500/00750 train_loss=1.150520
+[2026-09-09 22:02:28] epoch=059 batch=00600/00750 train_loss=1.144062
+[2026-09-09 22:02:43] epoch=059 batch=00700/00750 train_loss=1.163570
+[2026-09-09 22:03:11] epoch=059 train_loss=1.140273 val_MAE=1.785189 val_support_MAE=1.600606 lr=1.000e-06 time=137.6s
+[2026-09-09 22:03:27] epoch=060 batch=00100/00750 train_loss=1.134150
+[2026-09-09 22:03:43] epoch=060 batch=00200/00750 train_loss=1.107528
+[2026-09-09 22:03:58] epoch=060 batch=00300/00750 train_loss=1.148912
+[2026-09-09 22:04:14] epoch=060 batch=00400/00750 train_loss=1.131102
+[2026-09-09 22:04:30] epoch=060 batch=00500/00750 train_loss=1.160064
+[2026-09-09 22:04:45] epoch=060 batch=00600/00750 train_loss=1.118135
+[2026-09-09 22:05:01] epoch=060 batch=00700/00750 train_loss=1.183546
+[2026-09-09 22:05:29] epoch=060 train_loss=1.140247 val_MAE=1.785242 val_support_MAE=1.600663 lr=1.000e-06 time=137.6s
+[2026-09-09 22:05:44] epoch=061 batch=00100/00750 train_loss=1.148797
+[2026-09-09 22:06:00] epoch=061 batch=00200/00750 train_loss=1.154438
+[2026-09-09 22:06:16] epoch=061 batch=00300/00750 train_loss=1.135425
+[2026-09-09 22:06:32] epoch=061 batch=00400/00750 train_loss=1.151182
+[2026-09-09 22:06:47] epoch=061 batch=00500/00750 train_loss=1.123824
+[2026-09-09 22:07:03] epoch=061 batch=00600/00750 train_loss=1.147266
+[2026-09-09 22:07:19] epoch=061 batch=00700/00750 train_loss=1.145993
+[2026-09-09 22:07:46] epoch=061 train_loss=1.140607 val_MAE=1.784859 val_support_MAE=1.600304 lr=1.000e-06 time=137.6s
+[2026-09-09 22:08:02] epoch=062 batch=00100/00750 train_loss=1.148774
+[2026-09-09 22:08:18] epoch=062 batch=00200/00750 train_loss=1.143702
+[2026-09-09 22:08:33] epoch=062 batch=00300/00750 train_loss=1.140168
+[2026-09-09 22:08:49] epoch=062 batch=00400/00750 train_loss=1.134149
+[2026-09-09 22:09:05] epoch=062 batch=00500/00750 train_loss=1.160694
+[2026-09-09 22:09:21] epoch=062 batch=00600/00750 train_loss=1.134617
+[2026-09-09 22:09:36] epoch=062 batch=00700/00750 train_loss=1.141608
+[2026-09-09 22:10:04] epoch=062 train_loss=1.140877 val_MAE=1.785154 val_support_MAE=1.600629 lr=1.000e-06 time=137.6s
+[2026-09-09 22:10:20] epoch=063 batch=00100/00750 train_loss=1.163726
+[2026-09-09 22:10:35] epoch=063 batch=00200/00750 train_loss=1.140899
+[2026-09-09 22:10:51] epoch=063 batch=00300/00750 train_loss=1.121872
+[2026-09-09 22:11:07] epoch=063 batch=00400/00750 train_loss=1.141096
+[2026-09-09 22:11:22] epoch=063 batch=00500/00750 train_loss=1.110103
+[2026-09-09 22:11:38] epoch=063 batch=00600/00750 train_loss=1.176432
+[2026-09-09 22:11:54] epoch=063 batch=00700/00750 train_loss=1.151610
+[2026-09-09 22:12:22] epoch=063 train_loss=1.140654 val_MAE=1.785699 val_support_MAE=1.601105 lr=1.000e-06 time=137.6s
+[2026-09-09 22:12:37] epoch=064 batch=00100/00750 train_loss=1.177183
+[2026-09-09 22:12:53] epoch=064 batch=00200/00750 train_loss=1.135762
+[2026-09-09 22:13:09] epoch=064 batch=00300/00750 train_loss=1.154366
+[2026-09-09 22:13:24] epoch=064 batch=00400/00750 train_loss=1.124831
+[2026-09-09 22:13:40] epoch=064 batch=00500/00750 train_loss=1.135932
+[2026-09-09 22:13:56] epoch=064 batch=00600/00750 train_loss=1.121028
+[2026-09-09 22:14:11] epoch=064 batch=00700/00750 train_loss=1.136088
+[2026-09-09 22:14:39] epoch=064 train_loss=1.140768 val_MAE=1.785028 val_support_MAE=1.600597 lr=1.000e-06 time=137.6s
+[2026-09-09 22:14:55] epoch=065 batch=00100/00750 train_loss=1.122351
+[2026-09-09 22:15:11] epoch=065 batch=00200/00750 train_loss=1.145758
+[2026-09-09 22:15:26] epoch=065 batch=00300/00750 train_loss=1.145852
+[2026-09-09 22:15:42] epoch=065 batch=00400/00750 train_loss=1.138804
+[2026-09-09 22:15:58] epoch=065 batch=00500/00750 train_loss=1.109071
+[2026-09-09 22:16:13] epoch=065 batch=00600/00750 train_loss=1.156914
+[2026-09-09 22:16:29] epoch=065 batch=00700/00750 train_loss=1.150217
+[2026-09-09 22:16:57] epoch=065 train_loss=1.139811 val_MAE=1.785562 val_support_MAE=1.601026 lr=1.000e-06 time=137.6s
+[2026-09-09 22:17:13] epoch=066 batch=00100/00750 train_loss=1.150911
+[2026-09-09 22:17:28] epoch=066 batch=00200/00750 train_loss=1.146725
+[2026-09-09 22:17:44] epoch=066 batch=00300/00750 train_loss=1.162769
+[2026-09-09 22:18:00] epoch=066 batch=00400/00750 train_loss=1.132742
+[2026-09-09 22:18:15] epoch=066 batch=00500/00750 train_loss=1.106319
+[2026-09-09 22:18:31] epoch=066 batch=00600/00750 train_loss=1.163701
+[2026-09-09 22:18:47] epoch=066 batch=00700/00750 train_loss=1.130694
+[2026-09-09 22:19:14] epoch=066 train_loss=1.140333 val_MAE=1.785266 val_support_MAE=1.600820 lr=1.000e-06 time=137.6s
+[2026-09-09 22:19:30] epoch=067 batch=00100/00750 train_loss=1.128188
+[2026-09-09 22:19:46] epoch=067 batch=00200/00750 train_loss=1.139873
+[2026-09-09 22:20:02] epoch=067 batch=00300/00750 train_loss=1.180571
+[2026-09-09 22:20:17] epoch=067 batch=00400/00750 train_loss=1.140348
+[2026-09-09 22:20:33] epoch=067 batch=00500/00750 train_loss=1.165975
+[2026-09-09 22:20:49] epoch=067 batch=00600/00750 train_loss=1.142952
+[2026-09-09 22:21:04] epoch=067 batch=00700/00750 train_loss=1.113858
+[2026-09-09 22:21:32] epoch=067 train_loss=1.140485 val_MAE=1.785043 val_support_MAE=1.600434 lr=1.000e-06 time=137.6s
+[2026-09-09 22:21:48] epoch=068 batch=00100/00750 train_loss=1.151116
+[2026-09-09 22:22:03] epoch=068 batch=00200/00750 train_loss=1.149756
+[2026-09-09 22:22:19] epoch=068 batch=00300/00750 train_loss=1.153175
+[2026-09-09 22:22:35] epoch=068 batch=00400/00750 train_loss=1.133980
+[2026-09-09 22:22:51] epoch=068 batch=00500/00750 train_loss=1.134463
+[2026-09-09 22:23:06] epoch=068 batch=00600/00750 train_loss=1.120869
+[2026-09-09 22:23:22] epoch=068 batch=00700/00750 train_loss=1.153349
+[2026-09-09 22:23:50] epoch=068 train_loss=1.140213 val_MAE=1.785384 val_support_MAE=1.600852 lr=1.000e-06 time=137.6s
+[2026-09-09 22:24:05] epoch=069 batch=00100/00750 train_loss=1.146307
+[2026-09-09 22:24:21] epoch=069 batch=00200/00750 train_loss=1.119997
+[2026-09-09 22:24:37] epoch=069 batch=00300/00750 train_loss=1.164049
+[2026-09-09 22:24:52] epoch=069 batch=00400/00750 train_loss=1.135306
+[2026-09-09 22:25:08] epoch=069 batch=00500/00750 train_loss=1.147284
+[2026-09-09 22:25:24] epoch=069 batch=00600/00750 train_loss=1.122974
+[2026-09-09 22:25:39] epoch=069 batch=00700/00750 train_loss=1.159067
+[2026-09-09 22:26:07] epoch=069 train_loss=1.140765 val_MAE=1.785057 val_support_MAE=1.600531 lr=1.000e-06 time=137.6s
+[2026-09-09 22:26:23] epoch=070 batch=00100/00750 train_loss=1.156487
+[2026-09-09 22:26:39] epoch=070 batch=00200/00750 train_loss=1.120282
+[2026-09-09 22:26:54] epoch=070 batch=00300/00750 train_loss=1.139039
+[2026-09-09 22:27:10] epoch=070 batch=00400/00750 train_loss=1.140920
+[2026-09-09 22:27:26] epoch=070 batch=00500/00750 train_loss=1.160421
+[2026-09-09 22:27:41] epoch=070 batch=00600/00750 train_loss=1.157177
+[2026-09-09 22:27:57] epoch=070 batch=00700/00750 train_loss=1.122472
+[2026-09-09 22:28:25] epoch=070 train_loss=1.140712 val_MAE=1.785225 val_support_MAE=1.600774 lr=1.000e-06 time=137.6s
+[2026-09-09 22:28:25] early_stop epoch=70 patience=20
+[2026-09-09 22:28:52] FINISHED stage=screening STAEformer seed=10: val_MAE=1.784515 val_support=1.599579; TEST NOT EVALUATED
+[2026-09-09 22:29:24] + rc=0
+[2026-09-09 22:29:24] + echo SCRIPT_EXIT_STATUS=0
+[2026-09-09 22:29:24] SCRIPT_EXIT_STATUS=0
+
+======================================================================================
+                  Resource Usage on 2026-09-09 22:29:28:
+   Job Id:             178544681.gadi-pbs
+   Project:            mh20
+   Exit Status:        0
+   Service Units:      98.86
+   NCPUs Requested:    12                  CPU Time Used: 02:41:30        
+   Memory Requested:   32.0GB                Memory Used: 5.98GB          
+   NGPUs Requested:    1                 GPU Utilisation: 32%             
+                                         GPU Memory Used: 5.85GB          
+   Walltime Requested: 48:00:00            Walltime Used: 02:44:46        
+   JobFS Requested:    100.0MB                JobFS Used: 2.3KB           
+======================================================================================

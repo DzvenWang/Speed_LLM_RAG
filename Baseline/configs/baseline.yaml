@@ -1,0 +1,168 @@
+version: 0.4.0
+project:
+  root: /scratch/mh20/zw1165/Speed_LLM_RAG
+  baseline_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
+  log_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs
+  exp_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_exps
+  supportbench_project: /scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench
+  benchmark_root: /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench
+  support_artifact_root: /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench
+  backbone_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone
+  backbone_exp_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_exps
+  frozen_backbone_json: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_exps/FROZEN_BACKBONE.json
+  python: /scratch/mh20/zw1165/envs/TFP/bin/python
+  leaf_python: /scratch/mh20/zw1165/envs/LEAF/bin/python
+  protocol_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol
+  protocol_artifact_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_artifacts
+
+experiment:
+  subgraph: TraffiDent_Net_06
+  history: 12
+  horizon: 12
+  severity: 0.4
+  seed: 10
+  formal_seeds: [10, 20, 30]
+  families:
+    - temporal_outage
+    - regional_outage
+    - directional_outage
+    - predictive_regional_outage
+    - predictive_directional_outage
+
+protocol:
+  official_source_policy: exact_commit_or_first_run_resolved_commit_then_tree_sha256_lock
+  test_selection_policy: physically_isolated_until_evaluation_stage
+  prediction_contract: raw_speed_Mx12xN
+  retrieval_memory: train_only
+  retrieval_memory_signal: full_train_history
+  retrieval_query_signal: incomplete_query_history
+  current_query_future_allowed_at_inference: false
+  same_frozen_backbone_for_imputation_and_matched_rag: true
+  cache_fingerprint_required: true
+  retrieval_audit_required: true
+  shared_protocol_name: protocol_v1
+  shared_protocol_version: 1.0.0
+  consumer_policy: frozen_shared_protocol_only
+  no_local_sampling: true
+  development_cache_migration_from: [0.3.1]
+
+baseline_story:
+  main_table:
+    - FrozenBackbone
+    - ImputeFormer
+    - GinAR
+    - RAFT
+    - RAST
+    - SARAF
+  llm_specific:
+    - LEAF
+  partial_sensing_subtrack:
+    - SLPF
+  optional_appendix:
+    - BiTGraph
+    - PFRP
+  claim_chain:
+    - strong_numerical_forecasting
+    - reconstruction_first
+    - missing_aware_end_to_end
+    - generic_similarity_retrieval
+    - traffic_spatiotemporal_retrieval
+    - retrieval_reliability_control
+    - predictive_support_reasoning_and_control
+
+methods:
+  ImputeFormer:
+    enabled: true
+    table_group: main
+    priority: 1
+    formal_track: reconstruction_then_same_frozen_backbone
+    stage_now: reconstruction_bridge_and_smoke
+    requires_frozen_backbone_for_final_forecast: true
+  GinAR:
+    enabled: true
+    table_group: main
+    priority: 2
+    formal_track: end_to_end_variable_missing_forecasting
+    stage_now: development_runner_ready_after_vendor_smoke
+    requires_frozen_backbone_for_final_forecast: false
+  RAFT:
+    enabled: true
+    table_group: main
+    priority: 3
+    formal_track: generic_retrieval_external_val_only_runner_train_memory_only
+    stage_now: development_runner_ready_after_vendor_smoke
+    requires_frozen_backbone_for_final_forecast: false
+  RAST:
+    enabled: true
+    table_group: main
+    priority: 4
+    formal_track: traffic_rag_matched_frozen_backbone
+    stage_now: adapter_and_retrieval_audit_wait_for_backbone
+    requires_frozen_backbone_for_final_forecast: true
+  SARAF:
+    enabled: true
+    table_group: main
+    priority: 5
+    formal_track: stationarity_aware_retrieval_external_val_only_runner_train_memory_only
+    stage_now: development_runner_ready_after_vendor_smoke
+    requires_frozen_backbone_for_final_forecast: false
+  LEAF:
+    enabled: true
+    table_group: llm_specific
+    priority: 6
+    formal_track: llm_framework_reference
+    stage_now: source_runtime_audit_in_isolated_environment
+    requires_frozen_backbone_for_final_forecast: false
+  SLPF:
+    enabled: true
+    table_group: partial_sensing_subtrack
+    priority: 7
+    formal_track: matched_fixed_partial_sensing_subtrack
+    stage_now: official_native_subtrack_bridge_and_smoke
+    requires_frozen_backbone_for_final_forecast: false
+
+runners:
+  RAFT:
+    batch_size: 32
+    max_epochs: 10
+    learning_rate: 0.0001
+    patience: 10
+    n_period: 3
+    topm: 20
+  GinAR:
+    model_variant: model1
+    batch_size: 16
+    max_epochs: 100
+    learning_rate: 0.006
+    dropout: 0.15
+    emb_size: 16
+    graph_size: 8
+    layers: 2
+    gradient_clip: 5.0
+    lr_milestones: [1, 15, 40, 70, 90]
+    lr_gamma: 0.5
+    patience: 20
+    input_features: [speed, tod, dow]
+  SARAF:
+    batch_size: 32
+    max_epochs: 20
+    learning_rate: 0.001
+    patience: 5
+    n_period: 1
+    topm: 20
+    time_aware_weight: 0.3
+    freq: 5min
+    fusion_method: weighted
+    features: M
+    retrieval_precompute_batch_size: 1024
+    train_only_memory: true
+
+protocol_assertions:
+  development:
+    train_rows: 12000
+    val_rows: 5000
+  formal:
+    val_rows: 5000
+    train_policy: all_eligible_unique_groups
+  evaluation:
+    test_rows: 5000

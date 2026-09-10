@@ -1,0 +1,13 @@
+{
+  "include": [
+    "backbone",
+    "scripts"
+  ],
+  "extraPaths": [
+    ".",
+    "../Protocol",
+    "../TraffiDent_SupportBench"
+  ],
+  "reportMissingImports": "warning",
+  "reportUnusedImport": "warning"
+}

@@ -1,0 +1,30 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=48GB
+#PBS -l walltime=12:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -N RAFTDev
+set -euo pipefail
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
+LOGROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs
+PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+SEED=${SEED:-10}
+mkdir -p "$LOGROOT"; STAMP=$(date +%Y%m%d_%H%M%S); LOG="$LOGROOT/RAFT.development.${PBS_JOBID}.${STAMP}.live.log"; touch "$LOG"
+export PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 BASELINE_TIMESTAMP_STREAM=1
+export PYTHONPATH="$ROOT:/scratch/mh20/zw1165/Speed_LLM_RAG/Protocol:/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench:${PYTHONPATH:-}"
+unset TRANSFORMERS_CACHE || true
+exec > >("$PY" -u "$ROOT/timestamp_stream.py" | tee -a "$LOG") 2>&1
+trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"; exit $rc' EXIT
+cd "$ROOT"
+echo "START RAFT Development v0.4.0 job=$PBS_JOBID seed=$SEED"
+echo "SAFETY: Train-only retrieval memory; Development Train/Val only; no Test dataset is instantiated."
+nvidia-smi
+"$PY" scripts/verify_official_sources.py
+"$PY" scripts/validate_cache.py --stage development
+"$PY" scripts/retrieval_leakage_audit.py --stage development
+"$PY" baseline/runners/raft_runner.py --stage development --seed "$SEED"
+echo "RAFT DEVELOPMENT PASS"

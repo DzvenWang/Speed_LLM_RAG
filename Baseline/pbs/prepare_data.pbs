@@ -1,0 +1,25 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q normal
+#PBS -l ncpus=4
+#PBS -l mem=24GB
+#PBS -l walltime=02:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -N BaselinePrep
+set -euo pipefail
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
+LOGROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs
+PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+STAGE=${STAGE:-development}
+case "$STAGE" in development|formal|evaluation) ;; *) echo "Invalid STAGE=$STAGE"; exit 2;; esac
+mkdir -p "$LOGROOT"; STAMP=$(date +%Y%m%d_%H%M%S); LOG="$LOGROOT/BaselinePrep.${STAGE}.${PBS_JOBID}.${STAMP}.live.log"; touch "$LOG"
+export PYTHONDONTWRITEBYTECODE=1 BASELINE_TIMESTAMP_STREAM=1
+exec > >("$PY" -u "$ROOT/timestamp_stream.py" | tee -a "$LOG") 2>&1
+trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"; exit $rc' EXIT
+cd "$ROOT"
+echo "START BaselinePrep v0.4.0 stage=$STAGE job=$PBS_JOBID"
+"$PY" scripts/preflight.py
+"$PY" scripts/prepare_data.py --stage "$STAGE"
+"$PY" scripts/validate_cache.py --stage "$STAGE"
+if [ "$STAGE" = development ] || [ "$STAGE" = formal ]; then "$PY" scripts/retrieval_leakage_audit.py --stage "$STAGE"; fi

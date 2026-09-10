@@ -1,0 +1,63 @@
+[2026-09-08 17:13:34] [api] recomputed 100/2048 views
+[2026-09-08 17:13:34] [api] recomputed 200/2048 views
+[2026-09-08 17:13:35] [api] recomputed 300/2048 views
+[2026-09-08 17:13:36] [api] recomputed 400/2048 views
+[2026-09-08 17:13:36] [api] recomputed 500/2048 views
+[2026-09-08 17:13:37] [api] recomputed 600/2048 views
+[2026-09-08 17:13:37] [api] recomputed 700/2048 views
+[2026-09-08 17:13:38] [api] recomputed 800/2048 views
+[2026-09-08 17:13:39] [api] recomputed 900/2048 views
+[2026-09-08 17:13:39] [api] recomputed 1000/2048 views
+[2026-09-08 17:13:40] [api] recomputed 1100/2048 views
+[2026-09-08 17:13:40] [api] recomputed 1200/2048 views
+[2026-09-08 17:13:41] [api] recomputed 1300/2048 views
+[2026-09-08 17:13:42] [api] recomputed 1400/2048 views
+[2026-09-08 17:13:42] [api] recomputed 1500/2048 views
+[2026-09-08 17:13:43] [api] recomputed 1600/2048 views
+[2026-09-08 17:13:43] [api] recomputed 1700/2048 views
+[2026-09-08 17:13:44] [api] recomputed 1800/2048 views
+[2026-09-08 17:13:45] [api] recomputed 1900/2048 views
+[2026-09-08 17:13:45] [api] recomputed 2000/2048 views
+[2026-09-08 17:13:46] 
+[2026-09-08 17:13:46] === Predictive Structured Mask Audit ===
+[2026-09-08 17:13:46] features=/scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/test_support_features_v2.csv
+[2026-09-08 17:13:46] distribution=id severity=0.40 max_groups=512
+[2026-09-08 17:13:46] 
+[2026-09-08 17:13:46] [Context efficacy: predictive/general]
+[2026-09-08 17:13:46]   regional     n= 512 general=0.994408 predictive=0.652242 ratio=0.6559 95%CI=[0.6541,0.6577] win=0.000 verdict=REVERSED
+[2026-09-08 17:13:46]   directional  n= 512 general=0.953366 predictive=0.986651 ratio=1.0349 95%CI=[1.0278,1.0422] win=0.312 verdict=WEAK_BELOW_TARGET
+[2026-09-08 17:13:46] 
+[2026-09-08 17:13:46] [Support-dependent scope: predictive/general]
+[2026-09-08 17:13:46]   regional     general=0.037708 predictive=0.363578 ratio=9.6418 win=1.000
+[2026-09-08 17:13:46]   directional  general=0.040975 predictive=0.032785 ratio=0.8001 win=0.439
+[2026-09-08 17:13:46] WARNING objective/scope divergence for regional: context_ratio=0.6559, scope_ratio=9.6418
+[2026-09-08 17:13:46] WARNING objective/scope divergence for directional: context_ratio=1.0349, scope_ratio=0.8001
+[2026-09-08 17:13:46] 
+[2026-09-08 17:13:46] [API re-check]
+[2026-09-08 17:13:46]   max |context(API)-context(CSV)| = 0.000e+00
+[2026-09-08 17:13:46]   max |scope(API)-scope(CSV)|     = 9.801e-17
+[2026-09-08 17:13:46]   inspect: /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/audits/predictive_structured_test_id_s0.40/api_inventory.json
+[2026-09-08 17:13:46] 
+[2026-09-08 17:13:46] RESULT=SCIENTIFIC_DIAGNOSTIC_FAIL
+[2026-09-08 17:13:46] AUDIT_SUMMARY=/scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/audits/predictive_structured_test_id_s0.40/audit_summary.json
+[2026-09-08 17:13:46] PAIR_SUMMARY=/scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/audits/predictive_structured_test_id_s0.40/pair_summary.csv
+[2026-09-08 17:13:46] PAIRED_ROWS=/scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/audits/predictive_structured_test_id_s0.40/paired_rows.csv
+[2026-09-08 17:13:46] RESULT_FILES:
+[2026-09-08 17:13:46] api_inventory.json	4677 bytes
+[2026-09-08 17:13:46] api_recheck.csv	612247 bytes
+[2026-09-08 17:13:46] audit_summary.json	3251 bytes
+[2026-09-08 17:13:46] family_summary.csv	987 bytes
+[2026-09-08 17:13:46] pair_summary.csv	1062 bytes
+[2026-09-08 17:13:46] paired_rows.csv	376882 bytes
+
+======================================================================================
+                  Resource Usage on 2026-09-08 17:13:49:
+   Job Id:             178441159.gadi-pbs
+   Project:            mh20
+   Exit Status:        0
+   Service Units:      0.18
+   NCPUs Requested:    4                   CPU Time Used: 00:00:23        
+   Memory Requested:   24.0GB                Memory Used: 1.28GB          
+   Walltime Requested: 02:00:00            Walltime Used: 00:00:54        
+   JobFS Requested:    100.0MB                JobFS Used: 0B              
+======================================================================================

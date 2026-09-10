@@ -1,0 +1,26 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q normal
+#PBS -l ncpus=2
+#PBS -l mem=8GB
+#PBS -l walltime=01:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -N BaselineAudit
+set -euo pipefail
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
+LOGROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs
+PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+mkdir -p "$LOGROOT"; STAMP=$(date +%Y%m%d_%H%M%S); LOG="$LOGROOT/BaselineCompatibility.${PBS_JOBID}.${STAMP}.live.log"; touch "$LOG"
+export PYTHONDONTWRITEBYTECODE=1 BASELINE_TIMESTAMP_STREAM=1
+exec > >("$PY" -u "$ROOT/timestamp_stream.py" | tee -a "$LOG") 2>&1
+trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"; exit $rc' EXIT
+cd "$ROOT"
+"$PY" scripts/verify_official_sources.py
+"$PY" scripts/audit_official_compatibility.py
+"$PY" scripts/runtime_contract_audit.py
+if [ -f /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_exps/_cache/TraffiDent_Net_06/development/cache_manifest.json ]; then
+  "$PY" scripts/validate_cache.py --stage development
+  "$PY" scripts/retrieval_leakage_audit.py --stage development
+fi
+"$PY" scripts/baseline_status.py

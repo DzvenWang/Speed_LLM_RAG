@@ -1,0 +1,20 @@
+[2026-09-08 17:13:27] Traceback (most recent call last):
+[2026-09-08 17:13:27]   File "/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench/derived/audit_predictive_structured_masks.py", line 513, in <module>
+[2026-09-08 17:13:27]     main()
+[2026-09-08 17:13:27]   File "/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench/derived/audit_predictive_structured_masks.py", line 409, in main
+[2026-09-08 17:13:27]     raise ValueError("No rows remain after distribution/severity filtering")
+[2026-09-08 17:13:27] ValueError: No rows remain after distribution/severity filtering
+[2026-09-08 17:13:27] PredMaskAudit exiting rc=1
+[2026-09-08 17:13:27] LIVE_LOG=/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench/logs/PredMaskAudit.178441167.gadi-pbs.live.log
+
+======================================================================================
+                  Resource Usage on 2026-09-08 17:13:31:
+   Job Id:             178441167.gadi-pbs
+   Project:            mh20
+   Exit Status:        1
+   Service Units:      0.12
+   NCPUs Requested:    4                   CPU Time Used: 00:00:04        
+   Memory Requested:   24.0GB                Memory Used: 405.7MB         
+   Walltime Requested: 02:00:00            Walltime Used: 00:00:35        
+   JobFS Requested:    100.0MB                JobFS Used: 0B              
+======================================================================================

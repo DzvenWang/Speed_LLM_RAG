@@ -1,0 +1,74 @@
+START Backbone screening metric refresh job=178653087.gadi-pbs host=gadi-gpu-v100-0133.gadi.nci.org.au
+PYTHON=/scratch/mh20/zw1165/envs/TFP/bin/python
+Thu Sep 10 17:12:12 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.173.02             Driver Version: 580.173.02     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  Tesla V100-SXM2-32GB           On  |   00000000:B2:00.0 Off |                    0 |
+| N/A   35C    P0             43W /  300W |       0MiB /  32768MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+PASS source STAEformer fc49d39b2f1a8e3cf37b6289d7240680e1690f3f tree-lock-no-git
+PASS source HimNet 2a9aa44d1864f6fb60bdf9d14bafd6c1681e81a5 tree-lock-no-git
+PASS source BigST 830cb529354c0cda75c1660d1a0af2ffc7e66abb tree-lock-no-git
+PASS source STDN e24a60fa9485fb9805df9c171d67ab60840d757d tree-lock-no-git
+SOURCE LOCK PASS
+/scratch/mh20/zw1165/envs/TFP/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+PASS screening train rows 12000 families {'predictive_regional_outage': 2400, 'predictive_directional_outage': 2400, 'regional_outage': 2400, 'temporal_outage': 2400, 'directional_outage': 2400}
+PASS screening val rows 5000 families {'predictive_regional_outage': 1000, 'regional_outage': 1000, 'directional_outage': 1000, 'temporal_outage': 1000, 'predictive_directional_outage': 1000}
+PASS Shared Protocol stage hash 60de891db0ea5b72a4c0fd9f4a7e30fcaf96d04f2085994516a0f4048a9915bb
+CACHE VALIDATION PASS
+BACKBONE METRICS SMOKE PASS
+/scratch/mh20/zw1165/envs/TFP/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+REFRESH DEVICE=cuda:0 val_queries=5000 models=STAEformer,HimNet,BigST,STDN
+REFRESH START model=STAEformer
+REFRESH DONE model=STAEformer MAE=1.784515 RMSE=3.539946 masked_RMSE=3.918913 support_RMSE=2.896112
+REFRESH START model=HimNet
+REFRESH DONE model=HimNet MAE=1.765427 RMSE=3.537067 masked_RMSE=3.995733 support_RMSE=2.850511
+REFRESH START model=BigST
+/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone/vendor/BigST/model.py:148: UserWarning: torch.qr is deprecated in favor of torch.linalg.qr and will be removed in a future PyTorch release.
+The boolean parameter 'some' has been replaced with a string parameter 'mode'.
+Q, R = torch.qr(A, some)
+should be replaced with
+Q, R = torch.linalg.qr(A, 'reduced' if some else 'complete') (Triggered internally at /pytorch/aten/src/ATen/native/BatchLinearAlgebra.cpp:2496.)
+  q, _ = torch.qr(unstructured_block)
+REFRESH DONE model=BigST MAE=1.813596 RMSE=3.571323 masked_RMSE=3.970332 support_RMSE=2.923243
+REFRESH START model=STDN
+L 2
+K 16
+d 8
+node_miss_rate 0.1
+T_miss_len 12
+Number of isolated points: 2
+REFRESH DONE model=STDN MAE=2.231304 RMSE=4.123696 masked_RMSE=4.472954 support_RMSE=3.451101
+SCREENING METRICS REFRESH PASS
+METRIC REFRESH PASS
+SCRIPT_EXIT_STATUS=0
+
+======================================================================================
+                  Resource Usage on 2026-09-10 17:16:20:
+   Job Id:             178653087.gadi-pbs
+   Project:            mh20
+   Exit Status:        0
+   Service Units:      2.75
+   NCPUs Requested:    12                  CPU Time Used: 00:02:42        
+   Memory Requested:   32.0GB                Memory Used: 6.07GB          
+   NGPUs Requested:    1                 GPU Utilisation: 22%             
+                                         GPU Memory Used: 4.78GB          
+   Walltime Requested: 02:00:00            Walltime Used: 00:04:35        
+   JobFS Requested:    100.0MB                JobFS Used: 0B              
+======================================================================================

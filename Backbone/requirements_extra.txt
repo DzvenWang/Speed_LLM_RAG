@@ -1,0 +1,10 @@
+# Extra packages expected by the external experiment wrapper / official sources.
+torchinfo
+pyyaml
+scipy
+scikit-learn
+fastdtw==0.3.4
+# PatchSTG 2025 imports Attention/Mlp from timm.models.vision_transformer.
+timm==1.0.12
+# torch-geometric is intentionally not required by the active STDN path.
+# torch-geometric

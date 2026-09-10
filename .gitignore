@@ -1,0 +1,82 @@
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Conda
+.conda/
+.ipynb_checkpoints/
+
+# Logs
+logs/
+*.log
+*.out
+*.err
+
+# Data
+data/
+datasets/
+raw_data/
+videos/
+*.mp4
+*.avi
+*.mov
+*.npy
+*.npz
+*.pkl
+*.h5
+*.csv
+llm/generated/
+**/analysis_results/
+**/data_analysis_result/
+*.gz
+
+
+# Models / checkpoints
+**/experiments/
+**/exps/
+checkpoints/
+ckpt/
+weights/
+runs/
+wandb/
+outputs/
+results/
+reports/
+*.pt
+*.pth
+*.ckpt
+.hf_cache/
+baseline_experiments/
+**/_official/
+baseline_Reliability_Calibration_experiments/
+baseline_Reliability_Control_experiments/
+baseline_Controlled_Support_experiments/
+RISE_Model_experiments/
+
+
+# System
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+
+old_baseline/
+
+
+**/vendor/
+artifacts/
+Backbone_logs/
+Backbone_exps/
+Baseline_logs/
+Baseline_exps/
+Protocol_artifacts/
+Protocol_logs/

@@ -1,0 +1,103 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q normal
+#PBS -l ncpus=8
+#PBS -l mem=16GB
+#PBS -l walltime=12:00:00
+#PBS -l storage=scratch/mh20
+#PBS -j oe
+#PBS -N SOUtilityV2
+
+# Required at qsub time:
+#   QUERY_PRED_VAL=/path/val_query_predictions.npz
+#   QUERY_PRED_TEST=/path/test_query_predictions.npz
+#   MEMORY_PRED=/path/train_memory_predictions.npz
+# Example:
+# qsub -v QUERY_PRED_VAL=...,QUERY_PRED_TEST=...,MEMORY_PRED=... pbs/build_support_utility_headroom.pbs
+
+set -euo pipefail
+PROJECT_ROOT="/scratch/mh20/zw1165/Speed_LLM_RAG"
+PROCESS_ROOT="$PROJECT_ROOT/TraffiDent_SupportBench"
+CONDA_BASE="/scratch/mh20/zw1165/miniconda"
+CONDA_ENV="/scratch/mh20/zw1165/envs/TFP"
+SUBGRAPH="${SUBGRAPH:-TraffiDent_Net_06}"
+: "${QUERY_PRED_VAL:?Set QUERY_PRED_VAL to Validation query prediction NPZ}"
+: "${QUERY_PRED_TEST:?Set QUERY_PRED_TEST to Test query prediction NPZ}"
+: "${MEMORY_PRED:?Set MEMORY_PRED to Train-memory prediction NPZ}"
+
+ART="$PROJECT_ROOT/artifacts/supportbench/$SUBGRAPH"
+VAL_POOL="$ART/val_challenge_pool.npz"
+TEST_POOL="$ART/test_challenge_pool.npz"
+VAL_FEAT="$ART/val_support_features_v2.csv"
+TEST_FEAT="$ART/test_support_features_v2.csv"
+ALPHA_CFG="$ART/val_support_alpha.json"
+VAL_UTILITY="$ART/val_support_utility_v2.npz"
+TEST_UTILITY="$ART/test_support_utility_v2.npz"
+VAL_HEAD="$ART/val_support_features_v2__headroom.json"
+VAL_SO="$ART/val_support_opportunity_v2.csv"
+TEST_SO="$ART/test_support_opportunity_v2.csv"
+VAL_SO_CAL="$ART/val_support_opportunity_v2.calibrator.json"
+
+cd "$PROCESS_ROOT"
+set +u
+source "$CONDA_BASE/etc/profile.d/conda.sh"
+conda activate "$CONDA_ENV"
+set -u
+export PYTHONPATH="$PROCESS_ROOT:${PYTHONPATH:-}"
+export PYTHONUNBUFFERED=1
+mkdir -p "$ART" "$PROCESS_ROOT/logs"
+LIVE_LOG="$PROCESS_ROOT/logs/SOUtilityV2.${PBS_JOBID:-manual}.live.log"
+: > "$LIVE_LOG"
+exec > >(python -u "$PROCESS_ROOT/timestamp_stream.py" | tee -a "$LIVE_LOG") 2>&1
+trap 'rc=$?; echo "SOUtilityV2 exiting rc=$rc"; echo "LIVE_LOG=$LIVE_LOG"' EXIT
+
+for f in "$VAL_POOL" "$TEST_POOL" "$VAL_FEAT" "$TEST_FEAT" "$QUERY_PRED_VAL" "$QUERY_PRED_TEST" "$MEMORY_PRED"; do
+  [[ -s "$f" ]] || { echo "ERROR missing $f" >&2; exit 3; }
+done
+
+# One alpha selected on Validation only.
+python -u derived/select_support_alpha.py --subgraph "$SUBGRAPH" --candidate-pool "$VAL_POOL" \
+  --query-predictions "$QUERY_PRED_VAL" --memory-predictions "$MEMORY_PRED" --output "$ALPHA_CFG"
+
+python -u derived/build_support_utility.py --subgraph "$SUBGRAPH" --candidate-pool "$VAL_POOL" \
+  --query-predictions "$QUERY_PRED_VAL" --memory-predictions "$MEMORY_PRED" \
+  --alpha-config "$ALPHA_CFG" --output "$VAL_UTILITY"
+python -u derived/build_support_utility.py --subgraph "$SUBGRAPH" --candidate-pool "$TEST_POOL" \
+  --query-predictions "$QUERY_PRED_TEST" --memory-predictions "$MEMORY_PRED" \
+  --alpha-config "$ALPHA_CFG" --output "$TEST_UTILITY"
+
+# Diagnose which future-free features actually predict realised Validation headroom.
+python -u derived/analyze_support_opportunity_headroom.py --features "$VAL_FEAT" \
+  --utility "$VAL_UTILITY" --output "$VAL_HEAD"
+
+# Fit SO-v2 from Validation OOF headroom and then freeze to Test.
+python -u derived/fit_support_opportunity_calibrator.py --features "$VAL_FEAT" \
+  --utility "$VAL_UTILITY" --fit-calibrator --output "$VAL_SO"
+[[ -s "$VAL_SO_CAL" ]] || { echo "ERROR missing $VAL_SO_CAL" >&2; exit 5; }
+python -u derived/fit_support_opportunity_calibrator.py --features "$TEST_FEAT" \
+  --calibrator "$VAL_SO_CAL" --output "$TEST_SO"
+
+# Test outcomes are used only for final evaluation, never fitting.
+python -u derived/analyze_support_opportunity_headroom.py --features "$TEST_SO" \
+  --utility "$TEST_UTILITY" --output "$ART/test_support_opportunity_v2__headroom.json"
+
+python - "$VAL_SO" "$TEST_SO" "$VAL_SO_CAL" <<'PY'
+import json,sys,pandas as pd
+for name,p in [('Val',sys.argv[1]),('Test',sys.argv[2])]:
+    d=pd.read_csv(p)
+    print(name,'groups=',d.opportunity_group.value_counts().to_dict())
+    print(name,'rates=',d.opportunity_group.value_counts(normalize=True).round(4).to_dict())
+    print(name,'High-SO family=',d[d.opportunity_group=='high'].family.value_counts(normalize=True).round(4).to_dict())
+    if 'oracle_safe_global_relative_gain' in d:
+        print(name,'realised gain by SO=',d.groupby('opportunity_group')['oracle_safe_global_relative_gain'].mean().round(6).to_dict())
+cal=json.load(open(sys.argv[3]))
+print('calibrator alpha=',cal['ridge_alpha'],'OOF spearman=',cal['validation_oof_spearman'])
+print('features=',cal['feature_names'])
+print('coefficients=',cal['ridge_coef'])
+PY
+
+echo "RESULT=PASS"
+echo "VAL_UTILITY=$VAL_UTILITY"
+echo "TEST_UTILITY=$TEST_UTILITY"
+echo "VAL_SO=$VAL_SO"
+echo "TEST_SO=$TEST_SO"

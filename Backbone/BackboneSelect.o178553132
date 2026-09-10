@@ -1,0 +1,105 @@
+[2026-09-09 21:38:16] START BackboneSelect stage=screening model=STDN seed=10 job=178553132.gadi-pbs host=gadi-gpu-v100-0139.gadi.nci.org.au
+[2026-09-09 21:38:16] PYTHON=/scratch/mh20/zw1165/envs/TFP/bin/python
+[2026-09-09 21:38:16] Python 3.11.11
+[2026-09-09 21:38:16] + nvidia-smi
+[2026-09-09 21:38:16] Wed Sep  9 21:38:15 2026       
+[2026-09-09 21:38:16] +-----------------------------------------------------------------------------------------+
+[2026-09-09 21:38:16] | NVIDIA-SMI 580.173.02             Driver Version: 580.173.02     CUDA Version: 13.0     |
+[2026-09-09 21:38:16] +-----------------------------------------+------------------------+----------------------+
+[2026-09-09 21:38:16] | GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+[2026-09-09 21:38:16] | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+[2026-09-09 21:38:16] |                                         |                        |               MIG M. |
+[2026-09-09 21:38:16] |=========================================+========================+======================|
+[2026-09-09 21:38:16] |   0  Tesla V100-SXM2-32GB           On  |   00000000:B1:00.0 Off |                    0 |
+[2026-09-09 21:38:16] | N/A   35C    P0             42W /  300W |       0MiB /  32768MiB |      0%      Default |
+[2026-09-09 21:38:16] |                                         |                        |                  N/A |
+[2026-09-09 21:38:16] +-----------------------------------------+------------------------+----------------------+
+[2026-09-09 21:38:16] 
+[2026-09-09 21:38:16] +-----------------------------------------------------------------------------------------+
+[2026-09-09 21:38:16] | Processes:                                                                              |
+[2026-09-09 21:38:16] |  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+[2026-09-09 21:38:16] |        ID   ID                                                               Usage      |
+[2026-09-09 21:38:16] |=========================================================================================|
+[2026-09-09 21:38:16] |  No running processes found                                                             |
+[2026-09-09 21:38:16] +-----------------------------------------------------------------------------------------+
+[2026-09-09 21:38:16] + /scratch/mh20/zw1165/envs/TFP/bin/python -u scripts/verify_official_sources.py
+[2026-09-09 21:38:19] PASS source STAEformer fc49d39b2f1a8e3cf37b6289d7240680e1690f3f tree-lock-no-git
+[2026-09-09 21:38:20] PASS source HimNet 2a9aa44d1864f6fb60bdf9d14bafd6c1681e81a5 tree-lock-no-git
+[2026-09-09 21:38:20] PASS source BigST 830cb529354c0cda75c1660d1a0af2ffc7e66abb tree-lock-no-git
+[2026-09-09 21:38:20] PASS source STDN e24a60fa9485fb9805df9c171d67ab60840d757d tree-lock-no-git
+[2026-09-09 21:38:20] SOURCE LOCK PASS
+[2026-09-09 21:38:20] + /scratch/mh20/zw1165/envs/TFP/bin/python -u scripts/validate_cache.py --stage screening
+[2026-09-09 21:38:54] /scratch/mh20/zw1165/envs/TFP/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[2026-09-09 21:38:54]   import pynvml  # type: ignore[import]
+[2026-09-09 21:39:10] PASS screening train rows 12000 families {'predictive_regional_outage': 2400, 'predictive_directional_outage': 2400, 'regional_outage': 2400, 'temporal_outage': 2400, 'directional_outage': 2400}
+[2026-09-09 21:39:10] PASS screening val rows 5000 families {'predictive_regional_outage': 1000, 'regional_outage': 1000, 'directional_outage': 1000, 'temporal_outage': 1000, 'predictive_directional_outage': 1000}
+[2026-09-09 21:39:10] PASS Shared Protocol stage hash 60de891db0ea5b72a4c0fd9f4a7e30fcaf96d04f2085994516a0f4048a9915bb
+[2026-09-09 21:39:10] CACHE VALIDATION PASS
+[2026-09-09 21:39:24] + /scratch/mh20/zw1165/envs/TFP/bin/python -u scripts/run_experiment.py --model STDN --stage screening --seed 10 --run-stamp 20260909_213815
+[2026-09-09 21:39:25] /scratch/mh20/zw1165/envs/TFP/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[2026-09-09 21:39:25]   import pynvml  # type: ignore[import]
+[2026-09-09 21:39:26] PASS source STAEformer fc49d39b2f1a8e3cf37b6289d7240680e1690f3f tree-lock-no-git
+[2026-09-09 21:39:27] PASS source HimNet 2a9aa44d1864f6fb60bdf9d14bafd6c1681e81a5 tree-lock-no-git
+[2026-09-09 21:39:27] PASS source BigST 830cb529354c0cda75c1660d1a0af2ffc7e66abb tree-lock-no-git
+[2026-09-09 21:39:27] PASS source STDN e24a60fa9485fb9805df9c171d67ab60840d757d tree-lock-no-git
+[2026-09-09 21:39:27] SOURCE LOCK PASS
+[2026-09-09 21:39:28] /scratch/mh20/zw1165/envs/TFP/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[2026-09-09 21:39:28]   import pynvml  # type: ignore[import]
+[2026-09-09 21:39:29] PASS screening val rows 5000 families {'predictive_regional_outage': 1000, 'regional_outage': 1000, 'directional_outage': 1000, 'temporal_outage': 1000, 'predictive_directional_outage': 1000}
+[2026-09-09 21:39:29] PASS screening train rows 12000 families {'predictive_regional_outage': 2400, 'predictive_directional_outage': 2400, 'regional_outage': 2400, 'temporal_outage': 2400, 'directional_outage': 2400}
+[2026-09-09 21:39:29] PASS Shared Protocol stage hash 60de891db0ea5b72a4c0fd9f4a7e30fcaf96d04f2085994516a0f4048a9915bb
+[2026-09-09 21:39:29] CACHE VALIDATION PASS
+[2026-09-09 21:39:33] run_dir=/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_exps/STDN/TraffiDent_Net_06/screening/20260909_213815_seed10
+[2026-09-09 21:39:34] L 2
+[2026-09-09 21:39:34] K 16
+[2026-09-09 21:39:34] d 8
+[2026-09-09 21:39:34] node_miss_rate 0.1
+[2026-09-09 21:39:34] T_miss_len 12
+[2026-09-09 21:39:57] Number of isolated points: 2
+[2026-09-09 21:40:14] stage=screening model=STDN seed=10 device=cuda:0 batch_size=64 params=6,434,467 vendor_commit=e24a60fa9485fb9805df9c171d67ab60840d757d adapter_revision=base
+[2026-09-09 21:40:14] official_recipe=STDN/conf/PEMSD4_1dim_12.conf optimizer=adam lr=0.001 eps=1e-08 wd=0.0 scheduler=step train_loss=mae
+[2026-09-09 21:41:42] epoch=001 batch=00100/00188 train_loss=2.555864
+[2026-09-09 21:42:54] epoch=001 train_loss=2.284911 val_MAE=2.415894 val_support_MAE=2.050416 lr=1.000e-03 time=160.1s
+[2026-09-09 21:43:53] epoch=002 batch=00100/00188 train_loss=1.851981
+[2026-09-09 21:45:01] epoch=002 train_loss=1.839157 val_MAE=2.429554 val_support_MAE=2.134173 lr=1.000e-03 time=127.4s
+[2026-09-09 21:46:00] epoch=003 batch=00100/00188 train_loss=1.765854
+[2026-09-09 21:47:09] epoch=003 train_loss=1.769839 val_MAE=2.231304 val_support_MAE=2.025107 lr=1.000e-03 time=127.4s
+[2026-09-09 21:48:07] epoch=004 batch=00100/00188 train_loss=1.736270
+[2026-09-09 21:49:16] epoch=004 train_loss=1.719769 val_MAE=2.248346 val_support_MAE=2.082570 lr=1.000e-03 time=127.4s
+[2026-09-09 21:50:15] epoch=005 batch=00100/00188 train_loss=1.697231
+[2026-09-09 21:51:24] epoch=005 train_loss=1.696583 val_MAE=2.289144 val_support_MAE=2.124642 lr=1.000e-03 time=127.4s
+[2026-09-09 21:52:22] epoch=006 batch=00100/00188 train_loss=1.682555
+[2026-09-09 21:53:31] epoch=006 train_loss=1.680155 val_MAE=2.756831 val_support_MAE=2.659753 lr=1.000e-03 time=127.4s
+[2026-09-09 21:54:30] epoch=007 batch=00100/00188 train_loss=1.656843
+[2026-09-09 21:55:38] epoch=007 train_loss=1.663617 val_MAE=2.430561 val_support_MAE=2.329256 lr=1.000e-03 time=127.5s
+[2026-09-09 21:56:37] epoch=008 batch=00100/00188 train_loss=1.653471
+[2026-09-09 21:57:46] epoch=008 train_loss=1.643562 val_MAE=2.996635 val_support_MAE=2.970374 lr=1.000e-03 time=127.4s
+[2026-09-09 21:58:45] epoch=009 batch=00100/00188 train_loss=1.630903
+[2026-09-09 21:59:53] epoch=009 train_loss=1.642188 val_MAE=3.185378 val_support_MAE=3.355653 lr=1.000e-03 time=127.4s
+[2026-09-09 22:00:52] epoch=010 batch=00100/00188 train_loss=1.627573
+[2026-09-09 22:02:01] epoch=010 train_loss=1.628785 val_MAE=2.705114 val_support_MAE=2.718711 lr=9.000e-04 time=127.4s
+[2026-09-09 22:02:59] epoch=011 batch=00100/00188 train_loss=1.617495
+[2026-09-09 22:04:08] epoch=011 train_loss=1.621519 val_MAE=2.715037 val_support_MAE=2.681681 lr=9.000e-04 time=127.4s
+[2026-09-09 22:05:07] epoch=012 batch=00100/00188 train_loss=1.604211
+[2026-09-09 22:06:16] epoch=012 train_loss=1.604742 val_MAE=2.903009 val_support_MAE=2.943153 lr=9.000e-04 time=127.4s
+[2026-09-09 22:07:14] epoch=013 batch=00100/00188 train_loss=1.594892
+[2026-09-09 22:08:23] epoch=013 train_loss=1.607671 val_MAE=2.897841 val_support_MAE=2.992045 lr=9.000e-04 time=127.5s
+[2026-09-09 22:08:23] early_stop epoch=13 patience=10
+[2026-09-09 22:08:46] FINISHED stage=screening STDN seed=10: val_MAE=2.231304 val_support=2.025107; TEST NOT EVALUATED
+[2026-09-09 22:08:48] + rc=0
+[2026-09-09 22:08:48] + echo SCRIPT_EXIT_STATUS=0
+[2026-09-09 22:08:48] SCRIPT_EXIT_STATUS=0
+
+======================================================================================
+                  Resource Usage on 2026-09-09 22:08:52:
+   Job Id:             178553132.gadi-pbs
+   Project:            mh20
+   Exit Status:        0
+   Service Units:      18.56
+   NCPUs Requested:    12                  CPU Time Used: 00:28:29        
+   Memory Requested:   32.0GB                Memory Used: 6.73GB          
+   NGPUs Requested:    1                 GPU Utilisation: 63%             
+                                         GPU Memory Used: 19.16GB         
+   Walltime Requested: 48:00:00            Walltime Used: 00:30:56        
+   JobFS Requested:    100.0MB                JobFS Used: 2.3KB           
+======================================================================================

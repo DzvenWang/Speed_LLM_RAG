@@ -1,0 +1,199 @@
+[2026-09-05 21:54:00] 
+[2026-09-05 21:54:00] ============================================================
+[2026-09-05 21:54:00] Support Opportunity build: environment
+[2026-09-05 21:54:00] ============================================================
+[2026-09-05 21:54:00] PBS_JOBID=178261014.gadi-pbs
+[2026-09-05 21:54:00] host=gadi-cpu-clx-2098.gadi.nci.org.au
+[2026-09-05 21:54:00] workdir=/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench
+[2026-09-05 21:54:00] subgraph=TraffiDent_Net_06
+[2026-09-05 21:54:00] budget=development
+[2026-09-05 21:54:00] memory_budget=development
+[2026-09-05 21:54:00] candidate_k=64
+[2026-09-05 21:54:00] ncpus=8
+[2026-09-05 21:54:00] conda_prefix=/scratch/mh20/zw1165/envs/TFP
+[2026-09-05 21:54:00] python=/scratch/mh20/zw1165/envs/TFP/bin/python
+[2026-09-05 21:54:00] Python 3.11.11
+[2026-09-05 21:54:00] supportbench import PASS: /scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench/supportbench/__init__.py
+[2026-09-05 21:54:00] 
+[2026-09-05 21:54:00] ============================================================
+[2026-09-05 21:54:00] STAGE 01/04: Build Validation candidate pool
+[2026-09-05 21:54:00] ============================================================
+[2026-09-05 21:55:04] [2026-09-05 21:55:04] Building multi-view memory features: episodes=12,000; budget=development; views=['temporal', 'spatial', 'propagation']
+[2026-09-05 21:58:28] [2026-09-05 21:58:28] memory features 2,000/12,000
+[2026-09-05 22:01:53] [2026-09-05 22:01:53] memory features 4,000/12,000
+[2026-09-05 22:05:17] [2026-09-05 22:05:17] memory features 6,000/12,000
+[2026-09-05 22:08:42] [2026-09-05 22:08:42] memory features 8,000/12,000
+[2026-09-05 22:12:07] [2026-09-05 22:12:07] memory features 10,000/12,000
+[2026-09-05 22:15:32] [2026-09-05 22:15:32] memory features 12,000/12,000
+[2026-09-05 22:15:36] [2026-09-05 22:15:36] wrote memory feature cache /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/retrieval_cache/multiview_memory_development.npz
+[2026-09-05 22:17:36] [2026-09-05 22:17:36] queries 500/25,000; mean candidates=57.6
+[2026-09-05 22:19:34] [2026-09-05 22:19:34] queries 1,000/25,000; mean candidates=56.1
+[2026-09-05 22:21:31] [2026-09-05 22:21:31] queries 1,500/25,000; mean candidates=55.1
+[2026-09-05 22:23:27] [2026-09-05 22:23:27] queries 2,000/25,000; mean candidates=55.4
+[2026-09-05 22:25:22] [2026-09-05 22:25:22] queries 2,500/25,000; mean candidates=55.5
+[2026-09-05 22:27:17] [2026-09-05 22:27:17] queries 3,000/25,000; mean candidates=55.9
+[2026-09-05 22:29:05] [2026-09-05 22:29:05] queries 3,500/25,000; mean candidates=56.3
+[2026-09-05 22:31:01] [2026-09-05 22:31:01] queries 4,000/25,000; mean candidates=56.9
+[2026-09-05 22:32:56] [2026-09-05 22:32:56] queries 4,500/25,000; mean candidates=57.4
+[2026-09-05 22:34:54] [2026-09-05 22:34:54] queries 5,000/25,000; mean candidates=57.7
+[2026-09-05 22:36:49] [2026-09-05 22:36:49] queries 5,500/25,000; mean candidates=58.0
+[2026-09-05 22:38:48] [2026-09-05 22:38:48] queries 6,000/25,000; mean candidates=58.2
+[2026-09-05 22:40:43] [2026-09-05 22:40:43] queries 6,500/25,000; mean candidates=58.3
+[2026-09-05 22:42:38] [2026-09-05 22:42:38] queries 7,000/25,000; mean candidates=58.5
+[2026-09-05 22:44:31] [2026-09-05 22:44:31] queries 7,500/25,000; mean candidates=58.6
+[2026-09-05 22:46:25] [2026-09-05 22:46:25] queries 8,000/25,000; mean candidates=58.6
+[2026-09-05 22:48:21] [2026-09-05 22:48:21] queries 8,500/25,000; mean candidates=58.7
+[2026-09-05 22:50:17] [2026-09-05 22:50:17] queries 9,000/25,000; mean candidates=58.9
+[2026-09-05 22:52:12] [2026-09-05 22:52:12] queries 9,500/25,000; mean candidates=59.0
+[2026-09-05 22:54:10] [2026-09-05 22:54:10] queries 10,000/25,000; mean candidates=59.1
+[2026-09-05 22:56:05] [2026-09-05 22:56:05] queries 10,500/25,000; mean candidates=59.2
+[2026-09-05 22:58:03] [2026-09-05 22:58:03] queries 11,000/25,000; mean candidates=59.3
+[2026-09-05 22:59:56] [2026-09-05 22:59:56] queries 11,500/25,000; mean candidates=59.4
+[2026-09-05 23:01:41] [2026-09-05 23:01:41] queries 12,000/25,000; mean candidates=59.5
+[2026-09-05 23:03:33] [2026-09-05 23:03:33] queries 12,500/25,000; mean candidates=59.5
+[2026-09-05 23:05:30] [2026-09-05 23:05:30] queries 13,000/25,000; mean candidates=59.4
+[2026-09-05 23:07:29] [2026-09-05 23:07:29] queries 13,500/25,000; mean candidates=59.4
+[2026-09-05 23:09:24] [2026-09-05 23:09:24] queries 14,000/25,000; mean candidates=59.4
+[2026-09-05 23:11:20] [2026-09-05 23:11:20] queries 14,500/25,000; mean candidates=59.4
+[2026-09-05 23:13:15] [2026-09-05 23:13:15] queries 15,000/25,000; mean candidates=59.5
+[2026-09-05 23:15:12] [2026-09-05 23:15:12] queries 15,500/25,000; mean candidates=59.5
+[2026-09-05 23:17:11] [2026-09-05 23:17:11] queries 16,000/25,000; mean candidates=59.6
+[2026-09-05 23:19:06] [2026-09-05 23:19:06] queries 16,500/25,000; mean candidates=59.6
+[2026-09-05 23:21:00] [2026-09-05 23:21:00] queries 17,000/25,000; mean candidates=59.7
+[2026-09-05 23:22:58] [2026-09-05 23:22:58] queries 17,500/25,000; mean candidates=59.7
+[2026-09-05 23:24:55] [2026-09-05 23:24:55] queries 18,000/25,000; mean candidates=59.7
+[2026-09-05 23:26:51] [2026-09-05 23:26:51] queries 18,500/25,000; mean candidates=59.7
+[2026-09-05 23:28:49] [2026-09-05 23:28:49] queries 19,000/25,000; mean candidates=59.8
+[2026-09-05 23:30:43] [2026-09-05 23:30:43] queries 19,500/25,000; mean candidates=59.7
+[2026-09-05 23:32:32] [2026-09-05 23:32:32] queries 20,000/25,000; mean candidates=59.8
+[2026-09-05 23:34:30] [2026-09-05 23:34:30] queries 20,500/25,000; mean candidates=59.8
+[2026-09-05 23:36:30] [2026-09-05 23:36:30] queries 21,000/25,000; mean candidates=59.9
+[2026-09-05 23:38:24] [2026-09-05 23:38:24] queries 21,500/25,000; mean candidates=59.9
+[2026-09-05 23:40:22] [2026-09-05 23:40:22] queries 22,000/25,000; mean candidates=59.9
+[2026-09-05 23:42:17] [2026-09-05 23:42:17] queries 22,500/25,000; mean candidates=59.9
+[2026-09-05 23:44:11] [2026-09-05 23:44:11] queries 23,000/25,000; mean candidates=59.9
+[2026-09-05 23:46:05] [2026-09-05 23:46:05] queries 23,500/25,000; mean candidates=59.9
+[2026-09-05 23:48:02] [2026-09-05 23:48:02] queries 24,000/25,000; mean candidates=59.9
+[2026-09-05 23:50:03] [2026-09-05 23:50:03] queries 24,500/25,000; mean candidates=59.9
+[2026-09-05 23:52:00] [2026-09-05 23:52:00] queries 25,000/25,000; mean candidates=60.0
+[2026-09-05 23:52:03] [2026-09-05 23:52:03] wrote /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/val_challenge_pool.npz; queries=25,000; K=64; per_view_recall=24; memory=12,000
+[2026-09-05 23:52:12] 
+[2026-09-05 23:52:12] ============================================================
+[2026-09-05 23:52:12] STAGE 02/04: Build Test candidate pool
+[2026-09-05 23:52:12] ============================================================
+[2026-09-05 23:52:57] [2026-09-05 23:52:57] loaded memory feature cache /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/retrieval_cache/multiview_memory_development.npz
+[2026-09-05 23:55:00] [2026-09-05 23:55:00] queries 500/25,000; mean candidates=61.8
+[2026-09-05 23:57:00] [2026-09-05 23:57:00] queries 1,000/25,000; mean candidates=61.4
+[2026-09-05 23:58:57] [2026-09-05 23:58:57] queries 1,500/25,000; mean candidates=61.0
+[2026-09-06 00:00:55] [2026-09-06 00:00:55] queries 2,000/25,000; mean candidates=60.7
+[2026-09-06 00:02:49] [2026-09-06 00:02:49] queries 2,500/25,000; mean candidates=60.5
+[2026-09-06 00:04:37] [2026-09-06 00:04:37] queries 3,000/25,000; mean candidates=60.6
+[2026-09-06 00:06:34] [2026-09-06 00:06:34] queries 3,500/25,000; mean candidates=60.5
+[2026-09-06 00:08:36] [2026-09-06 00:08:36] queries 4,000/25,000; mean candidates=60.6
+[2026-09-06 00:10:35] [2026-09-06 00:10:35] queries 4,500/25,000; mean candidates=60.7
+[2026-09-06 00:12:33] [2026-09-06 00:12:33] queries 5,000/25,000; mean candidates=60.8
+[2026-09-06 00:14:31] [2026-09-06 00:14:31] queries 5,500/25,000; mean candidates=60.8
+[2026-09-06 00:16:29] [2026-09-06 00:16:29] queries 6,000/25,000; mean candidates=60.8
+[2026-09-06 00:18:26] [2026-09-06 00:18:26] queries 6,500/25,000; mean candidates=60.7
+[2026-09-06 00:20:23] [2026-09-06 00:20:23] queries 7,000/25,000; mean candidates=60.8
+[2026-09-06 00:22:21] [2026-09-06 00:22:21] queries 7,500/25,000; mean candidates=60.8
+[2026-09-06 00:24:20] [2026-09-06 00:24:20] queries 8,000/25,000; mean candidates=60.8
+[2026-09-06 00:26:16] [2026-09-06 00:26:16] queries 8,500/25,000; mean candidates=60.8
+[2026-09-06 00:28:13] [2026-09-06 00:28:13] queries 9,000/25,000; mean candidates=60.8
+[2026-09-06 00:30:08] [2026-09-06 00:30:08] queries 9,500/25,000; mean candidates=60.8
+[2026-09-06 00:32:06] [2026-09-06 00:32:06] queries 10,000/25,000; mean candidates=60.8
+[2026-09-06 00:34:04] [2026-09-06 00:34:04] queries 10,500/25,000; mean candidates=60.8
+[2026-09-06 00:35:59] [2026-09-06 00:35:59] queries 11,000/25,000; mean candidates=60.8
+[2026-09-06 00:37:45] [2026-09-06 00:37:45] queries 11,500/25,000; mean candidates=60.8
+[2026-09-06 00:39:38] [2026-09-06 00:39:38] queries 12,000/25,000; mean candidates=60.9
+[2026-09-06 00:41:35] [2026-09-06 00:41:35] queries 12,500/25,000; mean candidates=60.9
+[2026-09-06 00:43:35] [2026-09-06 00:43:35] queries 13,000/25,000; mean candidates=60.9
+[2026-09-06 00:45:32] [2026-09-06 00:45:32] queries 13,500/25,000; mean candidates=60.8
+[2026-09-06 00:47:26] [2026-09-06 00:47:26] queries 14,000/25,000; mean candidates=60.7
+[2026-09-06 00:49:24] [2026-09-06 00:49:24] queries 14,500/25,000; mean candidates=60.4
+[2026-09-06 00:51:18] [2026-09-06 00:51:18] queries 15,000/25,000; mean candidates=60.3
+[2026-09-06 00:53:12] [2026-09-06 00:53:12] queries 15,500/25,000; mean candidates=60.3
+[2026-09-06 00:55:08] [2026-09-06 00:55:08] queries 16,000/25,000; mean candidates=60.2
+[2026-09-06 00:57:06] [2026-09-06 00:57:06] queries 16,500/25,000; mean candidates=60.2
+[2026-09-06 00:59:00] [2026-09-06 00:59:00] queries 17,000/25,000; mean candidates=60.3
+[2026-09-06 01:00:58] [2026-09-06 01:00:58] queries 17,500/25,000; mean candidates=60.3
+[2026-09-06 01:02:49] [2026-09-06 01:02:49] queries 18,000/25,000; mean candidates=60.3
+[2026-09-06 01:04:45] [2026-09-06 01:04:45] queries 18,500/25,000; mean candidates=60.4
+[2026-09-06 01:06:43] [2026-09-06 01:06:43] queries 19,000/25,000; mean candidates=60.4
+[2026-09-06 01:08:39] [2026-09-06 01:08:39] queries 19,500/25,000; mean candidates=60.5
+[2026-09-06 01:10:32] [2026-09-06 01:10:32] queries 20,000/25,000; mean candidates=60.5
+[2026-09-06 01:12:26] [2026-09-06 01:12:26] queries 20,500/25,000; mean candidates=60.4
+[2026-09-06 01:14:22] [2026-09-06 01:14:22] queries 21,000/25,000; mean candidates=60.4
+[2026-09-06 01:16:10] [2026-09-06 01:16:10] queries 21,500/25,000; mean candidates=60.5
+[2026-09-06 01:18:01] [2026-09-06 01:18:01] queries 22,000/25,000; mean candidates=60.5
+[2026-09-06 01:20:01] [2026-09-06 01:20:01] queries 22,500/25,000; mean candidates=60.5
+[2026-09-06 01:21:59] [2026-09-06 01:21:59] queries 23,000/25,000; mean candidates=60.6
+[2026-09-06 01:23:56] [2026-09-06 01:23:56] queries 23,500/25,000; mean candidates=60.6
+[2026-09-06 01:25:54] [2026-09-06 01:25:54] queries 24,000/25,000; mean candidates=60.6
+[2026-09-06 01:27:51] [2026-09-06 01:27:51] queries 24,500/25,000; mean candidates=60.6
+[2026-09-06 01:29:46] [2026-09-06 01:29:46] queries 25,000/25,000; mean candidates=60.7
+[2026-09-06 01:29:48] [2026-09-06 01:29:48] wrote /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/test_challenge_pool.npz; queries=25,000; K=64; per_view_recall=24; memory=12,000
+[2026-09-06 01:30:00] 
+[2026-09-06 01:30:00] ============================================================
+[2026-09-06 01:30:00] STAGE 03/04: Fit Validation Support Opportunity calibrator
+[2026-09-06 01:30:00] ============================================================
+[2026-09-06 02:17:13] [2026-09-06 02:17:13] wrote Validation calibrator /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/val_support_opportunity.calibrator.json
+[2026-09-06 02:17:14] [2026-09-06 02:17:14] wrote /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/val_support_opportunity.csv; low/medium/high={'medium': 10000, 'low': 7500, 'high': 7500}; challenge=/scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/val_support_opportunity__high.csv; family_composition=/scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/val_support_opportunity__family_composition.json
+[2026-09-06 02:17:14] 
+[2026-09-06 02:17:14] ============================================================
+[2026-09-06 02:17:14] STAGE 04/04: Apply frozen Validation calibrator to Test
+[2026-09-06 02:17:14] ============================================================
+[2026-09-06 03:04:33] [2026-09-06 03:04:33] wrote /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/test_support_opportunity.csv; low/medium/high={'medium': 10084, 'low': 7802, 'high': 7114}; challenge=/scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/test_support_opportunity__high.csv; family_composition=/scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/test_support_opportunity__family_composition.json
+[2026-09-06 03:04:33] 
+[2026-09-06 03:04:33] ============================================================
+[2026-09-06 03:04:33] Support Opportunity summary
+[2026-09-06 03:04:33] ============================================================
+[2026-09-06 03:04:35] Validation: queries=25,000
+[2026-09-06 03:04:35]   group_counts: {'low': 7500, 'medium': 10000, 'high': 7500}
+[2026-09-06 03:04:35]   group_rates : {'low': 0.3, 'medium': 0.4, 'high': 0.3}
+[2026-09-06 03:04:35]   SO mean/std : 0.717993 / 0.164659
+[2026-09-06 03:04:35] Test: queries=25,000
+[2026-09-06 03:04:35]   group_counts: {'low': 7802, 'medium': 10084, 'high': 7114}
+[2026-09-06 03:04:35]   group_rates : {'low': 0.3121, 'medium': 0.4034, 'high': 0.2846}
+[2026-09-06 03:04:35]   SO mean/std : 0.709896 / 0.164475
+[2026-09-06 03:04:35] Validation calibrator:
+[2026-09-06 03:04:35]   fitted_split= val
+[2026-09-06 03:04:35]   future_free= True
+[2026-09-06 03:04:35]   low_threshold= 0.6310976669446231
+[2026-09-06 03:04:35]   high_threshold= 0.849499864156383
+[2026-09-06 03:04:35] Validation High-SO family composition:
+[2026-09-06 03:04:35]   high_composition= {'directional_outage': 0.3464, 'predictive_directional_outage': 0.4199, 'predictive_regional_outage': 0.0831, 'regional_outage': 0.0, 'temporal_outage': 0.1507}
+[2026-09-06 03:04:35]   within_family_high_rate= {'directional_outage': 0.5196, 'predictive_directional_outage': 0.6298, 'predictive_regional_outage': 0.1246, 'regional_outage': 0.0, 'temporal_outage': 0.226}
+[2026-09-06 03:04:35]   max_family=predictive_directional_outage, fraction=0.4199
+[2026-09-06 03:04:35] Test High-SO family composition:
+[2026-09-06 03:04:35]   high_composition= {'directional_outage': 0.3548, 'predictive_directional_outage': 0.4124, 'predictive_regional_outage': 0.0728, 'regional_outage': 0.0, 'temporal_outage': 0.16}
+[2026-09-06 03:04:35]   within_family_high_rate= {'directional_outage': 0.5048, 'predictive_directional_outage': 0.5868, 'predictive_regional_outage': 0.1036, 'regional_outage': 0.0, 'temporal_outage': 0.2276}
+[2026-09-06 03:04:35]   max_family=predictive_directional_outage, fraction=0.4124
+[2026-09-06 03:04:35] 
+[2026-09-06 03:04:35] ============================================================
+[2026-09-06 03:04:35] Support Opportunity build completed
+[2026-09-06 03:04:35] ============================================================
+[2026-09-06 03:04:35] VAL_POOL=/scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/val_challenge_pool.npz
+[2026-09-06 03:04:35] TEST_POOL=/scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/test_challenge_pool.npz
+[2026-09-06 03:04:35] VAL_SO=/scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/val_support_opportunity.csv
+[2026-09-06 03:04:35] VAL_CAL=/scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/val_support_opportunity.calibrator.json
+[2026-09-06 03:04:35] VAL_COMP=/scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/val_support_opportunity__family_composition.json
+[2026-09-06 03:04:35] TEST_SO=/scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/test_support_opportunity.csv
+[2026-09-06 03:04:35] TEST_COMP=/scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/test_support_opportunity__family_composition.json
+[2026-09-06 03:04:35] RESULT=PASS
+[2026-09-06 03:04:35] ============================================================
+[2026-09-06 03:04:35] Support Opportunity PBS exiting rc=0
+[2026-09-06 03:04:35] LIVE_LOG=/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench/logs/SupportOpportunity.178261014.gadi-pbs.live.log
+[2026-09-06 03:04:35] ============================================================
+
+======================================================================================
+                  Resource Usage on 2026-09-06 03:04:41:
+   Job Id:             178261014.gadi-pbs
+   Project:            mh20
+   Exit Status:        0
+   Service Units:      83.05
+   NCPUs Requested:    8                   CPU Time Used: 21:39:29        
+   Memory Requested:   16.0GB                Memory Used: 2.43GB          
+   Walltime Requested: 12:00:00            Walltime Used: 05:11:27        
+   JobFS Requested:    100.0MB                JobFS Used: 0B              
+======================================================================================

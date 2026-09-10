@@ -1,0 +1,45 @@
+[2026-09-09 18:50:08] START SharedProtocol stage=development job=178541538.gadi-pbs host=gadi-cpu-clx-0273.gadi.nci.org.au
+[2026-09-09 18:50:12] Shared Protocol preflight v1.0.0
+[2026-09-09 18:50:12] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol
+[2026-09-09 18:50:12] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench
+[2026-09-09 18:50:12] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench
+[2026-09-09 18:50:12] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench
+[2026-09-09 18:50:12] PASS numpy
+[2026-09-09 18:50:12] PASS pandas
+[2026-09-09 18:50:12] PASS yaml
+[2026-09-09 18:50:12] PASS scipy
+[2026-09-09 18:50:12] PASS sklearn
+[2026-09-09 18:50:12] PASS SupportBench package version 1.2.3
+[2026-09-09 18:50:15] PASS SupportBench geometry N= 388 H= 12 P= 12
+[2026-09-09 18:50:15] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/val_challenge_pool.npz
+[2026-09-09 18:50:15] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench/TraffiDent_Net_06/test_challenge_pool.npz
+[2026-09-09 18:50:15] PREFLIGHT PASS
+[2026-09-09 18:52:24] evaluation masks: 500/5000
+[2026-09-09 18:52:27] evaluation masks: 1000/5000
+[2026-09-09 18:52:29] evaluation masks: 1500/5000
+[2026-09-09 18:52:32] evaluation masks: 2000/5000
+[2026-09-09 18:52:35] evaluation masks: 2500/5000
+[2026-09-09 18:52:37] evaluation masks: 3000/5000
+[2026-09-09 18:52:40] evaluation masks: 3500/5000
+[2026-09-09 18:52:43] evaluation masks: 4000/5000
+[2026-09-09 18:52:45] evaluation masks: 4500/5000
+[2026-09-09 18:52:48] evaluation masks: 5000/5000
+[2026-09-09 18:52:49] PROTOCOL_STAGE=development
+[2026-09-09 18:52:49] PROTOCOL_STAGE_HASH=60de891db0ea5b72a4c0fd9f4a7e30fcaf96d04f2085994516a0f4048a9915bb
+[2026-09-09 18:52:49] PROTOCOL_FROZEN=/scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_artifacts/TraffiDent_Net_06/protocol_v1/development/FROZEN.json
+[2026-09-09 18:52:49] PROTOCOL BUILD PASS
+[2026-09-09 18:53:01] PASS development 60de891db0ea5b72a4c0fd9f4a7e30fcaf96d04f2085994516a0f4048a9915bb
+[2026-09-09 18:53:01] PROTOCOL VALIDATION PASS
+[2026-09-09 18:53:01] SCRIPT_EXIT_STATUS=0
+
+======================================================================================
+                  Resource Usage on 2026-09-09 18:53:05:
+   Job Id:             178541538.gadi-pbs
+   Project:            mh20
+   Exit Status:        0
+   Service Units:      0.88
+   NCPUs Requested:    4                   CPU Time Used: 00:02:41        
+   Memory Requested:   32.0GB                Memory Used: 1.41GB          
+   Walltime Requested: 06:00:00            Walltime Used: 00:03:19        
+   JobFS Requested:    100.0MB                JobFS Used: 0B              
+======================================================================================

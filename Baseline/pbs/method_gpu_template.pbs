@@ -1,0 +1,14 @@
+#!/bin/bash
+# Template only. Do not submit until the method-specific compatibility audit has passed.
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=48GB
+#PBS -l walltime=24:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -N BaselineMethod
+# v0.4.0 intentionally has no generic "python official.py" call here: each official
+# method has different dataset assumptions. A method-specific bridge must be audited
+# before this template is instantiated, so we do not silently alter a baseline.

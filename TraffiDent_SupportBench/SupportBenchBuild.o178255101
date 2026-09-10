@@ -1,0 +1,2024 @@
+[2026-09-05 19:17:00] ============================================================
+[2026-09-05 19:17:00] TraffiDent-SupportBench PBS build
+[2026-09-05 19:17:00] LIVE_LOG=/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench/logs/SupportBenchBuild.178255101.gadi-pbs.live.log
+[2026-09-05 19:17:00] PBS_JOBID=178255101.gadi-pbs
+[2026-09-05 19:17:00] host=gadi-cpu-clx-2736.gadi.nci.org.au
+[2026-09-05 19:17:00] workdir=/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench
+[2026-09-05 19:17:00] conda_prefix=/scratch/mh20/zw1165/envs/TFP
+[2026-09-05 19:17:00] python=/scratch/mh20/zw1165/envs/TFP/bin/python
+[2026-09-05 19:17:00] Python 3.11.11
+[2026-09-05 19:17:00] ncpus=4
+[2026-09-05 19:17:00] ============================================================
+[2026-09-05 19:17:00] TraffiDent-SupportBench build v1.2.2
+[2026-09-05 19:17:00] PROCESS_ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench
+[2026-09-05 19:17:00] CONFIG=/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench/configs/supportbench.yaml
+[2026-09-05 19:17:00] ========== STAGE 00 START: preflight ==========
+[2026-09-05 19:17:01] TraffiDent-SupportBench preflight
+[2026-09-05 19:17:01] config: /scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench/configs/supportbench.yaml
+[2026-09-05 19:17:01] project_root: /scratch/mh20/zw1165/Speed_LLM_RAG
+[2026-09-05 19:17:01] process_root: /scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench
+[2026-09-05 19:17:01] data_root: /scratch/mh20/zw1165/Speed_LLM_RAG/data
+[2026-09-05 19:17:01] benchmark_root: /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench
+[2026-09-05 19:17:01] diagnostics_root: /scratch/mh20/zw1165/Speed_LLM_RAG/data/diagnostics/traffident/supportbench
+[2026-09-05 19:17:01] derived_root: /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench
+[2026-09-05 19:17:01] PASS numpy
+[2026-09-05 19:17:01] PASS pandas
+[2026-09-05 19:17:01] PASS scipy
+[2026-09-05 19:17:01] PASS yaml
+[2026-09-05 19:17:01] PASS sklearn
+[2026-09-05 19:17:01] PASS source_root /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/subgraph_datasets_final
+[2026-09-05 19:17:01] PASS TraffiDent_Net_01
+[2026-09-05 19:17:01] PASS TraffiDent_Net_02
+[2026-09-05 19:17:01] PASS TraffiDent_Net_03
+[2026-09-05 19:17:01] PASS TraffiDent_Net_04
+[2026-09-05 19:17:01] PASS TraffiDent_Net_06
+[2026-09-05 19:17:01] PREFLIGHT PASS
+[2026-09-05 19:17:01] ========== STAGE 00 DONE: preflight elapsed=1s ==========
+[2026-09-05 19:17:01] ========== STAGE 01 START: canonical core ==========
+[2026-09-05 19:17:16] source_root=/scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/subgraph_datasets_final
+[2026-09-05 19:17:18] valid mask built: /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench/TraffiDent_Net_01/core/raw_valid_mask.npy; synchronized-zero timestamps invalidated=12
+[2026-09-05 19:17:36] predictive dependency built: targets=1023/1028; anchors_every=12 steps (60 min); lags=[0, 5, 10, 15] min
+[2026-09-05 19:17:47] core built TraffiDent_Net_01: T=105408 N=1028 C=3
+[2026-09-05 19:17:51] valid mask built: /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench/TraffiDent_Net_02/core/raw_valid_mask.npy; synchronized-zero timestamps invalidated=12
+[2026-09-05 19:18:11] predictive dependency built: targets=1186/1186; anchors_every=12 steps (60 min); lags=[0, 5, 10, 15] min
+[2026-09-05 19:18:20] core built TraffiDent_Net_02: T=105408 N=1186 C=3
+[2026-09-05 19:18:23] valid mask built: /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench/TraffiDent_Net_03/core/raw_valid_mask.npy; synchronized-zero timestamps invalidated=12
+[2026-09-05 19:18:38] predictive dependency built: targets=904/910; anchors_every=12 steps (60 min); lags=[0, 5, 10, 15] min
+[2026-09-05 19:18:44] core built TraffiDent_Net_03: T=105408 N=910 C=3
+[2026-09-05 19:18:46] valid mask built: /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench/TraffiDent_Net_04/core/raw_valid_mask.npy; synchronized-zero timestamps invalidated=12
+[2026-09-05 19:19:02] predictive dependency built: targets=1010/1012; anchors_every=12 steps (60 min); lags=[0, 5, 10, 15] min
+[2026-09-05 19:19:23] core built TraffiDent_Net_04: T=105408 N=1012 C=3
+[2026-09-05 19:19:24] valid mask built: /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench/TraffiDent_Net_06/core/raw_valid_mask.npy; synchronized-zero timestamps invalidated=12
+[2026-09-05 19:19:29] predictive dependency built: targets=388/388; anchors_every=12 steps (60 min); lags=[0, 5, 10, 15] min
+[2026-09-05 19:19:31] core built TraffiDent_Net_06: T=105408 N=388 C=3
+[2026-09-05 19:19:31] ========== STAGE 01 DONE: canonical core elapsed=150s ==========
+[2026-09-05 19:19:31] ========== STAGE 02 START: forecast windows ==========
+[2026-09-05 19:19:32] TraffiDent_Net_01 train: 73,727 dense controlled-complete windows (stride=1)
+[2026-09-05 19:19:32] TraffiDent_Net_01 val: 10,518 dense controlled-complete windows (stride=1)
+[2026-09-05 19:19:33] TraffiDent_Net_01 test: 21,059 dense controlled-complete windows (stride=1)
+[2026-09-05 19:19:33] TraffiDent_Net_01 train: development windows=12,000/73,727
+[2026-09-05 19:19:33] TraffiDent_Net_01 val: development windows=5,000/10,518
+[2026-09-05 19:19:33] TraffiDent_Net_01 test: development windows=5,000/21,059
+[2026-09-05 19:19:33] TraffiDent_Net_02 train: 73,727 dense controlled-complete windows (stride=1)
+[2026-09-05 19:19:33] TraffiDent_Net_02 val: 10,518 dense controlled-complete windows (stride=1)
+[2026-09-05 19:19:33] TraffiDent_Net_02 test: 21,059 dense controlled-complete windows (stride=1)
+[2026-09-05 19:19:33] TraffiDent_Net_02 train: development windows=12,000/73,727
+[2026-09-05 19:19:33] TraffiDent_Net_02 val: development windows=5,000/10,518
+[2026-09-05 19:19:33] TraffiDent_Net_02 test: development windows=5,000/21,059
+[2026-09-05 19:19:34] TraffiDent_Net_03 train: 73,727 dense controlled-complete windows (stride=1)
+[2026-09-05 19:19:34] TraffiDent_Net_03 val: 10,518 dense controlled-complete windows (stride=1)
+[2026-09-05 19:19:34] TraffiDent_Net_03 test: 21,059 dense controlled-complete windows (stride=1)
+[2026-09-05 19:19:34] TraffiDent_Net_03 train: development windows=12,000/73,727
+[2026-09-05 19:19:34] TraffiDent_Net_03 val: development windows=5,000/10,518
+[2026-09-05 19:19:34] TraffiDent_Net_03 test: development windows=5,000/21,059
+[2026-09-05 19:19:35] TraffiDent_Net_04 train: 73,727 dense controlled-complete windows (stride=1)
+[2026-09-05 19:19:35] TraffiDent_Net_04 val: 10,518 dense controlled-complete windows (stride=1)
+[2026-09-05 19:19:35] TraffiDent_Net_04 test: 21,059 dense controlled-complete windows (stride=1)
+[2026-09-05 19:19:35] TraffiDent_Net_04 train: development windows=12,000/73,727
+[2026-09-05 19:19:35] TraffiDent_Net_04 val: development windows=5,000/10,518
+[2026-09-05 19:19:35] TraffiDent_Net_04 test: development windows=5,000/21,059
+[2026-09-05 19:19:35] TraffiDent_Net_06 train: 73,727 dense controlled-complete windows (stride=1)
+[2026-09-05 19:19:35] TraffiDent_Net_06 val: 10,518 dense controlled-complete windows (stride=1)
+[2026-09-05 19:19:35] TraffiDent_Net_06 test: 21,059 dense controlled-complete windows (stride=1)
+[2026-09-05 19:19:35] TraffiDent_Net_06 train: development windows=12,000/73,727
+[2026-09-05 19:19:35] TraffiDent_Net_06 val: development windows=5,000/10,518
+[2026-09-05 19:19:35] TraffiDent_Net_06 test: development windows=5,000/21,059
+[2026-09-05 19:19:36] ========== STAGE 02 DONE: forecast windows elapsed=5s ==========
+[2026-09-05 19:19:36] ========== STAGE 03 START: controlled sensing views ==========
+[2026-09-05 19:21:50] TraffiDent_Net_01: 1,284,368 deterministic sensing views written
+[2026-09-05 19:21:50] TraffiDent_Net_01 train: views=368,635; families=['complete', 'directional_outage', 'entry_random', 'predictive_directional_outage', 'predictive_regional_outage', 'regional_outage', 'sensor_outage', 'temporal_outage']
+[2026-09-05 19:21:50] TraffiDent_Net_01 val: views=305,022; families=['complete', 'directional_outage', 'entry_random', 'predictive_directional_outage', 'predictive_regional_outage', 'regional_outage', 'sensor_outage', 'temporal_outage']
+[2026-09-05 19:21:50] TraffiDent_Net_01 test: views=610,711; families=['complete', 'directional_outage', 'entry_random', 'predictive_directional_outage', 'predictive_regional_outage', 'regional_outage', 'sensor_outage', 'temporal_outage']
+[2026-09-05 19:24:06] TraffiDent_Net_02: 1,284,368 deterministic sensing views written
+[2026-09-05 19:24:06] TraffiDent_Net_02 train: views=368,635; families=['complete', 'directional_outage', 'entry_random', 'predictive_directional_outage', 'predictive_regional_outage', 'regional_outage', 'sensor_outage', 'temporal_outage']
+[2026-09-05 19:24:06] TraffiDent_Net_02 val: views=305,022; families=['complete', 'directional_outage', 'entry_random', 'predictive_directional_outage', 'predictive_regional_outage', 'regional_outage', 'sensor_outage', 'temporal_outage']
+[2026-09-05 19:24:06] TraffiDent_Net_02 test: views=610,711; families=['complete', 'directional_outage', 'entry_random', 'predictive_directional_outage', 'predictive_regional_outage', 'regional_outage', 'sensor_outage', 'temporal_outage']
+[2026-09-05 19:26:19] TraffiDent_Net_03: 1,284,368 deterministic sensing views written
+[2026-09-05 19:26:19] TraffiDent_Net_03 train: views=368,635; families=['complete', 'directional_outage', 'entry_random', 'predictive_directional_outage', 'predictive_regional_outage', 'regional_outage', 'sensor_outage', 'temporal_outage']
+[2026-09-05 19:26:19] TraffiDent_Net_03 val: views=305,022; families=['complete', 'directional_outage', 'entry_random', 'predictive_directional_outage', 'predictive_regional_outage', 'regional_outage', 'sensor_outage', 'temporal_outage']
+[2026-09-05 19:26:19] TraffiDent_Net_03 test: views=610,711; families=['complete', 'directional_outage', 'entry_random', 'predictive_directional_outage', 'predictive_regional_outage', 'regional_outage', 'sensor_outage', 'temporal_outage']
+[2026-09-05 19:28:34] TraffiDent_Net_04: 1,284,368 deterministic sensing views written
+[2026-09-05 19:28:34] TraffiDent_Net_04 train: views=368,635; families=['complete', 'directional_outage', 'entry_random', 'predictive_directional_outage', 'predictive_regional_outage', 'regional_outage', 'sensor_outage', 'temporal_outage']
+[2026-09-05 19:28:34] TraffiDent_Net_04 val: views=305,022; families=['complete', 'directional_outage', 'entry_random', 'predictive_directional_outage', 'predictive_regional_outage', 'regional_outage', 'sensor_outage', 'temporal_outage']
+[2026-09-05 19:28:34] TraffiDent_Net_04 test: views=610,711; families=['complete', 'directional_outage', 'entry_random', 'predictive_directional_outage', 'predictive_regional_outage', 'regional_outage', 'sensor_outage', 'temporal_outage']
+[2026-09-05 19:30:38] TraffiDent_Net_06: 1,284,368 deterministic sensing views written
+[2026-09-05 19:30:38] TraffiDent_Net_06 train: views=368,635; families=['complete', 'directional_outage', 'entry_random', 'predictive_directional_outage', 'predictive_regional_outage', 'regional_outage', 'sensor_outage', 'temporal_outage']
+[2026-09-05 19:30:38] TraffiDent_Net_06 val: views=305,022; families=['complete', 'directional_outage', 'entry_random', 'predictive_directional_outage', 'predictive_regional_outage', 'regional_outage', 'sensor_outage', 'temporal_outage']
+[2026-09-05 19:30:38] TraffiDent_Net_06 test: views=610,711; families=['complete', 'directional_outage', 'entry_random', 'predictive_directional_outage', 'predictive_regional_outage', 'regional_outage', 'sensor_outage', 'temporal_outage']
+[2026-09-05 19:30:38] ========== STAGE 03 DONE: controlled sensing views elapsed=662s ==========
+[2026-09-05 19:30:38] ========== STAGE 04 START: train-only support memory ==========
+[2026-09-05 19:30:39] TraffiDent_Net_01: full memory episodes=12,289; development memory episodes=12,000; stride=6
+[2026-09-05 19:30:39] TraffiDent_Net_02: full memory episodes=12,289; development memory episodes=12,000; stride=6
+[2026-09-05 19:30:39] TraffiDent_Net_03: full memory episodes=12,289; development memory episodes=12,000; stride=6
+[2026-09-05 19:30:39] TraffiDent_Net_04: full memory episodes=12,289; development memory episodes=12,000; stride=6
+[2026-09-05 19:30:40] TraffiDent_Net_06: full memory episodes=12,289; development memory episodes=12,000; stride=6
+[2026-09-05 19:30:40] ========== STAGE 04 DONE: train-only support memory elapsed=2s ==========
+[2026-09-05 19:30:40] ========== STAGE 05 START: experimental protocols ==========
+[2026-09-05 19:32:00] TraffiDent_Net_01: protocols written
+[2026-09-05 19:33:20] TraffiDent_Net_02: protocols written
+[2026-09-05 19:34:39] TraffiDent_Net_03: protocols written
+[2026-09-05 19:36:00] TraffiDent_Net_04: protocols written
+[2026-09-05 19:37:20] TraffiDent_Net_06: protocols written
+[2026-09-05 19:37:20] ========== STAGE 05 DONE: experimental protocols elapsed=400s ==========
+[2026-09-05 19:37:20] ========== STAGE 06 START: benchmark audit ==========
+[2026-09-05 19:38:07] {
+[2026-09-05 19:38:07]   "subgraph": "TraffiDent_Net_01",
+[2026-09-05 19:38:07]   "checks": {
+[2026-09-05 19:38:07]     "split_order": "PASS",
+[2026-09-05 19:38:07]     "predictive_dependency_train_only": "PASS",
+[2026-09-05 19:38:07]     "predictive_dependency_raw_lag_semantics": "PASS",
+[2026-09-05 19:38:07]     "predictive_dependency_lag_step_minutes": 5,
+[2026-09-05 19:38:07]     "predictive_dependency_sample_stride_minutes": 60,
+[2026-09-05 19:38:07]     "train_windows_inside_split": "PASS",
+[2026-09-05 19:38:07]     "train_development_subset": "PASS",
+[2026-09-05 19:38:07]     "val_windows_inside_split": "PASS",
+[2026-09-05 19:38:07]     "val_development_subset": "PASS",
+[2026-09-05 19:38:07]     "test_windows_inside_split": "PASS",
+[2026-09-05 19:38:07]     "test_development_subset": "PASS",
+[2026-09-05 19:38:07]     "controlled_window_validity": "PASS",
+[2026-09-05 19:38:07]     "view_determinism": "PASS",
+[2026-09-05 19:38:07]     "mask_ratio_max_abs_error": 0.025000000000000022,
+[2026-09-05 19:38:07]     "manifest_ratio_max_abs_error": 8.326672684688674e-17,
+[2026-09-05 19:38:07]     "regional_s20_id_layout_count": 32,
+[2026-09-05 19:38:07]     "regional_s20_ood_layout_count": 0,
+[2026-09-05 19:38:07]     "regional_s40_id_layout_count": 32,
+[2026-09-05 19:38:07]     "regional_s40_ood_layout_count": 16,
+[2026-09-05 19:38:07]     "regional_s60_id_layout_count": 32,
+[2026-09-05 19:38:07]     "regional_s60_ood_layout_count": 0,
+[2026-09-05 19:38:07]     "regional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:38:07]     "regional_id_layout_count": 96,
+[2026-09-05 19:38:07]     "regional_ood_layout_count": 16,
+[2026-09-05 19:38:07]     "directional_s20_id_layout_count": 32,
+[2026-09-05 19:38:07]     "directional_s20_ood_layout_count": 0,
+[2026-09-05 19:38:07]     "directional_s40_id_layout_count": 32,
+[2026-09-05 19:38:07]     "directional_s40_ood_layout_count": 16,
+[2026-09-05 19:38:07]     "directional_s60_id_layout_count": 32,
+[2026-09-05 19:38:07]     "directional_s60_ood_layout_count": 0,
+[2026-09-05 19:38:07]     "directional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:38:07]     "directional_id_layout_count": 96,
+[2026-09-05 19:38:07]     "directional_ood_layout_count": 16,
+[2026-09-05 19:38:07]     "predictive_regional_s40_id_layout_count": 24,
+[2026-09-05 19:38:07]     "predictive_regional_s40_ood_layout_count": 12,
+[2026-09-05 19:38:07]     "predictive_regional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:38:07]     "predictive_regional_id_layout_count": 24,
+[2026-09-05 19:38:07]     "predictive_regional_ood_layout_count": 12,
+[2026-09-05 19:38:07]     "predictive_directional_s40_id_layout_count": 24,
+[2026-09-05 19:38:07]     "predictive_directional_s40_ood_layout_count": 12,
+[2026-09-05 19:38:07]     "predictive_directional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:38:07]     "predictive_directional_id_layout_count": 24,
+[2026-09-05 19:38:07]     "predictive_directional_ood_layout_count": 12,
+[2026-09-05 19:38:07]     "regional_min_largest_component_fraction": 1.0,
+[2026-09-05 19:38:07]     "predictive_regional_outage_context_loss_ratio": 1.46061655994219,
+[2026-09-05 19:38:07]     "predictive_directional_outage_context_loss_ratio": 1.0294584069384067,
+[2026-09-05 19:38:07]     "paired_views_share_base_window": "PASS",
+[2026-09-05 19:38:07]     "memory_train_only": "PASS",
+[2026-09-05 19:38:07]     "development_memory_subset": "PASS",
+[2026-09-05 19:38:07]     "memory_stride": "PASS",
+[2026-09-05 19:38:07]     "local_patch_target_first": "PASS",
+[2026-09-05 19:38:07]     "resolved_protocols": "PASS"
+[2026-09-05 19:38:07]   },
+[2026-09-05 19:38:07]   "stratified_mask_audit": [
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "complete",
+[2026-09-05 19:38:07]       "severity": 0.0,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 105304,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.0,
+[2026-09-05 19:38:07]       "actual_min": 0.0,
+[2026-09-05 19:38:07]       "actual_max": 0.0,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "directional_outage",
+[2026-09-05 19:38:07]       "severity": 0.2,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 48924,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.2003891050583658,
+[2026-09-05 19:38:07]       "actual_min": 0.20038910505836577,
+[2026-09-05 19:38:07]       "actual_max": 0.20038910505836577,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.00038910505836575737,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "directional_outage",
+[2026-09-05 19:38:07]       "severity": 0.4,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 80501,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.3998054474708172,
+[2026-09-05 19:38:07]       "actual_min": 0.39980544747081714,
+[2026-09-05 19:38:07]       "actual_max": 0.39980544747081714,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.00019455252918287869,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "directional_outage",
+[2026-09-05 19:38:07]       "severity": 0.4,
+[2026-09-05 19:38:07]       "distribution": "ood",
+[2026-09-05 19:38:07]       "n_views": 31577,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.3998054474708172,
+[2026-09-05 19:38:07]       "actual_min": 0.39980544747081714,
+[2026-09-05 19:38:07]       "actual_max": 0.39980544747081714,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.00019455252918287869,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "directional_outage",
+[2026-09-05 19:38:07]       "severity": 0.6,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 48924,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.6001945525291829,
+[2026-09-05 19:38:07]       "actual_min": 0.6001945525291829,
+[2026-09-05 19:38:07]       "actual_max": 0.6001945525291829,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.00019455252918287869,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "entry_random",
+[2026-09-05 19:38:07]       "severity": 0.2,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 48925,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.1999837872892348,
+[2026-09-05 19:38:07]       "actual_min": 0.19998378728923477,
+[2026-09-05 19:38:07]       "actual_max": 0.19998378728923477,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 1.621271076523989e-05,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 8.326672684688674e-17,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "entry_random",
+[2026-09-05 19:38:07]       "severity": 0.4,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 80502,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.3999675745784696,
+[2026-09-05 19:38:07]       "actual_min": 0.39996757457846954,
+[2026-09-05 19:38:07]       "actual_max": 0.39996757457846954,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 3.242542153047978e-05,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "entry_random",
+[2026-09-05 19:38:07]       "severity": 0.6,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 48925,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.6000324254215305,
+[2026-09-05 19:38:07]       "actual_min": 0.6000324254215305,
+[2026-09-05 19:38:07]       "actual_max": 0.6000324254215305,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 3.242542153047978e-05,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "predictive_directional_outage",
+[2026-09-05 19:38:07]       "severity": 0.4,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 80501,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.3998054474708172,
+[2026-09-05 19:38:07]       "actual_min": 0.39980544747081714,
+[2026-09-05 19:38:07]       "actual_max": 0.39980544747081714,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.00019455252918287869,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "predictive_directional_outage",
+[2026-09-05 19:38:07]       "severity": 0.4,
+[2026-09-05 19:38:07]       "distribution": "ood",
+[2026-09-05 19:38:07]       "n_views": 31577,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.3998054474708172,
+[2026-09-05 19:38:07]       "actual_min": 0.39980544747081714,
+[2026-09-05 19:38:07]       "actual_max": 0.39980544747081714,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.00019455252918287869,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "predictive_regional_outage",
+[2026-09-05 19:38:07]       "severity": 0.4,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 80501,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.3998054474708172,
+[2026-09-05 19:38:07]       "actual_min": 0.39980544747081714,
+[2026-09-05 19:38:07]       "actual_max": 0.39980544747081714,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.00019455252918287869,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "predictive_regional_outage",
+[2026-09-05 19:38:07]       "severity": 0.4,
+[2026-09-05 19:38:07]       "distribution": "ood",
+[2026-09-05 19:38:07]       "n_views": 31577,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.3998054474708172,
+[2026-09-05 19:38:07]       "actual_min": 0.39980544747081714,
+[2026-09-05 19:38:07]       "actual_max": 0.39980544747081714,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.00019455252918287869,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "regional_outage",
+[2026-09-05 19:38:07]       "severity": 0.2,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 48924,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.2003891050583658,
+[2026-09-05 19:38:07]       "actual_min": 0.20038910505836577,
+[2026-09-05 19:38:07]       "actual_max": 0.20038910505836577,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.00038910505836575737,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "regional_outage",
+[2026-09-05 19:38:07]       "severity": 0.4,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 80501,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.3998054474708172,
+[2026-09-05 19:38:07]       "actual_min": 0.39980544747081714,
+[2026-09-05 19:38:07]       "actual_max": 0.39980544747081714,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.00019455252918287869,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "regional_outage",
+[2026-09-05 19:38:07]       "severity": 0.4,
+[2026-09-05 19:38:07]       "distribution": "ood",
+[2026-09-05 19:38:07]       "n_views": 31577,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.3998054474708172,
+[2026-09-05 19:38:07]       "actual_min": 0.39980544747081714,
+[2026-09-05 19:38:07]       "actual_max": 0.39980544747081714,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.00019455252918287869,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "regional_outage",
+[2026-09-05 19:38:07]       "severity": 0.6,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 48924,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.6001945525291829,
+[2026-09-05 19:38:07]       "actual_min": 0.6001945525291829,
+[2026-09-05 19:38:07]       "actual_max": 0.6001945525291829,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.00019455252918287869,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "sensor_outage",
+[2026-09-05 19:38:07]       "severity": 0.2,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 48925,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.2003891050583658,
+[2026-09-05 19:38:07]       "actual_min": 0.20038910505836577,
+[2026-09-05 19:38:07]       "actual_max": 0.20038910505836577,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.00038910505836575737,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "sensor_outage",
+[2026-09-05 19:38:07]       "severity": 0.4,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 80502,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.3998054474708172,
+[2026-09-05 19:38:07]       "actual_min": 0.39980544747081714,
+[2026-09-05 19:38:07]       "actual_max": 0.39980544747081714,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.00019455252918287869,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "sensor_outage",
+[2026-09-05 19:38:07]       "severity": 0.6,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 48925,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.6001945525291829,
+[2026-09-05 19:38:07]       "actual_min": 0.6001945525291829,
+[2026-09-05 19:38:07]       "actual_max": 0.6001945525291829,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.00019455252918287869,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "temporal_outage",
+[2026-09-05 19:38:07]       "severity": 0.2,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 48925,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.1875,
+[2026-09-05 19:38:07]       "actual_min": 0.1875,
+[2026-09-05 19:38:07]       "actual_max": 0.1875,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.012500000000000011,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "temporal_outage",
+[2026-09-05 19:38:07]       "severity": 0.4,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 80502,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.375,
+[2026-09-05 19:38:07]       "actual_min": 0.375,
+[2026-09-05 19:38:07]       "actual_max": 0.375,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.025000000000000022,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "family": "temporal_outage",
+[2026-09-05 19:38:07]       "severity": 0.6,
+[2026-09-05 19:38:07]       "distribution": "id",
+[2026-09-05 19:38:07]       "n_views": 48925,
+[2026-09-05 19:38:07]       "n_checked": 3,
+[2026-09-05 19:38:07]       "actual_mean": 0.625,
+[2026-09-05 19:38:07]       "actual_min": 0.625,
+[2026-09-05 19:38:07]       "actual_max": 0.625,
+[2026-09-05 19:38:07]       "max_abs_error_to_nominal": 0.025000000000000022,
+[2026-09-05 19:38:07]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     }
+[2026-09-05 19:38:07]   ],
+[2026-09-05 19:38:07]   "errors": [],
+[2026-09-05 19:38:07]   "warnings": [
+[2026-09-05 19:38:07]     "predictive_directional_outage: predictive/general context-loss ratio=1.029 < diagnostic target 1.050; predictive layouts may not be sufficiently support-oriented."
+[2026-09-05 19:38:07]   ],
+[2026-09-05 19:38:07]   "predictive_context_audit": [
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "general_family": "regional_outage",
+[2026-09-05 19:38:07]       "predictive_family": "predictive_regional_outage",
+[2026-09-05 19:38:07]       "severity": 0.4,
+[2026-09-05 19:38:07]       "split": "val",
+[2026-09-05 19:38:07]       "n_matched_views": 512,
+[2026-09-05 19:38:07]       "general_context_loss_mean": 0.3991120762657374,
+[2026-09-05 19:38:07]       "predictive_context_loss_mean": 0.5829497078666463,
+[2026-09-05 19:38:07]       "predictive_to_general_ratio": 1.46061655994219,
+[2026-09-05 19:38:07]       "configured_min_ratio": 1.05,
+[2026-09-05 19:38:07]       "status": "PASS"
+[2026-09-05 19:38:07]     },
+[2026-09-05 19:38:07]     {
+[2026-09-05 19:38:07]       "general_family": "directional_outage",
+[2026-09-05 19:38:07]       "predictive_family": "predictive_directional_outage",
+[2026-09-05 19:38:07]       "severity": 0.4,
+[2026-09-05 19:38:07]       "split": "val",
+[2026-09-05 19:38:07]       "n_matched_views": 512,
+[2026-09-05 19:38:07]       "general_context_loss_mean": 0.39854783785995096,
+[2026-09-05 19:38:07]       "predictive_context_loss_mean": 0.41028842225205153,
+[2026-09-05 19:38:07]       "predictive_to_general_ratio": 1.0294584069384067,
+[2026-09-05 19:38:07]       "configured_min_ratio": 1.05,
+[2026-09-05 19:38:07]       "status": "LOW_GAIN"
+[2026-09-05 19:38:07]     }
+[2026-09-05 19:38:07]   ],
+[2026-09-05 19:38:07]   "status": "PASS"
+[2026-09-05 19:38:07] }
+[2026-09-05 19:38:57] {
+[2026-09-05 19:38:57]   "subgraph": "TraffiDent_Net_02",
+[2026-09-05 19:38:57]   "checks": {
+[2026-09-05 19:38:57]     "split_order": "PASS",
+[2026-09-05 19:38:57]     "predictive_dependency_train_only": "PASS",
+[2026-09-05 19:38:57]     "predictive_dependency_raw_lag_semantics": "PASS",
+[2026-09-05 19:38:57]     "predictive_dependency_lag_step_minutes": 5,
+[2026-09-05 19:38:57]     "predictive_dependency_sample_stride_minutes": 60,
+[2026-09-05 19:38:57]     "train_windows_inside_split": "PASS",
+[2026-09-05 19:38:57]     "train_development_subset": "PASS",
+[2026-09-05 19:38:57]     "val_windows_inside_split": "PASS",
+[2026-09-05 19:38:57]     "val_development_subset": "PASS",
+[2026-09-05 19:38:57]     "test_windows_inside_split": "PASS",
+[2026-09-05 19:38:57]     "test_development_subset": "PASS",
+[2026-09-05 19:38:57]     "controlled_window_validity": "PASS",
+[2026-09-05 19:38:57]     "view_determinism": "PASS",
+[2026-09-05 19:38:57]     "mask_ratio_max_abs_error": 0.025351320966835345,
+[2026-09-05 19:38:57]     "manifest_ratio_max_abs_error": 5.551115123125783e-17,
+[2026-09-05 19:38:57]     "regional_s20_id_layout_count": 32,
+[2026-09-05 19:38:57]     "regional_s20_ood_layout_count": 0,
+[2026-09-05 19:38:57]     "regional_s40_id_layout_count": 32,
+[2026-09-05 19:38:57]     "regional_s40_ood_layout_count": 16,
+[2026-09-05 19:38:57]     "regional_s60_id_layout_count": 32,
+[2026-09-05 19:38:57]     "regional_s60_ood_layout_count": 0,
+[2026-09-05 19:38:57]     "regional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:38:57]     "regional_id_layout_count": 96,
+[2026-09-05 19:38:57]     "regional_ood_layout_count": 16,
+[2026-09-05 19:38:57]     "directional_s20_id_layout_count": 32,
+[2026-09-05 19:38:57]     "directional_s20_ood_layout_count": 0,
+[2026-09-05 19:38:57]     "directional_s40_id_layout_count": 32,
+[2026-09-05 19:38:57]     "directional_s40_ood_layout_count": 16,
+[2026-09-05 19:38:57]     "directional_s60_id_layout_count": 32,
+[2026-09-05 19:38:57]     "directional_s60_ood_layout_count": 0,
+[2026-09-05 19:38:57]     "directional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:38:57]     "directional_id_layout_count": 96,
+[2026-09-05 19:38:57]     "directional_ood_layout_count": 16,
+[2026-09-05 19:38:57]     "predictive_regional_s40_id_layout_count": 24,
+[2026-09-05 19:38:57]     "predictive_regional_s40_ood_layout_count": 12,
+[2026-09-05 19:38:57]     "predictive_regional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:38:57]     "predictive_regional_id_layout_count": 24,
+[2026-09-05 19:38:57]     "predictive_regional_ood_layout_count": 12,
+[2026-09-05 19:38:57]     "predictive_directional_s40_id_layout_count": 24,
+[2026-09-05 19:38:57]     "predictive_directional_s40_ood_layout_count": 12,
+[2026-09-05 19:38:57]     "predictive_directional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:38:57]     "predictive_directional_id_layout_count": 24,
+[2026-09-05 19:38:57]     "predictive_directional_ood_layout_count": 12,
+[2026-09-05 19:38:57]     "regional_min_largest_component_fraction": 1.0,
+[2026-09-05 19:38:57]     "predictive_regional_outage_context_loss_ratio": 1.3954206423403226,
+[2026-09-05 19:38:57]     "predictive_directional_outage_context_loss_ratio": 1.0209193674051005,
+[2026-09-05 19:38:57]     "paired_views_share_base_window": "PASS",
+[2026-09-05 19:38:57]     "memory_train_only": "PASS",
+[2026-09-05 19:38:57]     "development_memory_subset": "PASS",
+[2026-09-05 19:38:57]     "memory_stride": "PASS",
+[2026-09-05 19:38:57]     "local_patch_target_first": "PASS",
+[2026-09-05 19:38:57]     "resolved_protocols": "PASS"
+[2026-09-05 19:38:57]   },
+[2026-09-05 19:38:57]   "stratified_mask_audit": [
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "complete",
+[2026-09-05 19:38:57]       "severity": 0.0,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 105304,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.0,
+[2026-09-05 19:38:57]       "actual_min": 0.0,
+[2026-09-05 19:38:57]       "actual_max": 0.0,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "directional_outage",
+[2026-09-05 19:38:57]       "severity": 0.2,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 48924,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.19983136593591908,
+[2026-09-05 19:38:57]       "actual_min": 0.19983136593591905,
+[2026-09-05 19:38:57]       "actual_max": 0.19983136593591905,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.0001686340640809636,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "directional_outage",
+[2026-09-05 19:38:57]       "severity": 0.4,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 80501,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.39966273187183815,
+[2026-09-05 19:38:57]       "actual_min": 0.3996627318718381,
+[2026-09-05 19:38:57]       "actual_max": 0.3996627318718381,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.0003372681281619272,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "directional_outage",
+[2026-09-05 19:38:57]       "severity": 0.4,
+[2026-09-05 19:38:57]       "distribution": "ood",
+[2026-09-05 19:38:57]       "n_views": 31577,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.39966273187183815,
+[2026-09-05 19:38:57]       "actual_min": 0.3996627318718381,
+[2026-09-05 19:38:57]       "actual_max": 0.3996627318718381,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.0003372681281619272,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "directional_outage",
+[2026-09-05 19:38:57]       "severity": 0.6,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 48924,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.6003372681281619,
+[2026-09-05 19:38:57]       "actual_min": 0.6003372681281619,
+[2026-09-05 19:38:57]       "actual_max": 0.6003372681281619,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.0003372681281619272,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "entry_random",
+[2026-09-05 19:38:57]       "severity": 0.2,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 48925,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.19997189432265317,
+[2026-09-05 19:38:57]       "actual_min": 0.19997189432265317,
+[2026-09-05 19:38:57]       "actual_max": 0.19997189432265317,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 2.810567734684577e-05,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "entry_random",
+[2026-09-05 19:38:57]       "severity": 0.4,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 80502,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.40001405283867336,
+[2026-09-05 19:38:57]       "actual_min": 0.4000140528386734,
+[2026-09-05 19:38:57]       "actual_max": 0.4000140528386734,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 1.405283867339513e-05,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "entry_random",
+[2026-09-05 19:38:57]       "severity": 0.6,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 48925,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.5999859471613266,
+[2026-09-05 19:38:57]       "actual_min": 0.5999859471613266,
+[2026-09-05 19:38:57]       "actual_max": 0.5999859471613266,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 1.405283867339513e-05,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "predictive_directional_outage",
+[2026-09-05 19:38:57]       "severity": 0.4,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 80501,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.39966273187183815,
+[2026-09-05 19:38:57]       "actual_min": 0.3996627318718381,
+[2026-09-05 19:38:57]       "actual_max": 0.3996627318718381,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.0003372681281619272,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "predictive_directional_outage",
+[2026-09-05 19:38:57]       "severity": 0.4,
+[2026-09-05 19:38:57]       "distribution": "ood",
+[2026-09-05 19:38:57]       "n_views": 31577,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.39966273187183815,
+[2026-09-05 19:38:57]       "actual_min": 0.3996627318718381,
+[2026-09-05 19:38:57]       "actual_max": 0.3996627318718381,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.0003372681281619272,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "predictive_regional_outage",
+[2026-09-05 19:38:57]       "severity": 0.4,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 80501,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.39966273187183815,
+[2026-09-05 19:38:57]       "actual_min": 0.3996627318718381,
+[2026-09-05 19:38:57]       "actual_max": 0.3996627318718381,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.0003372681281619272,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "predictive_regional_outage",
+[2026-09-05 19:38:57]       "severity": 0.4,
+[2026-09-05 19:38:57]       "distribution": "ood",
+[2026-09-05 19:38:57]       "n_views": 31577,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.39966273187183815,
+[2026-09-05 19:38:57]       "actual_min": 0.3996627318718381,
+[2026-09-05 19:38:57]       "actual_max": 0.3996627318718381,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.0003372681281619272,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "regional_outage",
+[2026-09-05 19:38:57]       "severity": 0.2,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 48924,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.19983136593591908,
+[2026-09-05 19:38:57]       "actual_min": 0.19983136593591905,
+[2026-09-05 19:38:57]       "actual_max": 0.19983136593591905,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.0001686340640809636,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "regional_outage",
+[2026-09-05 19:38:57]       "severity": 0.4,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 80501,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.39966273187183815,
+[2026-09-05 19:38:57]       "actual_min": 0.3996627318718381,
+[2026-09-05 19:38:57]       "actual_max": 0.3996627318718381,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.0003372681281619272,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "regional_outage",
+[2026-09-05 19:38:57]       "severity": 0.4,
+[2026-09-05 19:38:57]       "distribution": "ood",
+[2026-09-05 19:38:57]       "n_views": 31577,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.39966273187183815,
+[2026-09-05 19:38:57]       "actual_min": 0.3996627318718381,
+[2026-09-05 19:38:57]       "actual_max": 0.3996627318718381,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.0003372681281619272,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "regional_outage",
+[2026-09-05 19:38:57]       "severity": 0.6,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 48924,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.6003372681281619,
+[2026-09-05 19:38:57]       "actual_min": 0.6003372681281619,
+[2026-09-05 19:38:57]       "actual_max": 0.6003372681281619,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.0003372681281619272,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "sensor_outage",
+[2026-09-05 19:38:57]       "severity": 0.2,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 48925,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.19983136593591908,
+[2026-09-05 19:38:57]       "actual_min": 0.19983136593591905,
+[2026-09-05 19:38:57]       "actual_max": 0.19983136593591905,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.0001686340640809636,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "sensor_outage",
+[2026-09-05 19:38:57]       "severity": 0.4,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 80502,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.39966273187183815,
+[2026-09-05 19:38:57]       "actual_min": 0.3996627318718381,
+[2026-09-05 19:38:57]       "actual_max": 0.3996627318718381,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.0003372681281619272,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "sensor_outage",
+[2026-09-05 19:38:57]       "severity": 0.6,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 48925,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.6003372681281619,
+[2026-09-05 19:38:57]       "actual_min": 0.6003372681281619,
+[2026-09-05 19:38:57]       "actual_max": 0.6003372681281619,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.0003372681281619272,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "temporal_outage",
+[2026-09-05 19:38:57]       "severity": 0.2,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 48925,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.1876053962900506,
+[2026-09-05 19:38:57]       "actual_min": 0.1876053962900506,
+[2026-09-05 19:38:57]       "actual_max": 0.1876053962900506,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.012394603709949409,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "temporal_outage",
+[2026-09-05 19:38:57]       "severity": 0.4,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 80502,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.3752107925801012,
+[2026-09-05 19:38:57]       "actual_min": 0.3752107925801012,
+[2026-09-05 19:38:57]       "actual_max": 0.3752107925801012,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.024789207419898818,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "family": "temporal_outage",
+[2026-09-05 19:38:57]       "severity": 0.6,
+[2026-09-05 19:38:57]       "distribution": "id",
+[2026-09-05 19:38:57]       "n_views": 48925,
+[2026-09-05 19:38:57]       "n_checked": 3,
+[2026-09-05 19:38:57]       "actual_mean": 0.6253513209668353,
+[2026-09-05 19:38:57]       "actual_min": 0.6253513209668353,
+[2026-09-05 19:38:57]       "actual_max": 0.6253513209668353,
+[2026-09-05 19:38:57]       "max_abs_error_to_nominal": 0.025351320966835345,
+[2026-09-05 19:38:57]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     }
+[2026-09-05 19:38:57]   ],
+[2026-09-05 19:38:57]   "errors": [],
+[2026-09-05 19:38:57]   "warnings": [
+[2026-09-05 19:38:57]     "predictive_directional_outage: predictive/general context-loss ratio=1.021 < diagnostic target 1.050; predictive layouts may not be sufficiently support-oriented."
+[2026-09-05 19:38:57]   ],
+[2026-09-05 19:38:57]   "predictive_context_audit": [
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "general_family": "regional_outage",
+[2026-09-05 19:38:57]       "predictive_family": "predictive_regional_outage",
+[2026-09-05 19:38:57]       "severity": 0.4,
+[2026-09-05 19:38:57]       "split": "val",
+[2026-09-05 19:38:57]       "n_matched_views": 512,
+[2026-09-05 19:38:57]       "general_context_loss_mean": 0.40132556651951745,
+[2026-09-05 19:38:57]       "predictive_context_loss_mean": 0.5600179798202589,
+[2026-09-05 19:38:57]       "predictive_to_general_ratio": 1.3954206423403226,
+[2026-09-05 19:38:57]       "configured_min_ratio": 1.05,
+[2026-09-05 19:38:57]       "status": "PASS"
+[2026-09-05 19:38:57]     },
+[2026-09-05 19:38:57]     {
+[2026-09-05 19:38:57]       "general_family": "directional_outage",
+[2026-09-05 19:38:57]       "predictive_family": "predictive_directional_outage",
+[2026-09-05 19:38:57]       "severity": 0.4,
+[2026-09-05 19:38:57]       "split": "val",
+[2026-09-05 19:38:57]       "n_matched_views": 512,
+[2026-09-05 19:38:57]       "general_context_loss_mean": 0.39961778733413666,
+[2026-09-05 19:38:57]       "predictive_context_loss_mean": 0.4079775386489928,
+[2026-09-05 19:38:57]       "predictive_to_general_ratio": 1.0209193674051005,
+[2026-09-05 19:38:57]       "configured_min_ratio": 1.05,
+[2026-09-05 19:38:57]       "status": "LOW_GAIN"
+[2026-09-05 19:38:57]     }
+[2026-09-05 19:38:57]   ],
+[2026-09-05 19:38:57]   "status": "PASS"
+[2026-09-05 19:38:57] }
+[2026-09-05 19:39:41] {
+[2026-09-05 19:39:41]   "subgraph": "TraffiDent_Net_03",
+[2026-09-05 19:39:41]   "checks": {
+[2026-09-05 19:39:41]     "split_order": "PASS",
+[2026-09-05 19:39:41]     "predictive_dependency_train_only": "PASS",
+[2026-09-05 19:39:41]     "predictive_dependency_raw_lag_semantics": "PASS",
+[2026-09-05 19:39:41]     "predictive_dependency_lag_step_minutes": 5,
+[2026-09-05 19:39:41]     "predictive_dependency_sample_stride_minutes": 60,
+[2026-09-05 19:39:41]     "train_windows_inside_split": "PASS",
+[2026-09-05 19:39:41]     "train_development_subset": "PASS",
+[2026-09-05 19:39:41]     "val_windows_inside_split": "PASS",
+[2026-09-05 19:39:41]     "val_development_subset": "PASS",
+[2026-09-05 19:39:41]     "test_windows_inside_split": "PASS",
+[2026-09-05 19:39:41]     "test_development_subset": "PASS",
+[2026-09-05 19:39:41]     "controlled_window_validity": "PASS",
+[2026-09-05 19:39:41]     "view_determinism": "PASS",
+[2026-09-05 19:39:41]     "mask_ratio_max_abs_error": 0.025274725274725296,
+[2026-09-05 19:39:41]     "manifest_ratio_max_abs_error": 5.551115123125783e-17,
+[2026-09-05 19:39:41]     "regional_s20_id_layout_count": 32,
+[2026-09-05 19:39:41]     "regional_s20_ood_layout_count": 0,
+[2026-09-05 19:39:41]     "regional_s40_id_layout_count": 32,
+[2026-09-05 19:39:41]     "regional_s40_ood_layout_count": 16,
+[2026-09-05 19:39:41]     "regional_s60_id_layout_count": 32,
+[2026-09-05 19:39:41]     "regional_s60_ood_layout_count": 0,
+[2026-09-05 19:39:41]     "regional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:39:41]     "regional_id_layout_count": 96,
+[2026-09-05 19:39:41]     "regional_ood_layout_count": 16,
+[2026-09-05 19:39:41]     "directional_s20_id_layout_count": 32,
+[2026-09-05 19:39:41]     "directional_s20_ood_layout_count": 0,
+[2026-09-05 19:39:41]     "directional_s40_id_layout_count": 32,
+[2026-09-05 19:39:41]     "directional_s40_ood_layout_count": 16,
+[2026-09-05 19:39:41]     "directional_s60_id_layout_count": 32,
+[2026-09-05 19:39:41]     "directional_s60_ood_layout_count": 0,
+[2026-09-05 19:39:41]     "directional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:39:41]     "directional_id_layout_count": 96,
+[2026-09-05 19:39:41]     "directional_ood_layout_count": 16,
+[2026-09-05 19:39:41]     "predictive_regional_s40_id_layout_count": 24,
+[2026-09-05 19:39:41]     "predictive_regional_s40_ood_layout_count": 12,
+[2026-09-05 19:39:41]     "predictive_regional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:39:41]     "predictive_regional_id_layout_count": 24,
+[2026-09-05 19:39:41]     "predictive_regional_ood_layout_count": 12,
+[2026-09-05 19:39:41]     "predictive_directional_s40_id_layout_count": 24,
+[2026-09-05 19:39:41]     "predictive_directional_s40_ood_layout_count": 12,
+[2026-09-05 19:39:41]     "predictive_directional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:39:41]     "predictive_directional_id_layout_count": 24,
+[2026-09-05 19:39:41]     "predictive_directional_ood_layout_count": 12,
+[2026-09-05 19:39:41]     "regional_min_largest_component_fraction": 0.989010989010989,
+[2026-09-05 19:39:41]     "predictive_regional_outage_context_loss_ratio": 1.3045622063541946,
+[2026-09-05 19:39:41]     "predictive_directional_outage_context_loss_ratio": 1.0226717736379738,
+[2026-09-05 19:39:41]     "paired_views_share_base_window": "PASS",
+[2026-09-05 19:39:41]     "memory_train_only": "PASS",
+[2026-09-05 19:39:41]     "development_memory_subset": "PASS",
+[2026-09-05 19:39:41]     "memory_stride": "PASS",
+[2026-09-05 19:39:41]     "local_patch_target_first": "PASS",
+[2026-09-05 19:39:41]     "resolved_protocols": "PASS"
+[2026-09-05 19:39:41]   },
+[2026-09-05 19:39:41]   "stratified_mask_audit": [
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "complete",
+[2026-09-05 19:39:41]       "severity": 0.0,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 105304,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.0,
+[2026-09-05 19:39:41]       "actual_min": 0.0,
+[2026-09-05 19:39:41]       "actual_max": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "directional_outage",
+[2026-09-05 19:39:41]       "severity": 0.2,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 48924,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.20000000000000004,
+[2026-09-05 19:39:41]       "actual_min": 0.2,
+[2026-09-05 19:39:41]       "actual_max": 0.2,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "directional_outage",
+[2026-09-05 19:39:41]       "severity": 0.4,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 80501,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.4000000000000001,
+[2026-09-05 19:39:41]       "actual_min": 0.4,
+[2026-09-05 19:39:41]       "actual_max": 0.4,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "directional_outage",
+[2026-09-05 19:39:41]       "severity": 0.4,
+[2026-09-05 19:39:41]       "distribution": "ood",
+[2026-09-05 19:39:41]       "n_views": 31577,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.4000000000000001,
+[2026-09-05 19:39:41]       "actual_min": 0.4,
+[2026-09-05 19:39:41]       "actual_max": 0.4,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "directional_outage",
+[2026-09-05 19:39:41]       "severity": 0.6,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 48924,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.6,
+[2026-09-05 19:39:41]       "actual_min": 0.6,
+[2026-09-05 19:39:41]       "actual_max": 0.6,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "entry_random",
+[2026-09-05 19:39:41]       "severity": 0.2,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 48925,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.20000000000000004,
+[2026-09-05 19:39:41]       "actual_min": 0.2,
+[2026-09-05 19:39:41]       "actual_max": 0.2,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "entry_random",
+[2026-09-05 19:39:41]       "severity": 0.4,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 80502,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.4000000000000001,
+[2026-09-05 19:39:41]       "actual_min": 0.4,
+[2026-09-05 19:39:41]       "actual_max": 0.4,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "entry_random",
+[2026-09-05 19:39:41]       "severity": 0.6,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 48925,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.6,
+[2026-09-05 19:39:41]       "actual_min": 0.6,
+[2026-09-05 19:39:41]       "actual_max": 0.6,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "predictive_directional_outage",
+[2026-09-05 19:39:41]       "severity": 0.4,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 80501,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.4000000000000001,
+[2026-09-05 19:39:41]       "actual_min": 0.4,
+[2026-09-05 19:39:41]       "actual_max": 0.4,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "predictive_directional_outage",
+[2026-09-05 19:39:41]       "severity": 0.4,
+[2026-09-05 19:39:41]       "distribution": "ood",
+[2026-09-05 19:39:41]       "n_views": 31577,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.4000000000000001,
+[2026-09-05 19:39:41]       "actual_min": 0.4,
+[2026-09-05 19:39:41]       "actual_max": 0.4,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "predictive_regional_outage",
+[2026-09-05 19:39:41]       "severity": 0.4,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 80501,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.4000000000000001,
+[2026-09-05 19:39:41]       "actual_min": 0.4,
+[2026-09-05 19:39:41]       "actual_max": 0.4,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "predictive_regional_outage",
+[2026-09-05 19:39:41]       "severity": 0.4,
+[2026-09-05 19:39:41]       "distribution": "ood",
+[2026-09-05 19:39:41]       "n_views": 31577,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.4000000000000001,
+[2026-09-05 19:39:41]       "actual_min": 0.4,
+[2026-09-05 19:39:41]       "actual_max": 0.4,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "regional_outage",
+[2026-09-05 19:39:41]       "severity": 0.2,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 48924,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.20000000000000004,
+[2026-09-05 19:39:41]       "actual_min": 0.2,
+[2026-09-05 19:39:41]       "actual_max": 0.2,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "regional_outage",
+[2026-09-05 19:39:41]       "severity": 0.4,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 80501,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.4000000000000001,
+[2026-09-05 19:39:41]       "actual_min": 0.4,
+[2026-09-05 19:39:41]       "actual_max": 0.4,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "regional_outage",
+[2026-09-05 19:39:41]       "severity": 0.4,
+[2026-09-05 19:39:41]       "distribution": "ood",
+[2026-09-05 19:39:41]       "n_views": 31577,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.4000000000000001,
+[2026-09-05 19:39:41]       "actual_min": 0.4,
+[2026-09-05 19:39:41]       "actual_max": 0.4,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "regional_outage",
+[2026-09-05 19:39:41]       "severity": 0.6,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 48924,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.6,
+[2026-09-05 19:39:41]       "actual_min": 0.6,
+[2026-09-05 19:39:41]       "actual_max": 0.6,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "sensor_outage",
+[2026-09-05 19:39:41]       "severity": 0.2,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 48925,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.20000000000000004,
+[2026-09-05 19:39:41]       "actual_min": 0.2,
+[2026-09-05 19:39:41]       "actual_max": 0.2,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "sensor_outage",
+[2026-09-05 19:39:41]       "severity": 0.4,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 80502,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.4000000000000001,
+[2026-09-05 19:39:41]       "actual_min": 0.4,
+[2026-09-05 19:39:41]       "actual_max": 0.4,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "sensor_outage",
+[2026-09-05 19:39:41]       "severity": 0.6,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 48925,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.6,
+[2026-09-05 19:39:41]       "actual_min": 0.6,
+[2026-09-05 19:39:41]       "actual_max": 0.6,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "temporal_outage",
+[2026-09-05 19:39:41]       "severity": 0.2,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 48925,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.18736263736263736,
+[2026-09-05 19:39:41]       "actual_min": 0.18736263736263736,
+[2026-09-05 19:39:41]       "actual_max": 0.18736263736263736,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.012637362637362648,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "temporal_outage",
+[2026-09-05 19:39:41]       "severity": 0.4,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 80502,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.3747252747252747,
+[2026-09-05 19:39:41]       "actual_min": 0.3747252747252747,
+[2026-09-05 19:39:41]       "actual_max": 0.3747252747252747,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.025274725274725296,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "family": "temporal_outage",
+[2026-09-05 19:39:41]       "severity": 0.6,
+[2026-09-05 19:39:41]       "distribution": "id",
+[2026-09-05 19:39:41]       "n_views": 48925,
+[2026-09-05 19:39:41]       "n_checked": 3,
+[2026-09-05 19:39:41]       "actual_mean": 0.6245421245421245,
+[2026-09-05 19:39:41]       "actual_min": 0.6245421245421245,
+[2026-09-05 19:39:41]       "actual_max": 0.6245421245421245,
+[2026-09-05 19:39:41]       "max_abs_error_to_nominal": 0.024542124542124566,
+[2026-09-05 19:39:41]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     }
+[2026-09-05 19:39:41]   ],
+[2026-09-05 19:39:41]   "errors": [],
+[2026-09-05 19:39:41]   "warnings": [
+[2026-09-05 19:39:41]     "predictive_directional_outage: predictive/general context-loss ratio=1.023 < diagnostic target 1.050; predictive layouts may not be sufficiently support-oriented."
+[2026-09-05 19:39:41]   ],
+[2026-09-05 19:39:41]   "predictive_context_audit": [
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "general_family": "regional_outage",
+[2026-09-05 19:39:41]       "predictive_family": "predictive_regional_outage",
+[2026-09-05 19:39:41]       "severity": 0.4,
+[2026-09-05 19:39:41]       "split": "val",
+[2026-09-05 19:39:41]       "n_matched_views": 512,
+[2026-09-05 19:39:41]       "general_context_loss_mean": 0.3993451329297386,
+[2026-09-05 19:39:41]       "predictive_context_loss_mean": 0.520970567711629,
+[2026-09-05 19:39:41]       "predictive_to_general_ratio": 1.3045622063541946,
+[2026-09-05 19:39:41]       "configured_min_ratio": 1.05,
+[2026-09-05 19:39:41]       "status": "PASS"
+[2026-09-05 19:39:41]     },
+[2026-09-05 19:39:41]     {
+[2026-09-05 19:39:41]       "general_family": "directional_outage",
+[2026-09-05 19:39:41]       "predictive_family": "predictive_directional_outage",
+[2026-09-05 19:39:41]       "severity": 0.4,
+[2026-09-05 19:39:41]       "split": "val",
+[2026-09-05 19:39:41]       "n_matched_views": 512,
+[2026-09-05 19:39:41]       "general_context_loss_mean": 0.39794766111299396,
+[2026-09-05 19:39:41]       "predictive_context_loss_mean": 0.4069698404055089,
+[2026-09-05 19:39:41]       "predictive_to_general_ratio": 1.0226717736379738,
+[2026-09-05 19:39:41]       "configured_min_ratio": 1.05,
+[2026-09-05 19:39:41]       "status": "LOW_GAIN"
+[2026-09-05 19:39:41]     }
+[2026-09-05 19:39:41]   ],
+[2026-09-05 19:39:41]   "status": "PASS"
+[2026-09-05 19:39:41] }
+[2026-09-05 19:40:27] {
+[2026-09-05 19:40:27]   "subgraph": "TraffiDent_Net_04",
+[2026-09-05 19:40:27]   "checks": {
+[2026-09-05 19:40:27]     "split_order": "PASS",
+[2026-09-05 19:40:27]     "predictive_dependency_train_only": "PASS",
+[2026-09-05 19:40:27]     "predictive_dependency_raw_lag_semantics": "PASS",
+[2026-09-05 19:40:27]     "predictive_dependency_lag_step_minutes": 5,
+[2026-09-05 19:40:27]     "predictive_dependency_sample_stride_minutes": 60,
+[2026-09-05 19:40:27]     "train_windows_inside_split": "PASS",
+[2026-09-05 19:40:27]     "train_development_subset": "PASS",
+[2026-09-05 19:40:27]     "val_windows_inside_split": "PASS",
+[2026-09-05 19:40:27]     "val_development_subset": "PASS",
+[2026-09-05 19:40:27]     "test_windows_inside_split": "PASS",
+[2026-09-05 19:40:27]     "test_development_subset": "PASS",
+[2026-09-05 19:40:27]     "controlled_window_validity": "PASS",
+[2026-09-05 19:40:27]     "view_determinism": "PASS",
+[2026-09-05 19:40:27]     "mask_ratio_max_abs_error": 0.025000000000000022,
+[2026-09-05 19:40:27]     "manifest_ratio_max_abs_error": 5.551115123125783e-17,
+[2026-09-05 19:40:27]     "regional_s20_id_layout_count": 32,
+[2026-09-05 19:40:27]     "regional_s20_ood_layout_count": 0,
+[2026-09-05 19:40:27]     "regional_s40_id_layout_count": 32,
+[2026-09-05 19:40:27]     "regional_s40_ood_layout_count": 16,
+[2026-09-05 19:40:27]     "regional_s60_id_layout_count": 32,
+[2026-09-05 19:40:27]     "regional_s60_ood_layout_count": 0,
+[2026-09-05 19:40:27]     "regional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:40:27]     "regional_id_layout_count": 96,
+[2026-09-05 19:40:27]     "regional_ood_layout_count": 16,
+[2026-09-05 19:40:27]     "directional_s20_id_layout_count": 32,
+[2026-09-05 19:40:27]     "directional_s20_ood_layout_count": 0,
+[2026-09-05 19:40:27]     "directional_s40_id_layout_count": 32,
+[2026-09-05 19:40:27]     "directional_s40_ood_layout_count": 16,
+[2026-09-05 19:40:27]     "directional_s60_id_layout_count": 32,
+[2026-09-05 19:40:27]     "directional_s60_ood_layout_count": 0,
+[2026-09-05 19:40:27]     "directional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:40:27]     "directional_id_layout_count": 96,
+[2026-09-05 19:40:27]     "directional_ood_layout_count": 16,
+[2026-09-05 19:40:27]     "predictive_regional_s40_id_layout_count": 24,
+[2026-09-05 19:40:27]     "predictive_regional_s40_ood_layout_count": 12,
+[2026-09-05 19:40:27]     "predictive_regional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:40:27]     "predictive_regional_id_layout_count": 24,
+[2026-09-05 19:40:27]     "predictive_regional_ood_layout_count": 12,
+[2026-09-05 19:40:27]     "predictive_directional_s40_id_layout_count": 24,
+[2026-09-05 19:40:27]     "predictive_directional_s40_ood_layout_count": 12,
+[2026-09-05 19:40:27]     "predictive_directional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:40:27]     "predictive_directional_id_layout_count": 24,
+[2026-09-05 19:40:27]     "predictive_directional_ood_layout_count": 12,
+[2026-09-05 19:40:27]     "regional_min_largest_component_fraction": 0.8514851485148515,
+[2026-09-05 19:40:27]     "predictive_regional_outage_context_loss_ratio": 1.3269963814951766,
+[2026-09-05 19:40:27]     "predictive_directional_outage_context_loss_ratio": 1.0271759971330652,
+[2026-09-05 19:40:27]     "paired_views_share_base_window": "PASS",
+[2026-09-05 19:40:27]     "memory_train_only": "PASS",
+[2026-09-05 19:40:27]     "development_memory_subset": "PASS",
+[2026-09-05 19:40:27]     "memory_stride": "PASS",
+[2026-09-05 19:40:27]     "local_patch_target_first": "PASS",
+[2026-09-05 19:40:27]     "resolved_protocols": "PASS"
+[2026-09-05 19:40:27]   },
+[2026-09-05 19:40:27]   "stratified_mask_audit": [
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "complete",
+[2026-09-05 19:40:27]       "severity": 0.0,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 105304,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.0,
+[2026-09-05 19:40:27]       "actual_min": 0.0,
+[2026-09-05 19:40:27]       "actual_max": 0.0,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "directional_outage",
+[2026-09-05 19:40:27]       "severity": 0.2,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 48924,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.199604743083004,
+[2026-09-05 19:40:27]       "actual_min": 0.19960474308300397,
+[2026-09-05 19:40:27]       "actual_max": 0.19960474308300397,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.00039525691699604515,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "directional_outage",
+[2026-09-05 19:40:27]       "severity": 0.4,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 80501,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_min": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_max": 0.40019762845849804,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.00019762845849802257,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "directional_outage",
+[2026-09-05 19:40:27]       "severity": 0.4,
+[2026-09-05 19:40:27]       "distribution": "ood",
+[2026-09-05 19:40:27]       "n_views": 31577,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_min": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_max": 0.40019762845849804,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.00019762845849802257,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "directional_outage",
+[2026-09-05 19:40:27]       "severity": 0.6,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 48924,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.599802371541502,
+[2026-09-05 19:40:27]       "actual_min": 0.599802371541502,
+[2026-09-05 19:40:27]       "actual_max": 0.599802371541502,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.00019762845849802257,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "entry_random",
+[2026-09-05 19:40:27]       "severity": 0.2,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 48925,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.20001646903820816,
+[2026-09-05 19:40:27]       "actual_min": 0.20001646903820816,
+[2026-09-05 19:40:27]       "actual_max": 0.20001646903820816,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 1.6469038208150044e-05,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "entry_random",
+[2026-09-05 19:40:27]       "severity": 0.4,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 80502,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.4000329380764163,
+[2026-09-05 19:40:27]       "actual_min": 0.4000329380764163,
+[2026-09-05 19:40:27]       "actual_max": 0.4000329380764163,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 3.293807641630009e-05,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "entry_random",
+[2026-09-05 19:40:27]       "severity": 0.6,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 48925,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.5999670619235836,
+[2026-09-05 19:40:27]       "actual_min": 0.5999670619235836,
+[2026-09-05 19:40:27]       "actual_max": 0.5999670619235836,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 3.29380764163556e-05,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "predictive_directional_outage",
+[2026-09-05 19:40:27]       "severity": 0.4,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 80501,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_min": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_max": 0.40019762845849804,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.00019762845849802257,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "predictive_directional_outage",
+[2026-09-05 19:40:27]       "severity": 0.4,
+[2026-09-05 19:40:27]       "distribution": "ood",
+[2026-09-05 19:40:27]       "n_views": 31577,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_min": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_max": 0.40019762845849804,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.00019762845849802257,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "predictive_regional_outage",
+[2026-09-05 19:40:27]       "severity": 0.4,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 80501,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_min": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_max": 0.40019762845849804,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.00019762845849802257,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "predictive_regional_outage",
+[2026-09-05 19:40:27]       "severity": 0.4,
+[2026-09-05 19:40:27]       "distribution": "ood",
+[2026-09-05 19:40:27]       "n_views": 31577,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_min": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_max": 0.40019762845849804,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.00019762845849802257,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "regional_outage",
+[2026-09-05 19:40:27]       "severity": 0.2,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 48924,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.199604743083004,
+[2026-09-05 19:40:27]       "actual_min": 0.19960474308300397,
+[2026-09-05 19:40:27]       "actual_max": 0.19960474308300397,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.00039525691699604515,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "regional_outage",
+[2026-09-05 19:40:27]       "severity": 0.4,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 80501,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_min": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_max": 0.40019762845849804,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.00019762845849802257,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "regional_outage",
+[2026-09-05 19:40:27]       "severity": 0.4,
+[2026-09-05 19:40:27]       "distribution": "ood",
+[2026-09-05 19:40:27]       "n_views": 31577,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_min": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_max": 0.40019762845849804,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.00019762845849802257,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "regional_outage",
+[2026-09-05 19:40:27]       "severity": 0.6,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 48924,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.599802371541502,
+[2026-09-05 19:40:27]       "actual_min": 0.599802371541502,
+[2026-09-05 19:40:27]       "actual_max": 0.599802371541502,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.00019762845849802257,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "sensor_outage",
+[2026-09-05 19:40:27]       "severity": 0.2,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 48925,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.199604743083004,
+[2026-09-05 19:40:27]       "actual_min": 0.19960474308300397,
+[2026-09-05 19:40:27]       "actual_max": 0.19960474308300397,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.00039525691699604515,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "sensor_outage",
+[2026-09-05 19:40:27]       "severity": 0.4,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 80502,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_min": 0.40019762845849804,
+[2026-09-05 19:40:27]       "actual_max": 0.40019762845849804,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.00019762845849802257,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "sensor_outage",
+[2026-09-05 19:40:27]       "severity": 0.6,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 48925,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.599802371541502,
+[2026-09-05 19:40:27]       "actual_min": 0.599802371541502,
+[2026-09-05 19:40:27]       "actual_max": 0.599802371541502,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.00019762845849802257,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "temporal_outage",
+[2026-09-05 19:40:27]       "severity": 0.2,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 48925,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.1875,
+[2026-09-05 19:40:27]       "actual_min": 0.1875,
+[2026-09-05 19:40:27]       "actual_max": 0.1875,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.012500000000000011,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "temporal_outage",
+[2026-09-05 19:40:27]       "severity": 0.4,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 80502,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.375,
+[2026-09-05 19:40:27]       "actual_min": 0.375,
+[2026-09-05 19:40:27]       "actual_max": 0.375,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.025000000000000022,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "family": "temporal_outage",
+[2026-09-05 19:40:27]       "severity": 0.6,
+[2026-09-05 19:40:27]       "distribution": "id",
+[2026-09-05 19:40:27]       "n_views": 48925,
+[2026-09-05 19:40:27]       "n_checked": 3,
+[2026-09-05 19:40:27]       "actual_mean": 0.625,
+[2026-09-05 19:40:27]       "actual_min": 0.625,
+[2026-09-05 19:40:27]       "actual_max": 0.625,
+[2026-09-05 19:40:27]       "max_abs_error_to_nominal": 0.025000000000000022,
+[2026-09-05 19:40:27]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     }
+[2026-09-05 19:40:27]   ],
+[2026-09-05 19:40:27]   "errors": [],
+[2026-09-05 19:40:27]   "warnings": [
+[2026-09-05 19:40:27]     "predictive_directional_outage: predictive/general context-loss ratio=1.027 < diagnostic target 1.050; predictive layouts may not be sufficiently support-oriented."
+[2026-09-05 19:40:27]   ],
+[2026-09-05 19:40:27]   "predictive_context_audit": [
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "general_family": "regional_outage",
+[2026-09-05 19:40:27]       "predictive_family": "predictive_regional_outage",
+[2026-09-05 19:40:27]       "severity": 0.4,
+[2026-09-05 19:40:27]       "split": "val",
+[2026-09-05 19:40:27]       "n_matched_views": 512,
+[2026-09-05 19:40:27]       "general_context_loss_mean": 0.3998922905884683,
+[2026-09-05 19:40:27]       "predictive_context_loss_mean": 0.5306556225987151,
+[2026-09-05 19:40:27]       "predictive_to_general_ratio": 1.3269963814951766,
+[2026-09-05 19:40:27]       "configured_min_ratio": 1.05,
+[2026-09-05 19:40:27]       "status": "PASS"
+[2026-09-05 19:40:27]     },
+[2026-09-05 19:40:27]     {
+[2026-09-05 19:40:27]       "general_family": "directional_outage",
+[2026-09-05 19:40:27]       "predictive_family": "predictive_directional_outage",
+[2026-09-05 19:40:27]       "severity": 0.4,
+[2026-09-05 19:40:27]       "split": "val",
+[2026-09-05 19:40:27]       "n_matched_views": 512,
+[2026-09-05 19:40:27]       "general_context_loss_mean": 0.39923347922740504,
+[2026-09-05 19:40:27]       "predictive_context_loss_mean": 0.41008304711431265,
+[2026-09-05 19:40:27]       "predictive_to_general_ratio": 1.0271759971330652,
+[2026-09-05 19:40:27]       "configured_min_ratio": 1.05,
+[2026-09-05 19:40:27]       "status": "LOW_GAIN"
+[2026-09-05 19:40:27]     }
+[2026-09-05 19:40:27]   ],
+[2026-09-05 19:40:27]   "status": "PASS"
+[2026-09-05 19:40:27] }
+[2026-09-05 19:40:58] {
+[2026-09-05 19:40:58]   "subgraph": "TraffiDent_Net_06",
+[2026-09-05 19:40:58]   "checks": {
+[2026-09-05 19:40:58]     "split_order": "PASS",
+[2026-09-05 19:40:58]     "predictive_dependency_train_only": "PASS",
+[2026-09-05 19:40:58]     "predictive_dependency_raw_lag_semantics": "PASS",
+[2026-09-05 19:40:58]     "predictive_dependency_lag_step_minutes": 5,
+[2026-09-05 19:40:58]     "predictive_dependency_sample_stride_minutes": 60,
+[2026-09-05 19:40:58]     "train_windows_inside_split": "PASS",
+[2026-09-05 19:40:58]     "train_development_subset": "PASS",
+[2026-09-05 19:40:58]     "val_windows_inside_split": "PASS",
+[2026-09-05 19:40:58]     "val_development_subset": "PASS",
+[2026-09-05 19:40:58]     "test_windows_inside_split": "PASS",
+[2026-09-05 19:40:58]     "test_development_subset": "PASS",
+[2026-09-05 19:40:58]     "controlled_window_validity": "PASS",
+[2026-09-05 19:40:58]     "view_determinism": "PASS",
+[2026-09-05 19:40:58]     "mask_ratio_max_abs_error": 0.025000000000000022,
+[2026-09-05 19:40:58]     "manifest_ratio_max_abs_error": 5.551115123125783e-17,
+[2026-09-05 19:40:58]     "regional_s20_id_layout_count": 32,
+[2026-09-05 19:40:58]     "regional_s20_ood_layout_count": 0,
+[2026-09-05 19:40:58]     "regional_s40_id_layout_count": 32,
+[2026-09-05 19:40:58]     "regional_s40_ood_layout_count": 16,
+[2026-09-05 19:40:58]     "regional_s60_id_layout_count": 32,
+[2026-09-05 19:40:58]     "regional_s60_ood_layout_count": 0,
+[2026-09-05 19:40:58]     "regional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:40:58]     "regional_id_layout_count": 96,
+[2026-09-05 19:40:58]     "regional_ood_layout_count": 16,
+[2026-09-05 19:40:58]     "directional_s20_id_layout_count": 32,
+[2026-09-05 19:40:58]     "directional_s20_ood_layout_count": 0,
+[2026-09-05 19:40:58]     "directional_s40_id_layout_count": 32,
+[2026-09-05 19:40:58]     "directional_s40_ood_layout_count": 16,
+[2026-09-05 19:40:58]     "directional_s60_id_layout_count": 32,
+[2026-09-05 19:40:58]     "directional_s60_ood_layout_count": 0,
+[2026-09-05 19:40:58]     "directional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:40:58]     "directional_id_layout_count": 96,
+[2026-09-05 19:40:58]     "directional_ood_layout_count": 16,
+[2026-09-05 19:40:58]     "predictive_regional_s40_id_layout_count": 24,
+[2026-09-05 19:40:58]     "predictive_regional_s40_ood_layout_count": 12,
+[2026-09-05 19:40:58]     "predictive_regional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:40:58]     "predictive_regional_id_layout_count": 24,
+[2026-09-05 19:40:58]     "predictive_regional_ood_layout_count": 12,
+[2026-09-05 19:40:58]     "predictive_directional_s40_id_layout_count": 24,
+[2026-09-05 19:40:58]     "predictive_directional_s40_ood_layout_count": 12,
+[2026-09-05 19:40:58]     "predictive_directional_id_ood_layout_disjoint": "PASS",
+[2026-09-05 19:40:58]     "predictive_directional_id_layout_count": 24,
+[2026-09-05 19:40:58]     "predictive_directional_ood_layout_count": 12,
+[2026-09-05 19:40:58]     "regional_min_largest_component_fraction": 1.0,
+[2026-09-05 19:40:58]     "predictive_regional_outage_context_loss_ratio": 1.2219705790229347,
+[2026-09-05 19:40:58]     "predictive_directional_outage_context_loss_ratio": 1.0303302500095544,
+[2026-09-05 19:40:58]     "paired_views_share_base_window": "PASS",
+[2026-09-05 19:40:58]     "memory_train_only": "PASS",
+[2026-09-05 19:40:58]     "development_memory_subset": "PASS",
+[2026-09-05 19:40:58]     "memory_stride": "PASS",
+[2026-09-05 19:40:58]     "local_patch_target_first": "PASS",
+[2026-09-05 19:40:58]     "resolved_protocols": "PASS"
+[2026-09-05 19:40:58]   },
+[2026-09-05 19:40:58]   "stratified_mask_audit": [
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "complete",
+[2026-09-05 19:40:58]       "severity": 0.0,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 105304,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.0,
+[2026-09-05 19:40:58]       "actual_min": 0.0,
+[2026-09-05 19:40:58]       "actual_max": 0.0,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.0,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "directional_outage",
+[2026-09-05 19:40:58]       "severity": 0.2,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 48924,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.20103092783505158,
+[2026-09-05 19:40:58]       "actual_min": 0.20103092783505155,
+[2026-09-05 19:40:58]       "actual_max": 0.20103092783505155,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.0010309278350515427,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "directional_outage",
+[2026-09-05 19:40:58]       "severity": 0.4,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 80501,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.3994845360824743,
+[2026-09-05 19:40:58]       "actual_min": 0.39948453608247425,
+[2026-09-05 19:40:58]       "actual_max": 0.39948453608247425,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.0005154639175257714,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "directional_outage",
+[2026-09-05 19:40:58]       "severity": 0.4,
+[2026-09-05 19:40:58]       "distribution": "ood",
+[2026-09-05 19:40:58]       "n_views": 31577,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.3994845360824743,
+[2026-09-05 19:40:58]       "actual_min": 0.39948453608247425,
+[2026-09-05 19:40:58]       "actual_max": 0.39948453608247425,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.0005154639175257714,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "directional_outage",
+[2026-09-05 19:40:58]       "severity": 0.6,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 48924,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.6005154639175257,
+[2026-09-05 19:40:58]       "actual_min": 0.6005154639175257,
+[2026-09-05 19:40:58]       "actual_max": 0.6005154639175257,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.0005154639175257714,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "entry_random",
+[2026-09-05 19:40:58]       "severity": 0.2,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 48925,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.19995704467353956,
+[2026-09-05 19:40:58]       "actual_min": 0.19995704467353953,
+[2026-09-05 19:40:58]       "actual_max": 0.19995704467353953,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 4.295532646048095e-05,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 2.7755575615628914e-17,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "entry_random",
+[2026-09-05 19:40:58]       "severity": 0.4,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 80502,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.3999140893470791,
+[2026-09-05 19:40:58]       "actual_min": 0.39991408934707906,
+[2026-09-05 19:40:58]       "actual_max": 0.39991408934707906,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 8.59106529209619e-05,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "entry_random",
+[2026-09-05 19:40:58]       "severity": 0.6,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 48925,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.6000859106529209,
+[2026-09-05 19:40:58]       "actual_min": 0.6000859106529209,
+[2026-09-05 19:40:58]       "actual_max": 0.6000859106529209,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 8.59106529209619e-05,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "predictive_directional_outage",
+[2026-09-05 19:40:58]       "severity": 0.4,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 80501,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.3994845360824743,
+[2026-09-05 19:40:58]       "actual_min": 0.39948453608247425,
+[2026-09-05 19:40:58]       "actual_max": 0.39948453608247425,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.0005154639175257714,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "predictive_directional_outage",
+[2026-09-05 19:40:58]       "severity": 0.4,
+[2026-09-05 19:40:58]       "distribution": "ood",
+[2026-09-05 19:40:58]       "n_views": 31577,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.3994845360824743,
+[2026-09-05 19:40:58]       "actual_min": 0.39948453608247425,
+[2026-09-05 19:40:58]       "actual_max": 0.39948453608247425,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.0005154639175257714,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "predictive_regional_outage",
+[2026-09-05 19:40:58]       "severity": 0.4,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 80501,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.3994845360824743,
+[2026-09-05 19:40:58]       "actual_min": 0.39948453608247425,
+[2026-09-05 19:40:58]       "actual_max": 0.39948453608247425,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.0005154639175257714,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "predictive_regional_outage",
+[2026-09-05 19:40:58]       "severity": 0.4,
+[2026-09-05 19:40:58]       "distribution": "ood",
+[2026-09-05 19:40:58]       "n_views": 31577,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.3994845360824743,
+[2026-09-05 19:40:58]       "actual_min": 0.39948453608247425,
+[2026-09-05 19:40:58]       "actual_max": 0.39948453608247425,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.0005154639175257714,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "regional_outage",
+[2026-09-05 19:40:58]       "severity": 0.2,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 48924,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.20103092783505158,
+[2026-09-05 19:40:58]       "actual_min": 0.20103092783505155,
+[2026-09-05 19:40:58]       "actual_max": 0.20103092783505155,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.0010309278350515427,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "regional_outage",
+[2026-09-05 19:40:58]       "severity": 0.4,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 80501,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.3994845360824743,
+[2026-09-05 19:40:58]       "actual_min": 0.39948453608247425,
+[2026-09-05 19:40:58]       "actual_max": 0.39948453608247425,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.0005154639175257714,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "regional_outage",
+[2026-09-05 19:40:58]       "severity": 0.4,
+[2026-09-05 19:40:58]       "distribution": "ood",
+[2026-09-05 19:40:58]       "n_views": 31577,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.3994845360824743,
+[2026-09-05 19:40:58]       "actual_min": 0.39948453608247425,
+[2026-09-05 19:40:58]       "actual_max": 0.39948453608247425,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.0005154639175257714,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "regional_outage",
+[2026-09-05 19:40:58]       "severity": 0.6,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 48924,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.6005154639175257,
+[2026-09-05 19:40:58]       "actual_min": 0.6005154639175257,
+[2026-09-05 19:40:58]       "actual_max": 0.6005154639175257,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.0005154639175257714,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "sensor_outage",
+[2026-09-05 19:40:58]       "severity": 0.2,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 48925,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.20103092783505158,
+[2026-09-05 19:40:58]       "actual_min": 0.20103092783505155,
+[2026-09-05 19:40:58]       "actual_max": 0.20103092783505155,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.0010309278350515427,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "sensor_outage",
+[2026-09-05 19:40:58]       "severity": 0.4,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 80502,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.3994845360824743,
+[2026-09-05 19:40:58]       "actual_min": 0.39948453608247425,
+[2026-09-05 19:40:58]       "actual_max": 0.39948453608247425,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.0005154639175257714,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 5.551115123125783e-17,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "sensor_outage",
+[2026-09-05 19:40:58]       "severity": 0.6,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 48925,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.6005154639175257,
+[2026-09-05 19:40:58]       "actual_min": 0.6005154639175257,
+[2026-09-05 19:40:58]       "actual_max": 0.6005154639175257,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.0005154639175257714,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "temporal_outage",
+[2026-09-05 19:40:58]       "severity": 0.2,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 48925,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.1875,
+[2026-09-05 19:40:58]       "actual_min": 0.1875,
+[2026-09-05 19:40:58]       "actual_max": 0.1875,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.012500000000000011,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "temporal_outage",
+[2026-09-05 19:40:58]       "severity": 0.4,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 80502,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.375,
+[2026-09-05 19:40:58]       "actual_min": 0.375,
+[2026-09-05 19:40:58]       "actual_max": 0.375,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.025000000000000022,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "family": "temporal_outage",
+[2026-09-05 19:40:58]       "severity": 0.6,
+[2026-09-05 19:40:58]       "distribution": "id",
+[2026-09-05 19:40:58]       "n_views": 48925,
+[2026-09-05 19:40:58]       "n_checked": 3,
+[2026-09-05 19:40:58]       "actual_mean": 0.625,
+[2026-09-05 19:40:58]       "actual_min": 0.625,
+[2026-09-05 19:40:58]       "actual_max": 0.625,
+[2026-09-05 19:40:58]       "max_abs_error_to_nominal": 0.025000000000000022,
+[2026-09-05 19:40:58]       "max_abs_error_to_manifest": 0.0,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     }
+[2026-09-05 19:40:58]   ],
+[2026-09-05 19:40:58]   "errors": [],
+[2026-09-05 19:40:58]   "warnings": [
+[2026-09-05 19:40:58]     "predictive_directional_outage: predictive/general context-loss ratio=1.030 < diagnostic target 1.050; predictive layouts may not be sufficiently support-oriented."
+[2026-09-05 19:40:58]   ],
+[2026-09-05 19:40:58]   "predictive_context_audit": [
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "general_family": "regional_outage",
+[2026-09-05 19:40:58]       "predictive_family": "predictive_regional_outage",
+[2026-09-05 19:40:58]       "severity": 0.4,
+[2026-09-05 19:40:58]       "split": "val",
+[2026-09-05 19:40:58]       "n_matched_views": 512,
+[2026-09-05 19:40:58]       "general_context_loss_mean": 0.40144674095790833,
+[2026-09-05 19:40:58]       "predictive_context_loss_mean": 0.4905561064952053,
+[2026-09-05 19:40:58]       "predictive_to_general_ratio": 1.2219705790229347,
+[2026-09-05 19:40:58]       "configured_min_ratio": 1.05,
+[2026-09-05 19:40:58]       "status": "PASS"
+[2026-09-05 19:40:58]     },
+[2026-09-05 19:40:58]     {
+[2026-09-05 19:40:58]       "general_family": "directional_outage",
+[2026-09-05 19:40:58]       "predictive_family": "predictive_directional_outage",
+[2026-09-05 19:40:58]       "severity": 0.4,
+[2026-09-05 19:40:58]       "split": "val",
+[2026-09-05 19:40:58]       "n_matched_views": 512,
+[2026-09-05 19:40:58]       "general_context_loss_mean": 0.39870396617334336,
+[2026-09-05 19:40:58]       "predictive_context_loss_mean": 0.4107967571471818,
+[2026-09-05 19:40:58]       "predictive_to_general_ratio": 1.0303302500095544,
+[2026-09-05 19:40:58]       "configured_min_ratio": 1.05,
+[2026-09-05 19:40:58]       "status": "LOW_GAIN"
+[2026-09-05 19:40:58]     }
+[2026-09-05 19:40:58]   ],
+[2026-09-05 19:40:58]   "status": "PASS"
+[2026-09-05 19:40:58] }
+[2026-09-05 19:40:58] ========== STAGE 06 DONE: benchmark audit elapsed=218s ==========
+[2026-09-05 19:40:58] ========== STAGE 07 START: canonical API smoke ==========
+[2026-09-05 19:41:02] PASS API
+[2026-09-05 19:41:02] history (12, 388, 1) mask (12, 388, 1) future (12, 388)
+[2026-09-05 19:41:02] view TraffiDent_Net_06__test__w000084326__regional_outage__s40__i00__id effective_missing 0.39948453608247425
+[2026-09-05 19:41:02] memory history (12, 388) future (12, 388) patch0 [0, 21, 31, 42, 48, 68, 70, 77, 79, 82, 86, 92, 95, 122, 173, 187]
+[2026-09-05 19:41:02] ========== STAGE 07 DONE: canonical API smoke elapsed=4s ==========
+[2026-09-05 19:41:02] TraffiDent-SupportBench build completed. total_elapsed=1442s
+[2026-09-05 19:41:02] PBS job exiting rc=0
+
+======================================================================================
+                  Resource Usage on 2026-09-05 19:41:07:
+   Job Id:             178255101.gadi-pbs
+   Project:            mh20
+   Exit Status:        0
+   Service Units:      4.90
+   NCPUs Requested:    4                   CPU Time Used: 00:23:46        
+   Memory Requested:   24.0GB                Memory Used: 10.34GB         
+   Walltime Requested: 02:00:00            Walltime Used: 00:24:30        
+   JobFS Requested:    100.0MB                JobFS Used: 0B              
+======================================================================================

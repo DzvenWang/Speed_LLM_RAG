@@ -1,0 +1,1 @@
+/scratch/mh20/zw1165/Speed_LLM_RAG/cmd.txt

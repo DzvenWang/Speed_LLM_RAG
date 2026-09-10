@@ -1,0 +1,47 @@
+version: 1.0.0
+
+project:
+  root: /scratch/mh20/zw1165/Speed_LLM_RAG
+  protocol_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol
+  artifact_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_artifacts
+  log_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_logs
+  supportbench_project: /scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench
+  benchmark_root: /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench
+  support_artifact_root: /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench
+  python: /scratch/mh20/zw1165/envs/TFP/bin/python
+
+source:
+  supportbench_version: 1.2.3
+
+experiment:
+  dataset: TraffiDent_Net_06
+  history: 12
+  horizon: 12
+  severity: 0.40
+  distribution: id
+  seed: 10
+  families:
+    - temporal_outage
+    - regional_outage
+    - directional_outage
+    - predictive_regional_outage
+    - predictive_directional_outage
+
+protocol:
+  name: protocol_v1
+  unique_view_group: true
+  family_balanced: true
+  formal_reuses_development_val: true
+  train_only_normalization: true
+  normalized_missing_fill_value: 0.0
+  test_isolation: explicit_authorization_required
+
+stages:
+  development:
+    train_size: 12000
+    val_size: 5000
+  formal:
+    train_size: all
+    val_size: 5000
+  evaluation:
+    test_size: 5000

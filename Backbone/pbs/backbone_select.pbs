@@ -1,0 +1,43 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=48:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -N BackboneSelect
+#PBS -j oe
+set -euo pipefail
+: "${MODEL:?Submit with MODEL=STAEformer|HimNet|BigST|STDN|PatchSTG|DST-SGNN}"
+: "${STAGE:?Submit with STAGE=screening|formal}"
+: "${SEED:?Submit with SEED=10 etc.}"
+case "$MODEL" in STAEformer|HimNet|BigST|STDN|PatchSTG|DST-SGNN) ;; *) echo "Unknown MODEL=$MODEL"; exit 2;; esac
+case "$STAGE" in screening|formal) ;; *) echo "Unknown STAGE=$STAGE"; exit 2;; esac
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG
+PROJ="$ROOT/Backbone"
+LOGROOT="$ROOT/Backbone_logs"
+ENVROOT=/scratch/mh20/zw1165/envs/TFP
+PYTHON="$ENVROOT/bin/python"
+mkdir -p "$LOGROOT"
+STAMP=$(date +%Y%m%d_%H%M%S)
+LOG="$LOGROOT/BackboneSelect.${STAGE}.${MODEL}.seed${SEED}.${PBS_JOBID}.${STAMP}.live.log"
+touch "$LOG"
+if [[ ! -x "$PYTHON" ]]; then echo "ERROR: Python not executable: $PYTHON" | tee -a "$LOG"; exit 3; fi
+cd "$PROJ"
+export PATH="$ENVROOT/bin:$PATH"
+# Transformers v5 removes TRANSFORMERS_CACHE; Backbone does not rely on it.
+unset TRANSFORMERS_CACHE || true
+export PYTHONPATH="$PROJ:$ROOT/Protocol:$ROOT/TraffiDent_SupportBench:${PYTHONPATH:-}"
+export BACKBONE_TIMESTAMP_STREAM=1 PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+exec > >("$PYTHON" -u "$PROJ/timestamp_stream.py" | tee -a "$LOG") 2>&1
+trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"' EXIT
+echo "START BackboneSelect stage=$STAGE model=$MODEL seed=$SEED job=$PBS_JOBID host=$(hostname)"
+echo "PYTHON=$PYTHON"
+"$PYTHON" -V
+set -x
+nvidia-smi || true
+"$PYTHON" -u scripts/verify_official_sources.py
+"$PYTHON" -u scripts/preflight.py --model "$MODEL" --stage "$STAGE"
+"$PYTHON" -u scripts/validate_cache.py --stage "$STAGE"
+"$PYTHON" -u scripts/run_experiment.py --model "$MODEL" --stage "$STAGE" --seed "$SEED" --run-stamp "$STAMP"

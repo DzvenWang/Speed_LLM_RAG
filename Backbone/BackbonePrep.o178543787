@@ -1,0 +1,92 @@
+[2026-09-09 19:25:40] START BackbonePrep stage=screening job=178543787.gadi-pbs host=gadi-cpu-clx-2626.gadi.nci.org.au
+[2026-09-09 19:25:40] PYTHON=/scratch/mh20/zw1165/envs/TFP/bin/python
+[2026-09-09 19:25:40] Python 3.11.11
+[2026-09-09 19:25:40] + /scratch/mh20/zw1165/envs/TFP/bin/python -u scripts/preflight.py
+[2026-09-09 19:25:48] /scratch/mh20/zw1165/envs/TFP/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[2026-09-09 19:25:48]   import pynvml  # type: ignore[import]
+[2026-09-09 19:26:00] Backbone preflight v0.3.1
+[2026-09-09 19:26:00] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone
+[2026-09-09 19:26:00] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol
+[2026-09-09 19:26:00] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_artifacts
+[2026-09-09 19:26:00] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench
+[2026-09-09 19:26:00] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench
+[2026-09-09 19:26:01] PASS source STAEformer fc49d39b2f1a8e3cf37b6289d7240680e1690f3f tree-lock-no-git
+[2026-09-09 19:26:02] PASS source HimNet 2a9aa44d1864f6fb60bdf9d14bafd6c1681e81a5 tree-lock-no-git
+[2026-09-09 19:26:02] PASS source BigST 830cb529354c0cda75c1660d1a0af2ffc7e66abb tree-lock-no-git
+[2026-09-09 19:26:02] PASS source STDN e24a60fa9485fb9805df9c171d67ab60840d757d tree-lock-no-git
+[2026-09-09 19:26:02] SOURCE LOCK PASS
+[2026-09-09 19:26:02] PASS torch
+[2026-09-09 19:26:02] PASS torchinfo
+[2026-09-09 19:26:02] PASS numpy
+[2026-09-09 19:26:02] PASS pandas
+[2026-09-09 19:26:02] PASS yaml
+[2026-09-09 19:26:02] PASS scipy
+[2026-09-09 19:26:02] PASS sklearn
+[2026-09-09 19:26:02] PASS fastdtw
+[2026-09-09 19:26:02] PASS torch_geometric
+[2026-09-09 19:26:05] PASS STDN graph_utils import
+[2026-09-09 19:26:21] PASS SupportBench /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench/TraffiDent_Net_06 N= 388 H= 12 P= 12
+[2026-09-09 19:26:21] PASS frozen Protocol/development 60de891db0ea5b72a4c0fd9f4a7e30fcaf96d04f2085994516a0f4048a9915bb
+[2026-09-09 19:26:21] PREFLIGHT PASS
+[2026-09-09 19:26:22] + /scratch/mh20/zw1165/envs/TFP/bin/python -u scripts/prepare_data.py --stage screening
+[2026-09-09 19:26:24] /scratch/mh20/zw1165/envs/TFP/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[2026-09-09 19:26:24]   import pynvml  # type: ignore[import]
+[2026-09-09 19:26:43] screening/train <= Protocol/development: 12000 views unique_groups=12000 families={'predictive_regional_outage': 2400, 'predictive_directional_outage': 2400, 'regional_outage': 2400, 'temporal_outage': 2400, 'directional_outage': 2400}
+[2026-09-09 19:26:46] materialize train: 500/12000
+[2026-09-09 19:26:49] materialize train: 1000/12000
+[2026-09-09 19:26:52] materialize train: 1500/12000
+[2026-09-09 19:26:54] materialize train: 2000/12000
+[2026-09-09 19:26:57] materialize train: 2500/12000
+[2026-09-09 19:27:00] materialize train: 3000/12000
+[2026-09-09 19:27:03] materialize train: 3500/12000
+[2026-09-09 19:27:06] materialize train: 4000/12000
+[2026-09-09 19:27:08] materialize train: 4500/12000
+[2026-09-09 19:27:11] materialize train: 5000/12000
+[2026-09-09 19:27:14] materialize train: 5500/12000
+[2026-09-09 19:27:17] materialize train: 6000/12000
+[2026-09-09 19:27:20] materialize train: 6500/12000
+[2026-09-09 19:27:22] materialize train: 7000/12000
+[2026-09-09 19:27:25] materialize train: 7500/12000
+[2026-09-09 19:27:28] materialize train: 8000/12000
+[2026-09-09 19:27:31] materialize train: 8500/12000
+[2026-09-09 19:27:34] materialize train: 9000/12000
+[2026-09-09 19:27:36] materialize train: 9500/12000
+[2026-09-09 19:27:39] materialize train: 10000/12000
+[2026-09-09 19:27:42] materialize train: 10500/12000
+[2026-09-09 19:27:45] materialize train: 11000/12000
+[2026-09-09 19:27:47] materialize train: 11500/12000
+[2026-09-09 19:27:50] materialize train: 12000/12000
+[2026-09-09 19:27:51] screening/val <= Protocol/development: 5000 views unique_groups=5000 families={'predictive_regional_outage': 1000, 'regional_outage': 1000, 'directional_outage': 1000, 'temporal_outage': 1000, 'predictive_directional_outage': 1000}
+[2026-09-09 19:27:54] materialize val: 500/5000
+[2026-09-09 19:27:57] materialize val: 1000/5000
+[2026-09-09 19:28:00] materialize val: 1500/5000
+[2026-09-09 19:28:02] materialize val: 2000/5000
+[2026-09-09 19:28:05] materialize val: 2500/5000
+[2026-09-09 19:28:08] materialize val: 3000/5000
+[2026-09-09 19:28:11] materialize val: 3500/5000
+[2026-09-09 19:28:14] materialize val: 4000/5000
+[2026-09-09 19:28:16] materialize val: 4500/5000
+[2026-09-09 19:28:19] materialize val: 5000/5000
+[2026-09-09 19:28:20] cache ready: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_exps/_cache/TraffiDent_Net_06/screening protocol_hash=60de891db0ea5b72a4c0fd9f4a7e30fcaf96d04f2085994516a0f4048a9915bb cache=d00e31ee6576d2ce728f0c974b9deac2c3cfa10fa4e1a87c7f383dd193c72cf6
+[2026-09-09 19:28:23] + /scratch/mh20/zw1165/envs/TFP/bin/python -u scripts/validate_cache.py --stage screening
+[2026-09-09 19:28:38] /scratch/mh20/zw1165/envs/TFP/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[2026-09-09 19:28:38]   import pynvml  # type: ignore[import]
+[2026-09-09 19:28:52] PASS screening val rows 5000 families {'predictive_regional_outage': 1000, 'regional_outage': 1000, 'directional_outage': 1000, 'temporal_outage': 1000, 'predictive_directional_outage': 1000}
+[2026-09-09 19:28:52] PASS screening train rows 12000 families {'predictive_regional_outage': 2400, 'predictive_directional_outage': 2400, 'regional_outage': 2400, 'temporal_outage': 2400, 'directional_outage': 2400}
+[2026-09-09 19:28:52] PASS Shared Protocol stage hash 60de891db0ea5b72a4c0fd9f4a7e30fcaf96d04f2085994516a0f4048a9915bb
+[2026-09-09 19:28:52] CACHE VALIDATION PASS
+[2026-09-09 19:28:52] + rc=0
+[2026-09-09 19:28:52] + echo SCRIPT_EXIT_STATUS=0
+[2026-09-09 19:28:52] SCRIPT_EXIT_STATUS=0
+
+======================================================================================
+                  Resource Usage on 2026-09-09 19:28:56:
+   Job Id:             178543787.gadi-pbs
+   Project:            mh20
+   Exit Status:        0
+   Service Units:      0.98
+   NCPUs Requested:    4                   CPU Time Used: 00:02:23        
+   Memory Requested:   32.0GB                Memory Used: 4.12GB          
+   Walltime Requested: 06:00:00            Walltime Used: 00:03:40        
+   JobFS Requested:    100.0MB                JobFS Used: 0B              
+======================================================================================

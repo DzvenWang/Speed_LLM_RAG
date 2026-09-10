@@ -1,0 +1,71 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q normal
+#PBS -l ncpus=4
+#PBS -l mem=16GB
+#PBS -l walltime=02:00:00
+#PBS -l storage=scratch/mh20
+#PBS -j oe
+#PBS -N SupportBenchBuild
+
+# Do not source ~/.bashrc in a non-interactive PBS shell on Gadi.
+set -eo pipefail
+
+PROJECT_ROOT="/scratch/mh20/zw1165/Speed_LLM_RAG"
+PROCESS_ROOT="$PROJECT_ROOT/TraffiDent_SupportBench"
+CONDA_BASE="/scratch/mh20/zw1165/miniconda"
+CONDA_ENV="/scratch/mh20/zw1165/envs/TFP"
+
+cd "$PROCESS_ROOT"
+
+if [[ ! -f "$CONDA_BASE/etc/profile.d/conda.sh" ]]; then
+    echo "ERROR: conda initialization script not found: $CONDA_BASE/etc/profile.d/conda.sh" >&2
+    exit 2
+fi
+if [[ ! -x "$CONDA_ENV/bin/python" ]]; then
+    echo "ERROR: TFP Python not found: $CONDA_ENV/bin/python" >&2
+    exit 2
+fi
+
+set +u
+source "$CONDA_BASE/etc/profile.d/conda.sh"
+conda activate "$CONDA_ENV"
+set -u
+
+export PYTHONPATH="$PROCESS_ROOT:${PYTHONPATH:-}"
+export PYTHONUNBUFFERED=1
+export SUPPORTBENCH_OUTER_TIMESTAMP=1
+export OMP_NUM_THREADS="${PBS_NCPUS:-4}"
+export MKL_NUM_THREADS="${PBS_NCPUS:-4}"
+export OPENBLAS_NUM_THREADS="${PBS_NCPUS:-4}"
+export NUMEXPR_NUM_THREADS="${PBS_NCPUS:-4}"
+
+# Project-owned real-time log. PBS .o* output may be delayed/spooled, so this
+# file is the canonical log to tail while the job is running.
+mkdir -p "$PROCESS_ROOT/logs"
+JOB_TOKEN="${PBS_JOBID:-manual}"
+LIVE_LOG="$PROCESS_ROOT/logs/SupportBenchBuild.${JOB_TOKEN}.live.log"
+export LIVE_LOG
+: > "$LIVE_LOG"
+
+exec > >(python -u "$PROCESS_ROOT/timestamp_stream.py" | tee -a "$LIVE_LOG") 2>&1
+
+on_exit() {
+    rc=$?
+    echo "PBS job exiting rc=${rc}"
+}
+trap on_exit EXIT
+
+echo "============================================================"
+echo "TraffiDent-SupportBench PBS build"
+echo "LIVE_LOG=${LIVE_LOG}"
+echo "PBS_JOBID=${PBS_JOBID:-unknown}"
+echo "host=$(hostname)"
+echo "workdir=${PROCESS_ROOT}"
+echo "conda_prefix=${CONDA_PREFIX:-N/A}"
+echo "python=$(command -v python)"
+python --version
+echo "ncpus=${PBS_NCPUS:-4}"
+echo "============================================================"
+
+bash ./build_all.sh

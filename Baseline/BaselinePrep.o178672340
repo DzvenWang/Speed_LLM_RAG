@@ -1,0 +1,141 @@
+[2026-09-10 18:48:45] START BaselinePrep v0.4.0 stage=development job=178672340.gadi-pbs
+[2026-09-10 18:50:39] /scratch/mh20/zw1165/envs/TFP/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[2026-09-10 18:50:39]   import pynvml  # type: ignore[import]
+[2026-09-10 18:51:44] PASS source ImputeFormer 1c3868cf499951ac43b4fc7280593fbb745f58c7 tree-lock-no-git
+[2026-09-10 18:51:44] PASS source SLPF 8f135a96d57651dc19564bd3b94508c1f92c04fb tree-lock-no-git
+[2026-09-10 18:51:44] PASS source RAFT bfe2320f5d719d1e2a024330de3410b370bbb2a9 tree-lock-no-git
+[2026-09-10 18:51:44] PASS source RAST 4b48a47a002dd8d4151afe47be8f436f0c028a67 tree-lock-no-git
+[2026-09-10 18:51:44] PASS source LEAF 650b9e915fd4cc213387e279e4e529acbe587b85 tree-lock-no-git
+[2026-09-10 18:51:44] PASS source GinAR 089f01135bf38381d17f8265b1c753703955518b tree-lock-no-git
+[2026-09-10 18:51:44] PASS source SARAF d3eee1b9542af29799847c2718ec7fc5ae7e07ea tree-lock-no-git
+[2026-09-10 18:51:44] SOURCE LOCK PASS
+[2026-09-10 18:51:51] Baseline preflight v0.4.0
+[2026-09-10 18:51:51] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
+[2026-09-10 18:51:51] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol
+[2026-09-10 18:51:51] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_artifacts
+[2026-09-10 18:51:51] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench
+[2026-09-10 18:51:51] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench
+[2026-09-10 18:51:51] PASS /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone
+[2026-09-10 18:51:51] PASS entrypoint contract ImputeFormer
+[2026-09-10 18:51:51] PASS entrypoint contract GinAR
+[2026-09-10 18:51:51] PASS entrypoint contract RAFT
+[2026-09-10 18:51:51] PASS entrypoint contract RAST
+[2026-09-10 18:51:51] PASS entrypoint contract SARAF
+[2026-09-10 18:51:51] PASS entrypoint contract LEAF
+[2026-09-10 18:51:51] PASS entrypoint contract SLPF
+[2026-09-10 18:51:51] PASS torch
+[2026-09-10 18:51:51] PASS numpy
+[2026-09-10 18:51:51] PASS pandas
+[2026-09-10 18:51:51] PASS yaml
+[2026-09-10 18:51:51] PASS scipy
+[2026-09-10 18:51:51] PASS sklearn
+[2026-09-10 18:51:51] PASS tqdm
+[2026-09-10 18:51:51] INFO optional missing faiss
+[2026-09-10 18:51:51] INFO optional missing easydict
+[2026-09-10 18:51:51] INFO optional missing loguru
+[2026-09-10 18:51:51] PASS transformers
+[2026-09-10 18:51:51] INFO optional missing vllm
+[2026-09-10 18:51:51] PASS SupportBench /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench/TraffiDent_Net_06 N= 388 H= 12 P= 12
+[2026-09-10 18:51:51] PASS frozen Protocol/development 60de891db0ea5b72a4c0fd9f4a7e30fcaf96d04f2085994516a0f4048a9915bb
+[2026-09-10 18:51:51] PREFLIGHT PASS
+[2026-09-10 18:52:17] /scratch/mh20/zw1165/envs/TFP/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[2026-09-10 18:52:17]   import pynvml  # type: ignore[import]
+[2026-09-10 18:52:25] development/train <= SharedProtocol: 12000 views unique_groups=12000 families={'predictive_regional_outage': 2400, 'predictive_directional_outage': 2400, 'regional_outage': 2400, 'temporal_outage': 2400, 'directional_outage': 2400}
+[2026-09-10 18:52:29] materialize train: 500/12000
+[2026-09-10 18:52:32] materialize train: 1000/12000
+[2026-09-10 18:52:35] materialize train: 1500/12000
+[2026-09-10 18:52:38] materialize train: 2000/12000
+[2026-09-10 18:52:41] materialize train: 2500/12000
+[2026-09-10 18:52:43] materialize train: 3000/12000
+[2026-09-10 18:52:46] materialize train: 3500/12000
+[2026-09-10 18:52:49] materialize train: 4000/12000
+[2026-09-10 18:52:52] materialize train: 4500/12000
+[2026-09-10 18:52:55] materialize train: 5000/12000
+[2026-09-10 18:52:58] materialize train: 5500/12000
+[2026-09-10 18:53:01] materialize train: 6000/12000
+[2026-09-10 18:53:04] materialize train: 6500/12000
+[2026-09-10 18:53:07] materialize train: 7000/12000
+[2026-09-10 18:53:10] materialize train: 7500/12000
+[2026-09-10 18:53:13] materialize train: 8000/12000
+[2026-09-10 18:53:16] materialize train: 8500/12000
+[2026-09-10 18:53:19] materialize train: 9000/12000
+[2026-09-10 18:53:22] materialize train: 9500/12000
+[2026-09-10 18:53:25] materialize train: 10000/12000
+[2026-09-10 18:53:28] materialize train: 10500/12000
+[2026-09-10 18:53:32] materialize train: 11000/12000
+[2026-09-10 18:53:35] materialize train: 11500/12000
+[2026-09-10 18:53:38] materialize train: 12000/12000
+[2026-09-10 18:53:38] development/val <= SharedProtocol: 5000 views unique_groups=5000 families={'predictive_regional_outage': 1000, 'regional_outage': 1000, 'directional_outage': 1000, 'temporal_outage': 1000, 'predictive_directional_outage': 1000}
+[2026-09-10 18:53:42] materialize val: 500/5000
+[2026-09-10 18:53:45] materialize val: 1000/5000
+[2026-09-10 18:53:48] materialize val: 1500/5000
+[2026-09-10 18:53:51] materialize val: 2000/5000
+[2026-09-10 18:53:54] materialize val: 2500/5000
+[2026-09-10 18:53:57] materialize val: 3000/5000
+[2026-09-10 18:54:01] materialize val: 3500/5000
+[2026-09-10 18:54:05] materialize val: 4000/5000
+[2026-09-10 18:54:08] materialize val: 4500/5000
+[2026-09-10 18:54:12] materialize val: 5000/5000
+[2026-09-10 18:54:12] PROTOCOL_STAGE_HASH=60de891db0ea5b72a4c0fd9f4a7e30fcaf96d04f2085994516a0f4048a9915bb
+[2026-09-10 18:54:12] CACHE_FINGERPRINT=025c27416989c1550926799b3680c408e88927093a52f064fb6f86d839ee3ad8
+[2026-09-10 18:54:12] cache ready: /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_exps/_cache/TraffiDent_Net_06/development
+[2026-09-10 18:54:17] /scratch/mh20/zw1165/envs/TFP/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[2026-09-10 18:54:17]   import pynvml  # type: ignore[import]
+[2026-09-10 18:54:20] PASS train rows 12000 unique_groups 12000 families {'predictive_regional_outage': 2400, 'predictive_directional_outage': 2400, 'regional_outage': 2400, 'temporal_outage': 2400, 'directional_outage': 2400}
+[2026-09-10 18:54:20] PASS val rows 5000 unique_groups 5000 families {'predictive_regional_outage': 1000, 'regional_outage': 1000, 'directional_outage': 1000, 'temporal_outage': 1000, 'predictive_directional_outage': 1000}
+[2026-09-10 18:54:20] PASS shared Protocol stage 60de891db0ea5b72a4c0fd9f4a7e30fcaf96d04f2085994516a0f4048a9915bb
+[2026-09-10 18:54:20] PASS cache fingerprint 025c27416989c1550926799b3680c408e88927093a52f064fb6f86d839ee3ad8
+[2026-09-10 18:54:20] CACHE VALIDATION PASS
+[2026-09-10 18:54:22] /scratch/mh20/zw1165/envs/TFP/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[2026-09-10 18:54:22]   import pynvml  # type: ignore[import]
+[2026-09-10 18:54:25] /scratch/mh20/zw1165/envs/TFP/lib/python3.11/site-packages/torch/cuda/__init__.py:63: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+[2026-09-10 18:54:25]   import pynvml  # type: ignore[import]
+[2026-09-10 18:54:27] PASS train rows 12000 unique_groups 12000 families {'predictive_regional_outage': 2400, 'predictive_directional_outage': 2400, 'regional_outage': 2400, 'temporal_outage': 2400, 'directional_outage': 2400}
+[2026-09-10 18:54:27] PASS val rows 5000 unique_groups 5000 families {'predictive_regional_outage': 1000, 'regional_outage': 1000, 'directional_outage': 1000, 'temporal_outage': 1000, 'predictive_directional_outage': 1000}
+[2026-09-10 18:54:27] PASS shared Protocol stage 60de891db0ea5b72a4c0fd9f4a7e30fcaf96d04f2085994516a0f4048a9915bb
+[2026-09-10 18:54:27] PASS cache fingerprint 025c27416989c1550926799b3680c408e88927093a52f064fb6f86d839ee3ad8
+[2026-09-10 18:54:27] CACHE VALIDATION PASS
+[2026-09-10 18:54:28] {
+[2026-09-10 18:54:28]   "artifact_type": "retrieval_leakage_audit",
+[2026-09-10 18:54:28]   "cache_fingerprint": "025c27416989c1550926799b3680c408e88927093a52f064fb6f86d839ee3ad8",
+[2026-09-10 18:54:28]   "dataset": "TraffiDent_Net_06",
+[2026-09-10 18:54:28]   "external_runner_interval_exclusion_required": false,
+[2026-09-10 18:54:28]   "external_runner_policy": "RAFT/SARAF exclude all Train-memory windows whose [history+future] interval overlaps each Train/Val query interval.",
+[2026-09-10 18:54:28]   "interval_span_steps": 24,
+[2026-09-10 18:54:28]   "memory_split": "train",
+[2026-09-10 18:54:28]   "pass": true,
+[2026-09-10 18:54:28]   "potential_train_memory_val_query_interval_overlap_pairs": 0,
+[2026-09-10 18:54:28]   "project": "Baseline",
+[2026-09-10 18:54:28]   "project_version": "0.4.0",
+[2026-09-10 18:54:28]   "protocol_stage_hash": "60de891db0ea5b72a4c0fd9f4a7e30fcaf96d04f2085994516a0f4048a9915bb",
+[2026-09-10 18:54:28]   "query_future_allowed": false,
+[2026-09-10 18:54:28]   "query_split": "val",
+[2026-09-10 18:54:28]   "retrieval_memory_policy": "train_only",
+[2026-09-10 18:54:28]   "retrieval_memory_signal": "full_train_history",
+[2026-09-10 18:54:28]   "split_view_hashes": {
+[2026-09-10 18:54:28]     "train": "4cc894fc1c9d0817531eda6477b8d2a8b4c0037261e3ac81b77e7235a19a9e95",
+[2026-09-10 18:54:28]     "val": "528878c7a59e66dbbf46e16aaf9a129b8df78542f8b6bffbc00cb2c3aadfc2f8"
+[2026-09-10 18:54:28]   },
+[2026-09-10 18:54:28]   "stage": "development",
+[2026-09-10 18:54:28]   "test_cache_present": false,
+[2026-09-10 18:54:28]   "train_rows": 12000,
+[2026-09-10 18:54:28]   "val_queries_with_potential_interval_overlap": 0,
+[2026-09-10 18:54:28]   "val_rows": 5000,
+[2026-09-10 18:54:28]   "view_group_overlap": 0,
+[2026-09-10 18:54:28]   "view_id_overlap": 0
+[2026-09-10 18:54:28] }
+[2026-09-10 18:54:28] wrote /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_exps/_audit/retrieval_leakage_development.json
+[2026-09-10 18:54:28] RETRIEVAL LEAKAGE AUDIT PASS
+[2026-09-10 18:54:29] SCRIPT_EXIT_STATUS=0
+
+======================================================================================
+                  Resource Usage on 2026-09-10 18:54:32:
+   Job Id:             178672340.gadi-pbs
+   Project:            mh20
+   Exit Status:        0
+   Service Units:      1.16
+   NCPUs Requested:    4                   CPU Time Used: 00:02:48        
+   Memory Requested:   24.0GB                Memory Used: 4.26GB          
+   Walltime Requested: 02:00:00            Walltime Used: 00:05:49        
+   JobFS Requested:    100.0MB                JobFS Used: 0B              
+======================================================================================

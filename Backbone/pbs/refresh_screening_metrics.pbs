@@ -1,0 +1,43 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=02:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -N BackboneMetricRefresh
+#PBS -j oe
+
+set -euo pipefail
+
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG
+PROJ="$ROOT/Backbone"
+ENVROOT=/scratch/mh20/zw1165/envs/TFP
+PYTHON="$ENVROOT/bin/python"
+LOGROOT="$ROOT/Backbone_logs"
+
+mkdir -p "$LOGROOT"
+STAMP=$(date +%Y%m%d_%H%M%S)
+LOG="$LOGROOT/BackboneMetricRefresh.${PBS_JOBID}.${STAMP}.live.log"
+
+cd "$PROJ"
+export PATH="$ENVROOT/bin:$PATH"
+unset TRANSFORMERS_CACHE || true
+export PYTHONPATH="$PROJ:$ROOT/Protocol:$ROOT/TraffiDent_SupportBench:${PYTHONPATH:-}"
+export PYTHONUNBUFFERED=1
+export PYTHONDONTWRITEBYTECODE=1
+
+exec > >(tee -a "$LOG") 2>&1
+trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"' EXIT
+
+echo "START Backbone screening metric refresh job=$PBS_JOBID host=$(hostname)"
+echo "PYTHON=$PYTHON"
+nvidia-smi
+
+"$PYTHON" -u scripts/verify_official_sources.py
+"$PYTHON" -u scripts/validate_cache.py --stage screening
+"$PYTHON" -u scripts/smoke_metrics.py
+"$PYTHON" -u scripts/refresh_screening_metrics.py
+
+echo "METRIC REFRESH PASS"

@@ -1,0 +1,29 @@
+official_sources:
+  ImputeFormer:
+    remote: https://github.com/tongnie/ImputeFormer.git
+    commit: 1c3868cf499951ac43b4fc7280593fbb745f58c7
+    policy: exact
+  SLPF:
+    remote: https://github.com/zbliu98/SLPF.git
+    commit: 8f135a96d57651dc19564bd3b94508c1f92c04fb
+    policy: exact
+  RAFT:
+    remote: https://github.com/archon159/RAFT.git
+    commit: bfe2320f5d719d1e2a024330de3410b370bbb2a9
+    policy: exact
+  RAST:
+    remote: https://github.com/RWLinno/RAST.git
+    commit: 4b48a47a002dd8d4151afe47be8f436f0c028a67
+    policy: exact
+  LEAF:
+    remote: https://github.com/YushengZhao/LEAF.git
+    commit: 650b9e915fd4cc213387e279e4e529acbe587b85
+    policy: exact
+  GinAR:
+    remote: https://github.com/GestaltCogTeam/GinAR.git
+    ref: main
+    policy: resolve_once
+  SARAF:
+    remote: https://github.com/ShiqiaoZhou/SARAF.git
+    ref: main
+    policy: resolve_once

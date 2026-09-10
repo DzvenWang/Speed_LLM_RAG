@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "traffident-supportbench"
+version = "1.2.3"
+description = "Predictive spatiotemporal support benchmark under incomplete sensing"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "scipy>=1.10",
+  "PyYAML>=6.0",
+  "scikit-learn>=1.3",
+]
+
+[tool.setuptools]
+packages = ["supportbench"]
