@@ -7,6 +7,7 @@
 #PBS -l walltime=12:00:00
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -j oe
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs/
 #PBS -N RAFTDev
 set -euo pipefail
 ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline

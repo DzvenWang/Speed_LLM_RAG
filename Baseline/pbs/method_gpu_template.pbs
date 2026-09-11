@@ -8,6 +8,7 @@
 #PBS -l walltime=24:00:00
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -j oe
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs/
 #PBS -N BaselineMethod
 # v0.4.0 intentionally has no generic "python official.py" call here: each official
 # method has different dataset assumptions. A method-specific bridge must be audited

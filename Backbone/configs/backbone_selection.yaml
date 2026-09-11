@@ -24,9 +24,6 @@ official_sources:
   PatchSTG:
     remote: https://github.com/LMissher/PatchSTG.git
     commit: 8b298b230227a304a082e05241c69dca3740a73d
-  DST-SGNN:
-    remote: https://github.com/komorebi424/DST-SGNN.git
-    commit: ce426c7f0382aecb1a09c731fdc5ad411b36dfdc
 experiment:
   subgraph: TraffiDent_Net_06
   history: 12
@@ -201,31 +198,6 @@ models:
     tod_slots: 288
     dow_slots: 7
     spatial_layout: official_kdtree_on_traffident_nodes_plus_official_adjacency_padding
-  DST-SGNN:
-    recipe_source: DST-SGNN@ce426c7 RUN.py + hyperparameter.txt (seq/pre length adapted to benchmark H=P=12)
-    batch_size: 2
-    fallback_batch_sizes:
-    - 1
-    optimizer: adagrad
-    learning_rate: 0.01
-    lr_decay: 0.0
-    initial_accumulator_value: 0.0
-    weight_decay: 0.0
-    scheduler: exponential
-    lr_gamma: 0.5
-    scheduler_step_interval: 5
-    max_epochs: 25
-    patience: 25
-    grad_clip: 0.0
-    train_loss: mae
-    seq_length: 12
-    pre_length: 12
-    patch_len: 12
-    stride: 24
-    embed_size: 128
-    hidden_size: 1024
-    d_model: 128
-    gpu_only: true
 protocol:
   name: protocol_v1
   version: 1.0.0

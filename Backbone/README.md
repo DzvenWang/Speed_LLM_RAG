@@ -48,3 +48,6 @@ The pinned official 2025 source hard-codes `cuda:0`; v0.4.0 deliberately does no
 
 ## Later RAG/LLM compatibility
 Backbone internals remain untouched. The final model can later export frozen predictions/representations through an interface layer, preserving attribution of improvements to retrieval/reasoning/control rather than to a modified forecasting architecture.
+
+### 2026-09-11 DST-SGNN numerical-stability hotfix
+See `HOTFIX_20260911.md`. The vendor source lock is unchanged; stabilization is adapter-only.

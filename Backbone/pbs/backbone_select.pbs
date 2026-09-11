@@ -8,11 +8,12 @@
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -N BackboneSelect
 #PBS -j oe
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_logs/
 set -euo pipefail
-: "${MODEL:?Submit with MODEL=STAEformer|HimNet|BigST|STDN|PatchSTG|DST-SGNN}"
+: "${MODEL:?Submit with MODEL=STAEformer|HimNet|BigST|STDN|PatchSTG}"
 : "${STAGE:?Submit with STAGE=screening|formal}"
 : "${SEED:?Submit with SEED=10 etc.}"
-case "$MODEL" in STAEformer|HimNet|BigST|STDN|PatchSTG|DST-SGNN) ;; *) echo "Unknown MODEL=$MODEL"; exit 2;; esac
+case "$MODEL" in STAEformer|HimNet|BigST|STDN|PatchSTG) ;; *) echo "Unknown MODEL=$MODEL"; exit 2;; esac
 case "$STAGE" in screening|formal) ;; *) echo "Unknown STAGE=$STAGE"; exit 2;; esac
 ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG
 PROJ="$ROOT/Backbone"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Stage-1B only: do NOT resubmit the four already-completed v0.3.1 models.
+# Stage-1B only: PatchSTG is the sole recent-model extension; do NOT resubmit the four already-completed v0.3.1 models.
 set -euo pipefail
 ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone
 cd "$ROOT"
@@ -11,7 +11,7 @@ c=yaml.safe_load(open('configs/backbone_selection.yaml'))
 print(c['experiment']['screening']['seed'])
 PY2
 )
-for M in PatchSTG DST-SGNN; do
+for M in PatchSTG; do
   jid=$(qsub -v MODEL="$M",STAGE=screening,SEED="$SEED" pbs/backbone_select.pbs)
   echo "$M recent-screening seed=$SEED -> $jid"
 done

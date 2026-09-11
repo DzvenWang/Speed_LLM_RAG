@@ -8,6 +8,7 @@
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -N BackboneMetricRefresh
 #PBS -j oe
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_logs/
 
 set -euo pipefail
 

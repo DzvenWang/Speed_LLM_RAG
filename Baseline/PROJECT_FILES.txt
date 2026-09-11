@@ -70,3 +70,6 @@ tests/smoke_shared_protocol_consumer.py
 tests/smoke_story_contract.py
 timestamp_stream.py
 vendor/.gitkeep
+scripts/recover_incomplete_result.py
+tests/smoke_hotfix_20260911.py
+HOTFIX_20260911.md

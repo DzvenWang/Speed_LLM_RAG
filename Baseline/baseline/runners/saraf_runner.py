@@ -62,6 +62,29 @@ def overlap_masker(query_starts: np.ndarray, memory_starts: np.ndarray, span: in
     return masked_sim
 
 
+def _probe_time_bonus(rt, query_ds, device) -> dict:
+    """Fail loudly if the time-aware term is constant after timestamp adaptation."""
+    n = min(8, len(query_ds))
+    if n <= 0:
+        raise RuntimeError('SARAF time-bonus probe has no query rows')
+    q = torch.from_numpy(np.asarray(query_ds.xm[:n], dtype=np.float32)).to(device)
+    with torch.no_grad():
+        bonus = rt.compute_time_aware_bonus(q, rt.train_data_all_mark, device)
+    stats = {
+        'min': float(bonus.min().item()),
+        'max': float(bonus.max().item()),
+        'mean': float(bonus.mean().item()),
+        'std': float(bonus.std().item()),
+    }
+    print('SARAF TIME BONUS PROBE ' + json.dumps(stats, sort_keys=True), flush=True)
+    if stats['max'] - stats['min'] < 1e-5 or stats['std'] < 1e-6:
+        raise RuntimeError(
+            'SARAF time-aware bonus is effectively constant. Check time_index parsing; '
+            'numeric row-index columns must not be interpreted as datetimes.'
+        )
+    return stats
+
+
 def precompute_retrieval(model, memory_ds, train_query_ds, val_query_ds, cfg, device):
     rt = model.rt
     # Official implementation has no 5-minute map; fix only frequency metadata,
@@ -69,6 +92,7 @@ def precompute_retrieval(model, memory_ds, train_query_ds, val_query_ds, cfg, de
     rt.steps_per_day = 288
     rt.steps_per_year = 288 * 365
     rt.prepare_dataset(memory_ds)
+    time_bonus_probe = _probe_time_bonus(rt, val_query_ds, device)
 
     H = int(cfg['experiment']['history']); P = int(cfg['experiment']['horizon'])
     span = H + P
@@ -99,6 +123,7 @@ def precompute_retrieval(model, memory_ds, train_query_ds, val_query_ds, cfg, de
         'train_query_rows': len(train_query_ds),
         'val_query_rows': len(val_query_ds),
         'overlap_exclusion_span_steps': span,
+        'time_bonus_probe': time_bonus_probe,
     }
 
 

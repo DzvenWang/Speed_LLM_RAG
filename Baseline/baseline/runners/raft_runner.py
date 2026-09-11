@@ -74,7 +74,7 @@ def precompute(model,memory_ds,train_ds,val_ds,cfg,device):
     tr=rt.retrieve_all(train_ds,train=True,device=device)
     print('RAFT RETRIEVAL val queries -> Train-only full-history memory',flush=True)
     va=rt.retrieve_all(val_ds,train=False,device=device)
-    model.retrieval_dict={'train':tr.detach(),'valid':va.detach()}
+    model.retrieval_dict={'train':tr.detach().to(device, non_blocking=True),'valid':va.detach().to(device, non_blocking=True)}
     del model.rt
     if torch.cuda.is_available(): torch.cuda.empty_cache()
     return {'train_retrieval_shape':list(tr.shape),'val_retrieval_shape':list(va.shape),'memory_rows':len(memory_ds),'overlap_exclusion_span_steps':span}

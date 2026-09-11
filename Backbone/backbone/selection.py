@@ -4,7 +4,7 @@ import json
 import numpy as np
 import pandas as pd
 
-MODELS = ['STAEformer', 'HimNet', 'BigST', 'STDN', 'PatchSTG', 'DST-SGNN']
+MODELS = ['STAEformer', 'HimNet', 'BigST', 'STDN', 'PatchSTG']
 
 
 def latest_summary(exp_root, model, subgraph, stage):

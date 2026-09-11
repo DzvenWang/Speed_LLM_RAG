@@ -1,1 +1,5 @@
 /scratch/mh20/zw1165/Speed_LLM_RAG/cmd.txt
+
+qstat -u $USER
+
+nci_account -P mh20

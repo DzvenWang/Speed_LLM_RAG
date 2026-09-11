@@ -5,7 +5,7 @@ import shutil
 import numpy as np
 import pandas as pd
 
-from .sampler import balanced_unique_group_pick, quotas_for_total
+from .sampler import all_unique_group_pick, balanced_unique_group_pick, quotas_for_total
 from .utils import canonical_sha256, canonical_view_hash, ensure_dir, read_json, sha256_file, write_json
 
 
@@ -106,7 +106,7 @@ def build_stage(bench, cfg: dict, stage: str, force: bool = False) -> Path:
         dev = root / 'development'
         if not (dev / 'FROZEN.json').exists():
             raise RuntimeError('Development protocol must be frozen before formal protocol.')
-        train = balanced_unique_group_pick(filtered_views(bench, cfg, 'train', False), fams, 0, seed + 10)
+        train = all_unique_group_pick(filtered_views(bench, cfg, 'train', False), fams, seed + 10)
         val = pd.read_csv(dev / 'val_views.csv')
         # Formal Val is exactly Development Val; only protocol_view_id namespace changes.
         val2 = val.drop(columns=['protocol_view_id']).copy()
@@ -227,8 +227,13 @@ def validate_stage(cfg: dict, stage: str) -> dict:
             if configured not in (None, 'all', 0) and len(df) != int(configured):
                 raise AssertionError(f'{stage}/{split}: expected {configured}, got {len(df)}')
         counts = df.family.astype(str).value_counts().to_dict()
-        if max(counts.values()) - min(counts.values()) > 1:
+        require_exact_balance = not (stage == 'formal' and split == 'train')
+        if require_exact_balance and max(counts.values()) - min(counts.values()) > 1:
             raise AssertionError(f'{stage}/{split}: family counts not balanced: {counts}')
+        if stage == 'formal' and split == 'train':
+            missing_families = [f for f in fams if int(counts.get(f, 0)) == 0]
+            if missing_families:
+                raise AssertionError(f'{stage}/{split}: missing sensing families: {missing_families}')
     if 'train' in views and 'val' in views:
         if set(views['train'].view_id.astype(str)) & set(views['val'].view_id.astype(str)):
             raise AssertionError('Train/Val view_id overlap')

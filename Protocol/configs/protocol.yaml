@@ -31,6 +31,8 @@ protocol:
   name: protocol_v1
   unique_view_group: true
   family_balanced: true
+  formal_train_policy: all_eligible_unique_groups_best_effort_family_balance
+  formal_train_exact_family_balance: false
   formal_reuses_development_val: true
   train_only_normalization: true
   normalized_missing_fill_value: 0.0

@@ -37,7 +37,6 @@ clone_or_keep(){
   clone_or_keep BigST https://github.com/usail-hkust/BigST.git 830cb529354c0cda75c1660d1a0af2ffc7e66abb
   clone_or_keep STDN https://github.com/roarer008/STDN.git e24a60fa9485fb9805df9c171d67ab60840d757d
   clone_or_keep PatchSTG https://github.com/LMissher/PatchSTG.git 8b298b230227a304a082e05241c69dca3740a73d
-  clone_or_keep DST-SGNN https://github.com/komorebi424/DST-SGNN.git ce426c7f0382aecb1a09c731fdc5ad411b36dfdc
 } | tee "$VENDOR/OFFICIAL_COMMITS.tsv"
 
 "$PY" "$ROOT/scripts/source_lock.py" create --root "$ROOT" --sources "$ROOT/configs/backbone_selection.yaml"

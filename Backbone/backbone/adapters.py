@@ -319,53 +319,12 @@ class PatchSTGAdapter(BaseAdapter):
         return pred
 
 
-class DSTSGNNAdapter(BaseAdapter):
-    name = 'DST-SGNN'
-    adapter_revision = 'dstsgnn_official_h12_patch12_v1'
 
-    @classmethod
-    def build(cls, vendor, num_nodes, device, mean, std, cfg, adj, nodes):
-        if device.type != 'cuda':
-            raise RuntimeError(
-                'Pinned DST-SGNN source hard-codes cuda:0 in MODEL.py/SGSC.py; '
-                'run it only through the V100 PBS job. Vendor source is intentionally not edited.'
-            )
-        if int(cfg['seq_length']) != 12 or int(cfg['patch_len']) != 12:
-            raise RuntimeError('This benchmark adapter is locked to H=12 and patch_len=12 for DST-SGNN.')
-        mod = load_module('vendor_dstsgnn_model', Path(vendor)/'model'/'MODEL.py', Path(vendor))
-        m = mod.DSTSGNN(
-            stride=int(cfg.get('stride', 24)),
-            pre_length=int(cfg['pre_length']),
-            embed_size=int(cfg['embed_size']),
-            feature_size=num_nodes,
-            seq_length=int(cfg['seq_length']),
-            hidden_size=int(cfg['hidden_size']),
-            patch_len=int(cfg['patch_len']),
-            d_model=int(cfg['d_model']),
-        )
-        obj = cls(m, device, mean, std)
-        obj.adapter_metadata = {
-            'history_length': int(cfg['seq_length']),
-            'forecast_length': int(cfg['pre_length']),
-            'patch_len': int(cfg['patch_len']),
-            'official_internal_patch_stride': 24,
-            'note': 'With H=patch_len=12 the pinned official code forms exactly one input patch; SGSC retains its official 1->12 projection.',
-        }
-        return obj
-
-    def forward(self, batch, batches_seen=None, training=False):
-        x = batch['x'].to(self.device, non_blocking=True).float()  # [B,T,N]
-        pred = self.model(x)  # official [B,N,P]
-        if pred.ndim != 3:
-            raise RuntimeError(f'DST-SGNN expected [B,N,P], got {tuple(pred.shape)}')
-        return pred.transpose(1, 2).contiguous().float()
-
-
-ADAPTERS={'STAEformer':STAEformerAdapter,'HimNet':HimNetAdapter,'BigST':BigSTAdapter,'STDN':STDNAdapter,'PatchSTG':PatchSTGAdapter,'DST-SGNN':DSTSGNNAdapter}
+ADAPTERS={'STAEformer':STAEformerAdapter,'HimNet':HimNetAdapter,'BigST':BigSTAdapter,'STDN':STDNAdapter,'PatchSTG':PatchSTGAdapter}
 
 def build_adapter(name,vendor_root,num_nodes,device,mean,std,cfg,adj,nodes=None):
     if name not in ADAPTERS: raise KeyError(name)
     vendor = Path(vendor_root) / name
-    if name in ('PatchSTG', 'DST-SGNN'):
+    if name == 'PatchSTG':
         return ADAPTERS[name].build(vendor,num_nodes,device,mean,std,cfg,adj,nodes)
     return ADAPTERS[name].build(vendor,num_nodes,device,mean,std,cfg,adj)

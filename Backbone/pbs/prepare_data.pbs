@@ -7,6 +7,7 @@
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -N BackbonePrep
 #PBS -j oe
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_logs/
 set -euo pipefail
 : "${STAGE:=screening}"
 case "$STAGE" in screening|formal) ;; *) echo "Unknown STAGE=$STAGE" >&2; exit 2;; esac

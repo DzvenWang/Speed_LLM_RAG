@@ -10,12 +10,12 @@ from backbone.data import CachedSplit
 from backbone.utils import count_parameters, load_yaml
 from supportbench.dataset import SupportBench
 
-ap=argparse.ArgumentParser(); ap.add_argument('--model',required=True,choices=['PatchSTG','DST-SGNN']); args=ap.parse_args()
+ap=argparse.ArgumentParser(); ap.add_argument('--model',required=True,choices=['PatchSTG']); args=ap.parse_args()
 if not torch.cuda.is_available(): raise SystemExit('GPU smoke requires cuda:0')
 cfg=load_yaml(ROOT/'configs/backbone_selection.yaml'); sg=cfg['experiment']['subgraph']
 b=SupportBench(sg,root=cfg['project']['benchmark_root']); st=b.stats['channels'][b.manifest['primary_channel']]
 cache=Path(cfg['project']['exp_root'])/'_cache'/sg/'screening'; val=CachedSplit(cache,'val')
-mc=dict(cfg['models'][args.model]); bs=1 if args.model=='DST-SGNN' else min(2,int(mc['batch_size']))
+mc=dict(cfg['models'][args.model]); bs=min(2,int(mc['batch_size']))
 loader=DataLoader(val,batch_size=bs,shuffle=False,num_workers=0)
 batch=next(iter(loader)); device=torch.device('cuda:0')
 adapter=build_adapter(args.model,ROOT/'vendor',b.N,device,float(st['mean']),float(st['std']),mc,b.adj,b.nodes)

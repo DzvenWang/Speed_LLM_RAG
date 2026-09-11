@@ -1,0 +1,37 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12,ngpus=1,mem=32GB,walltime=12:00:00,jobfs=10GB
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -N STDNSpecial
+
+set -euo pipefail
+
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone
+PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+EXP=${EXP:?Submit with qsub -v EXP=d1_bs16 STDN_Special/pbs/run_single.pbs}
+STAGE=${STAGE:-screening}
+SEED=${SEED:-10}
+STAMP="stdn_diag_${EXP}_$(date +%Y%m%d_%H%M%S)"
+LOGDIR="$ROOT/STDN_Special/logs"
+mkdir -p "$LOGDIR"
+LIVE="$LOGDIR/${STAMP}.${PBS_JOBID}.live.log"
+
+exec > >(awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush(); }' | tee -a "$LIVE") 2>&1
+
+cd "$ROOT"
+echo "START STDN_Special EXP=$EXP STAGE=$STAGE SEED=$SEED JOB=$PBS_JOBID HOST=$(hostname)"
+echo "PYTHON=$PY"
+"$PY" -V
+nvidia-smi || true
+
+"$PY" -u scripts/verify_official_sources.py
+"$PY" -u scripts/validate_cache.py --stage "$STAGE"
+"$PY" -u STDN_Special/run_diagnostic.py \
+  --experiment "$EXP" \
+  --stage "$STAGE" \
+  --seed "$SEED" \
+  --run-stamp "$STAMP"
+
+echo "FINISH STDN_Special EXP=$EXP"

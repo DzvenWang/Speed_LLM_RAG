@@ -33,8 +33,6 @@ try:
         lat=pd.to_numeric(b.nodes.get('lat'),errors='coerce').to_numpy(float); lng=pd.to_numeric(b.nodes.get('lng'),errors='coerce').to_numpy(float)
         geo=float((np.isfinite(lat)&np.isfinite(lng)).mean())
         print('PASS PatchSTG static node metadata geographic_fraction=',f'{geo:.3f}')
-    if args.model=='DST-SGNN' and (b.H!=12 or b.P!=12):
-        raise RuntimeError(f'DST-SGNN adapter is locked to H=P=12, got H={b.H} P={b.P}')
 except Exception as e: print('FAIL SupportBench/recent-model contract',repr(e)); failed=True
 try:
     consumer=importlib.import_module('shared_protocol.consumer')
@@ -42,8 +40,5 @@ try:
     pm,_=consumer.load_frozen_stage(cfg['project']['protocol_artifact_root'],cfg['experiment']['subgraph'],cfg['protocol']['name'],pstage)
     print('PASS frozen Protocol/'+pstage,pm['stage_hash'])
 except Exception as e: print('FAIL Protocol/'+str(args.stage),repr(e)); failed=True
-if args.model=='DST-SGNN':
-    import torch
-    ok=torch.cuda.is_available(); print(('PASS' if ok else 'FAIL'),'DST-SGNN cuda:0 required by pinned official source'); failed|=not ok
 if failed: raise SystemExit(2)
 print('PREFLIGHT PASS')

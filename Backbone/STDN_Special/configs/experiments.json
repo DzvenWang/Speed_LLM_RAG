@@ -1,0 +1,42 @@
+{
+  "official_control": {
+    "description": "Existing official STDN control. Do not rerun unless needed.",
+    "batch_size": 64,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0,
+    "patience": 10,
+    "epochs": 200
+  },
+  "d1_bs16": {
+    "description": "Attribution D1: change batch size only (64 -> 16).",
+    "batch_size": 16,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0,
+    "patience": 10,
+    "epochs": 200
+  },
+  "d2_bs16_pat30": {
+    "description": "Attribution D2: D1 + longer early-stopping patience (10 -> 30).",
+    "batch_size": 16,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0,
+    "patience": 30,
+    "epochs": 200
+  },
+  "d3_regularized": {
+    "description": "Attribution D3: D2 + lower LR and explicit L2 regularization.",
+    "batch_size": 16,
+    "learning_rate": 0.0005,
+    "weight_decay": 0.0001,
+    "patience": 30,
+    "epochs": 200
+  },
+  "d4_low_lr": {
+    "description": "Sensitivity check: D3 with a smaller learning rate.",
+    "batch_size": 16,
+    "learning_rate": 0.0002,
+    "weight_decay": 0.0001,
+    "patience": 30,
+    "epochs": 200
+  }
+}

@@ -61,10 +61,18 @@ def scale_stats(cache: Path) -> tuple[float, float]:
     return float(info['mean']), max(float(info['std']), 1e-6)
 
 
+def as_unicode_array(values) -> np.ndarray:
+    """Return a pickle-free NumPy Unicode array for portable NPZ artifacts."""
+    vals = [str(v) for v in values]
+    width = max(1, max((len(v) for v in vals), default=1))
+    return np.asarray(vals, dtype=f'<U{width}')
+
+
 def save_val_outputs(cfg: dict, cache: Path, run_dir: Path, pred_raw: np.ndarray, method: str, seed: int, stage: str, extra_summary: dict) -> dict:
     meta = pd.read_csv(cache / 'val_manifest.csv')
     pred_path = run_dir / 'val_predictions.npz'
-    np.savez_compressed(pred_path, view_id=meta.view_id.astype(str).to_numpy(), pred=np.asarray(pred_raw, np.float32))
+    view_ids = as_unicode_array(meta.view_id.astype(str).tolist())
+    np.savez_compressed(pred_path, view_id=view_ids, pred=np.asarray(pred_raw, np.float32))
     metrics = evaluate_prediction_file(cache, 'val', pred_path)
     metrics.to_csv(run_dir / 'val_metrics.csv', index=False)
     all_row = metrics.loc[metrics.family.astype(str) == 'ALL'].iloc[0].to_dict()
@@ -121,7 +129,40 @@ class GinARDataset(ArrayForecastDataset):
         feat[...,0] = x
         feat[...,1] = tod[:,None]
         feat[...,2] = dow[:,None]
-        return torch.from_numpy(feat), torch.from_numpy(np.asarray(self.y[i],np.float32)), torch.from_numpy(np.asarray(self.valid[i],np.uint8)), int(i)
+        return torch.from_numpy(feat), torch.from_numpy(np.array(self.y[i],dtype=np.float32,copy=True)), torch.from_numpy(np.array(self.valid[i],dtype=np.uint8,copy=True)), int(i)
+
+
+def _valid_datetime_candidate(raw: pd.Series, max_idx: int) -> list[pd.Timestamp] | None:
+    """Parse only genuine timestamp-like columns and reject numeric row indices.
+
+    ``pd.to_datetime`` interprets integers as nanoseconds from the Unix epoch, so a
+    plain 0,1,2,... index silently collapses a 5-minute series into nearly identical
+    calendar marks.  SARAF's time-aware bonus then degenerates to a constant.
+    """
+    if len(raw) < max_idx:
+        return None
+    if pd.api.types.is_numeric_dtype(raw.dtype):
+        return None
+    text = raw.astype(str)
+    # Require obvious date/time syntax rather than arbitrary identifiers.
+    probe = text.head(min(len(text), 256))
+    if not probe.str.contains(r'[-/:T ]', regex=True).mean() > 0.8:
+        return None
+    s = pd.to_datetime(text, errors='coerce')
+    if s.notna().mean() <= 0.95:
+        return None
+    s = s.iloc[:max_idx].reset_index(drop=True)
+    if len(s) >= 3:
+        d = s.diff().dropna().dt.total_seconds().to_numpy()
+        d = d[np.isfinite(d) & (d > 0)]
+        if d.size == 0:
+            return None
+        med = float(np.median(d))
+        # TraffiDent is 5-minute data. Allow mild source irregularity, but reject
+        # nanosecond/index-like or day-level columns.
+        if not (240.0 <= med <= 360.0):
+            return None
+    return list(s)
 
 
 def _load_datetime_axis(cfg: dict, cache: Path, split: str) -> list[pd.Timestamp]:
@@ -130,14 +171,16 @@ def _load_datetime_axis(cfg: dict, cache: Path, split: str) -> list[pd.Timestamp
     sg = Path(cfg['project']['benchmark_root']) / cfg['experiment']['subgraph']
     candidates = [sg/'core'/'time_index.csv', sg/'time_index.csv']
     for p in candidates:
-        if not p.exists(): continue
+        if not p.exists():
+            continue
         df = pd.read_csv(p)
         for c in df.columns:
-            s = pd.to_datetime(df[c], errors='coerce')
-            if len(s) >= max_idx and s.notna().mean() > 0.95:
-                return list(s.iloc[:max_idx])
-    # Deterministic fallback preserves 5-min daily/weekly alignment if explicit timestamps are absent.
-    base = pd.Timestamp('2000-01-03 00:00:00')
+            parsed = _valid_datetime_candidate(df[c], max_idx)
+            if parsed is not None:
+                return parsed
+    # Deterministic fallback preserves exact 5-min TOD/DOW periodicity and is safer
+    # than interpreting an integer row-id column as nanosecond timestamps.
+    base = pd.Timestamp('2000-01-03 00:00:00')  # Monday
     return list(pd.date_range(base, periods=max_idx, freq='5min'))
 
 
@@ -169,7 +212,7 @@ class SARAFTensorDataset(Dataset):
         self.pred_len=int(self.y.shape[1]); self.label_len=0
     def __len__(self): return int(self.x.shape[0])
     def __getitem__(self,i):
-        return int(i), np.asarray(self.x[i],np.float32), np.asarray(self.y[i],np.float32), np.asarray(self.xm[i],np.float32), np.asarray(self.ym[i],np.float32)
+        return int(i), np.array(self.x[i],dtype=np.float32,copy=True), np.array(self.y[i],dtype=np.float32,copy=True), np.array(self.xm[i],dtype=np.float32,copy=True), np.array(self.ym[i],dtype=np.float32,copy=True)
 
 
 def simple_namespace(**kwargs): return SimpleNamespace(**kwargs)

@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""Static/deterministic contract smoke for recent adapters.
-Does not instantiate DST-SGNN on CPU because pinned vendor code requires cuda:0.
-"""
+"""Static/deterministic contract smoke for the PatchSTG recent adapter."""
 from pathlib import Path
 import sys, numpy as np, pandas as pd, torch
 GADI_ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone')
@@ -16,5 +14,4 @@ loc=_node_coordinate_array(nodes,N)
 assert loc.shape==(2,N) and np.isfinite(loc).all()
 p=cfg['models']['PatchSTG']; assert int(p['tem_patchsize'])*int(p['tem_patchnum'])==12
 assert 2**int(p['spatial_recur'])==int(p['spa_patchnum']) and int(p['spa_patchnum'])%int(p['factors'])==0
-d=cfg['models']['DST-SGNN']; assert int(d['seq_length'])==12 and int(d['pre_length'])==12 and int(d['patch_len'])==12
 print('RECENT MODEL CONTRACT SMOKE PASS')

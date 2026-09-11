@@ -161,3 +161,102 @@ def balanced_unique_group_pick(df: pd.DataFrame, families: list[str], total: int
     if any(int(counts.get(f, 0)) != int(quotas[f]) for f in fams):
         raise AssertionError(f'Family quota mismatch: expected={quotas}, actual={counts}')
     return out.sort_values(['window_start', 'family', 'view_id']).reset_index(drop=True)
+
+def all_unique_group_pick(df: pd.DataFrame, families: list[str], seed: int) -> pd.DataFrame:
+    """Select exactly one eligible sensing view for every unique view-group.
+
+    Used by the Formal full-training stage. No eligible group is dropped merely
+    to satisfy an exact family quota. Assignment is deterministic and
+    best-effort balanced: constrained groups are assigned first, then each group
+    is mapped to the currently least-used available family with a seeded hash
+    tie-break.
+
+    The implementation is intentionally vectorized for the ~56k-group Formal
+    split: canonical (group, family) representatives are computed once and the
+    final assignments are joined in one merge, avoiding per-group DataFrame
+    scans.
+    """
+    fams = list(families)
+    if not fams:
+        raise ValueError('At least one sensing family is required.')
+    d = df[df.family.astype(str).isin(fams)].copy()
+    if len(d) == 0:
+        raise ValueError('No eligible views for shared protocol sampling.')
+    d['view_group_id'] = d.view_group_id.astype(str)
+    d['family'] = d.family.astype(str)
+    d['view_id'] = d.view_id.astype(str)
+
+    # Freeze one deterministic concrete view for each (group, family) pair.
+    d['_row_hash'] = [
+        hashlib.sha256(f'{seed}:view:{gid}:{fam}:{vid}'.encode('utf-8')).hexdigest()
+        for gid, fam, vid in zip(d.view_group_id, d.family, d.view_id)
+    ]
+    rep = (
+        d.sort_values(['view_group_id', 'family', '_row_hash', 'window_start', 'view_id'])
+        .drop_duplicates(['view_group_id', 'family'], keep='first')
+        .drop(columns=['_row_hash'])
+        .reset_index(drop=True)
+    )
+
+    fam_rank = {f: i for i, f in enumerate(fams)}
+    gmeta = (
+        rep.groupby('view_group_id', sort=False)
+        .agg(
+            window_start=('window_start', 'min'),
+            available_families=('family', lambda x: tuple(sorted(set(x), key=fam_rank.__getitem__))),
+        )
+        .reset_index()
+    )
+    gmeta['_hash'] = [
+        hashlib.sha256(f'{seed}:group:{gid}'.encode('utf-8')).hexdigest()
+        for gid in gmeta.view_group_id.astype(str)
+    ]
+    gmeta['_n_fam'] = gmeta.available_families.map(len)
+    gmeta = gmeta.sort_values(['_n_fam', '_hash', 'window_start', 'view_group_id']).reset_index(drop=True)
+
+    family_counts = {f: 0 for f in fams}
+    assigned_gid: list[str] = []
+    assigned_family: list[str] = []
+    for r in gmeta.itertuples(index=False):
+        gid = str(r.view_group_id)
+        available = tuple(r.available_families)
+        if not available:
+            raise AssertionError(f'No available family for view_group_id={gid}')
+        min_count = min(family_counts[f] for f in available)
+        tied = [f for f in available if family_counts[f] == min_count]
+        fam = min(
+            tied,
+            key=lambda f: hashlib.sha256(f'{seed}:family:{gid}:{f}'.encode('utf-8')).hexdigest(),
+        )
+        assigned_gid.append(gid)
+        assigned_family.append(fam)
+        family_counts[fam] += 1
+
+    assignments = pd.DataFrame({
+        'view_group_id': assigned_gid,
+        'family': assigned_family,
+    })
+    out = assignments.merge(
+        rep,
+        on=['view_group_id', 'family'],
+        how='left',
+        validate='one_to_one',
+        sort=False,
+    )
+
+    expected = int(gmeta.view_group_id.nunique())
+    if len(out) != expected:
+        raise AssertionError(f'Expected all {expected} eligible unique groups, got {len(out)}.')
+    if out.view_id.isna().any():
+        raise AssertionError('Formal full-train assignment could not resolve a concrete view.')
+    if out.view_group_id.astype(str).duplicated().any():
+        raise AssertionError('Duplicate view_group_id in formal full-train selection.')
+    missing = set(gmeta.view_group_id.astype(str)) - set(out.view_group_id.astype(str))
+    if missing:
+        raise AssertionError(f'Formal full-train selection dropped {len(missing)} eligible groups.')
+    counts = out.family.astype(str).value_counts().to_dict()
+    absent = [f for f in fams if int(counts.get(f, 0)) == 0]
+    if absent:
+        raise AssertionError(f'Formal full-train selection contains no samples for families: {absent}')
+    return out.sort_values(['window_start', 'family', 'view_id']).reset_index(drop=True)
+

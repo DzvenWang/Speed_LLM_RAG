@@ -9,10 +9,10 @@
 - Severity: 0.40, distribution: ID
 - Families: Temporal, Regional, Directional, Predictive Regional, Predictive Directional
 - Development: Train 12,000 = 2,400×5; Val 5,000 = 1,000×5
-- Formal: all eligible unique Train view-groups; exact/near-exact five-family balance; **same Val views as Development**
+- Formal: **all eligible unique Train view-groups**; one deterministic representative view per group with best-effort family balancing (no exact quota); **same Val views as Development**
 - Evaluation: Test 5,000 = 1,000×5, generated only after explicit authorization
 
-Every selected forecast target has exactly one `view_group_id` occurrence inside a split. Family assignment and concrete `view_id` are frozen in CSV manifests.
+Every selected forecast target has exactly one `view_group_id` occurrence inside a split. Development/Evaluation use exact family-balanced sampling. Formal Train keeps every eligible unique group and uses deterministic best-effort family assignment, so no group is discarded solely to satisfy an exact quota. Family assignment and concrete `view_id` are frozen in CSV manifests.
 
 ## Artifact layout
 
@@ -36,7 +36,7 @@ python scripts/status.py
 python scripts/validate_protocol.py --stage development
 ```
 
-Backbone screening and Baseline development may then be materialized. Build `formal` only when the project reaches the full-train stage:
+Backbone screening and Baseline development may then be materialized. Build `formal` only when the project reaches the full-train stage. Formal Train does not reuse the Development 12k cap; it consumes all eligible unique training groups:
 
 ```bash
 qsub -v STAGE=formal pbs/build_protocol.pbs
