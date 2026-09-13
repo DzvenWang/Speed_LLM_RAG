@@ -1,6 +1,12 @@
-# Baseline v0.4.0 lightweight extras. Do not blindly replace torch in TFP.
+# Baseline v0.6.0 lightweight extras. Do not blindly replace torch in TFP.
 easydict
 loguru
 tqdm
 # RAST retrieval may require a FAISS build compatible with the active CUDA/PyTorch stack.
 # LEAF must remain in a separate legacy/vLLM environment; do not install vLLM into TFP.
+
+# ImputeFormer official architecture
+torch-spatiotemporal
+# RAST retrieval store (use cluster-compatible build)
+faiss-cpu
+easydict

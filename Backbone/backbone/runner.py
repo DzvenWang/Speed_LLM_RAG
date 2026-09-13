@@ -9,7 +9,8 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from .data import CachedSplit
 from .adapters import build_adapter
-from .metrics import per_query_metrics, METRICS_REVISION
+from .metrics import per_query_metrics, backbone_metric_summary, METRICS_REVISION
+from .predictions import save_prediction_npz
 from .utils import count_parameters, ensure_dir, log, seed_all, write_json
 from .identity import load_cache_identity, require_cache_version_compatibility
 
@@ -106,14 +107,15 @@ def evaluate(adapter, loader, meta, device):
     support = np.concatenate(supports)
     rows = per_query_metrics(pred, y, valid, direct, support)
     df = pd.concat([meta.reset_index(drop=True), pd.DataFrame(rows)], axis=1)
-    metric_cols = [c for c in df.columns if c in rows[0]]
-    summary = {
-        c: float(pd.to_numeric(df[c], errors='coerce').mean())
-        for c in metric_cols
-    }
-    for fam, g in df.groupby('family'):
-        for c in metric_cols:
-            summary[f'{c}__{fam}'] = float(pd.to_numeric(g[c], errors='coerce').mean())
+    # Canonical aggregate metrics are micro-aggregated over valid target points.
+    # Per-query metrics stay in the CSV for diagnostics only.
+    summary = backbone_metric_summary(pred, y, valid, direct, support)
+    fam_values = np.asarray(meta['family'].astype(str))
+    for fam in pd.unique(fam_values):
+        ii = np.flatnonzero(fam_values == str(fam))
+        fs = backbone_metric_summary(pred[ii], y[ii], valid[ii], direct[ii], support[ii])
+        for c, v in fs.items():
+            summary[f'{c}__{fam}'] = float(v)
     summary['inference_seconds_total'] = float(sum(times))
     summary['inference_ms_per_query'] = float(1000 * sum(times) / max(len(df), 1))
     summary['peak_gpu_memory_mb'] = (
@@ -269,10 +271,16 @@ def _train_once(model_name, cfg, cache_dir, run_dir, vendor_root, benchmark_adj,
     ck = torch.load(run_dir / 'best.pt', map_location=device, weights_only=False)
     model.load_state_dict(ck['state_dict'])
     vp, vdf, vs = evaluate(adapter, val_loader, val.meta, device)
-    np.savez_compressed(
+    save_prediction_npz(
         run_dir / 'val_predictions.npz',
-        view_id=np.asarray(val.meta.view_id.astype(str)),
-        pred=vp.astype(np.float32),
+        val.meta.view_id.astype(str).tolist(),
+        vp.astype(np.float32),
+        manifest_path=run_dir / 'val_predictions.manifest.json',
+        metadata={
+            'producer': 'Backbone', 'model': model_name, 'seed': int(seed),
+            'stage': stage, 'split': 'val', 'code_project_version': str(cfg.get('version')),
+            'run_identity': run_identity,
+        },
     )
     vdf.to_csv(run_dir / 'val_metrics.csv', index=False)
     summary = {
@@ -330,7 +338,7 @@ def train_model(model_name, cfg, cache_dir, run_dir, vendor_root, benchmark_adj,
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             # Remove incomplete artifacts before a clean retry.
-            for name in ['best.pt', 'history.csv', 'val_predictions.npz', 'val_metrics.csv', 'summary.json']:
+            for name in ['best.pt', 'history.csv', 'val_predictions.npz', 'val_predictions.manifest.json', 'val_metrics.csv', 'summary.json']:
                 p = Path(run_dir) / name
                 if p.exists():
                     p.unlink()

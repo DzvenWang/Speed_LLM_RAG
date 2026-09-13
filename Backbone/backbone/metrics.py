@@ -1,40 +1,22 @@
-from __future__ import annotations
-import numpy as np
+from pathlib import Path
+import sys
 
-METRICS_REVISION = 'rmse_fix1'
+_COMMON = Path(__file__).resolve().parents[2] / 'ExperimentCommon'
+if not _COMMON.exists():
+    _COMMON = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon')
+if str(_COMMON) not in sys.path:
+    sys.path.insert(0, str(_COMMON))
 
+from experiment_common.constants import METRICS_REVISION  # noqa: E402,F401
+from experiment_common.metrics import (  # noqa: E402,F401
+    _metric,
+    mae_rmse,
+    metric_bundle,
+    per_query_metrics,
+    backbone_metric_summary,
+)
 
-def _metric(pred, y, mask, kind='mae'):
-    m = np.asarray(mask, bool) & np.isfinite(pred) & np.isfinite(y)
-    if not np.any(m):
-        return np.nan
-    e = np.asarray(pred)[m] - np.asarray(y)[m]
-    if kind == 'mae':
-        return float(np.mean(np.abs(e)))
-    if kind == 'rmse':
-        return float(np.sqrt(np.mean(e * e)))
-    raise KeyError(kind)
-
-
-def per_query_metrics(pred, y, valid, direct, support):
-    rows = []
-    for i in range(len(pred)):
-        v = valid[i]
-        d = v & direct[i][None, :]
-        s = v & support[i][None, :]
-        r = {
-            'MAE': _metric(pred[i], y[i], v, 'mae'),
-            'RMSE': _metric(pred[i], y[i], v, 'rmse'),
-            'directly_masked_MAE': _metric(pred[i], y[i], d, 'mae'),
-            'directly_masked_RMSE': _metric(pred[i], y[i], d, 'rmse'),
-            'support_dependent_MAE': _metric(pred[i], y[i], s, 'mae'),
-            'support_dependent_RMSE': _metric(pred[i], y[i], s, 'rmse'),
-        }
-        for h in [3, 6, 12]:
-            if h <= pred.shape[1]:
-                r[f'H{h}_MAE'] = _metric(pred[i, h-1:h], y[i, h-1:h], v[h-1:h], 'mae')
-                r[f'H{h}_RMSE'] = _metric(pred[i, h-1:h], y[i, h-1:h], v[h-1:h], 'rmse')
-                r[f'H{h}_support_dependent_MAE'] = _metric(pred[i, h-1:h], y[i, h-1:h], s[h-1:h], 'mae')
-                r[f'H{h}_support_dependent_RMSE'] = _metric(pred[i, h-1:h], y[i, h-1:h], s[h-1:h], 'rmse')
-        rows.append(r)
-    return rows
+__all__ = [
+    '_metric', 'mae_rmse', 'metric_bundle', 'per_query_metrics',
+    'backbone_metric_summary', 'METRICS_REVISION'
+]

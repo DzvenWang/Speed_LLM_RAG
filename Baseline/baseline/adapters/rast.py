@@ -3,9 +3,9 @@ class RASTAdapter(OfficialAdapter):
     method='RAST'
     def compatibility_audit(self):
         repo=self.ctx.project_root/'vendor'/self.method
-        return {'entrypoint':str(repo/'experiments/train.py'),'arch':str(repo/'src/arch/rast_arch.py'),'exists':(repo/'experiments/train.py').exists() and (repo/'src/arch/rast_arch.py').exists(),'formal_protocol':'closest traffic-RAG baseline; same frozen numerical backbone when supported by official universal-backbone interface','retrieval_memory':'train_only'}
+        return {'entrypoint':str(repo/'experiments/train.py'),'arch':str(repo/'src/arch/rast_arch.py'),'exists':(repo/'experiments/train.py').exists() and (repo/'src/arch/rast_arch.py').exists(),'formal_protocol':'official RAST architecture under external Shared-Protocol Train/Val runner','retrieval_memory':'training only','matched_patchstg_control':'optional appendix adaptation'}
     def prepare_bridge(self):
-        return {'cache':str(self.ctx.cache_root),'frozen_backbone_json':str(self.ctx.frozen_backbone_json),'needs_frozen_backbone_for_formal':True,'requires_faiss':True,'requires_retrieval_leakage_audit':True}
-    def run_command(self, phase):
-        if phase=='formal' and not self.ctx.frozen_backbone_json.exists(): raise RuntimeError('FROZEN_BACKBONE.json is required for matched formal RAST.')
-        raise RuntimeError('RAST architecture bridge remains explicit; generate a matched-backbone BasicTS config only after the frozen backbone is known.')
+        return {'cache':str(self.ctx.cache_root),'runner':'baseline/runners/rast_runner.py','requires_faiss':True,'requires_retrieval_leakage_audit':True}
+    def run_command(self,phase):
+        if phase not in ('development','formal'): raise RuntimeError('RAST selection runner cannot access Test.')
+        return ['python','baseline/runners/rast_runner.py','--stage',phase,'--variant','native']

@@ -1,4 +1,4 @@
-version: 0.4.0
+version: 0.5.0
 project:
   root: /scratch/mh20/zw1165/Speed_LLM_RAG
   supportbench_project: /scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench
@@ -8,6 +8,7 @@ project:
   exp_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_exps
   protocol_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol
   protocol_artifact_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_artifacts
+  common_root: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon
 official_sources:
   STAEformer:
     remote: https://github.com/XDZhelheim/STAEformer.git
@@ -52,6 +53,8 @@ selection:
   formal_secondary: mean_val_support_dependent_MAE
   stability_metric: std_val_MAE
   freeze_before_test: true
+  reference_model: PatchSTG
+  formal_strategy: fixed_reference_model_three_seed
 runtime:
   num_workers: 0
   amp: false
@@ -164,7 +167,8 @@ models:
     T_miss_len: 12
     bn_decay: 0.1
   PatchSTG:
-    recipe_source: PatchSTG/config/SD.conf + main.py (TraffiDent N/time adapted at adapter boundary)
+    recipe_source: PatchSTG/config/SD.conf + main.py (TraffiDent N/time adapted at
+      adapter boundary)
     batch_size: 16
     fallback_batch_sizes:
     - 8
@@ -216,12 +220,10 @@ protocol_assertions:
     train_policy: all_eligible_unique_groups
   evaluation:
     test_rows: 5000
-compatibility:
-  screening_cache_project_versions:
-  - 0.3.1
-  - 0.4.0
-  formal_cache_project_versions:
-  - 0.4.0
-  evaluation_cache_project_versions:
-  - 0.4.0
-  note: v0.4.0 Stage-1B may reuse the frozen v0.3.1 screening cache/results; Formal/Evaluation must be rebuilt under v0.4.0.
+shared_contract:
+  required_version: 1.0.0
+  config: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon/configs/experiment_contract.yaml
+  data_contract_revision: traffident_experiment_cache_v1
+  time_feature_revision: traffident_time_features_v1
+  metrics_revision: traffident_metrics_v1
+  prediction_contract_revision: traffident_prediction_v1

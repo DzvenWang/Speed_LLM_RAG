@@ -1,0 +1,62 @@
+{
+  "cache_fingerprint": "fe0801eb0d5e4d73305f22701d01b1b29ca14ef0c4922f99b96c50669bca8473",
+  "cache_schema_version": 1,
+  "contract_fingerprint": "62ca9e42c1a60bafa6a73ab284297f3c370f8a57552ce19b0849eda00a060bd8",
+  "contract_version": "1.0.0",
+  "data_contract_revision": "traffident_experiment_cache_v1",
+  "history": 12,
+  "horizon": 12,
+  "metrics_revision": "traffident_metrics_v1",
+  "prediction_contract_revision": "traffident_prediction_v1",
+  "protocol_name": "protocol_v1",
+  "protocol_stage_hash": "60de891db0ea5b72a4c0fd9f4a7e30fcaf96d04f2085994516a0f4048a9915bb",
+  "protocol_version": "1.0.0",
+  "split_protocol_view_hashes": {
+    "train": "4cc894fc1c9d0817531eda6477b8d2a8b4c0037261e3ac81b77e7235a19a9e95",
+    "val": "528878c7a59e66dbbf46e16aaf9a129b8df78542f8b6bffbc00cb2c3aadfc2f8"
+  },
+  "splits": {
+    "train": {
+      "families": {
+        "directional_outage": 2400,
+        "predictive_directional_outage": 2400,
+        "predictive_regional_outage": 2400,
+        "regional_outage": 2400,
+        "temporal_outage": 2400
+      },
+      "mean": 63.204204427024,
+      "rows": 12000,
+      "speed_mean": 63.204204427024,
+      "speed_std": 7.846501932727223,
+      "std": 7.846501932727223,
+      "unique_groups": 12000,
+      "view_manifest_sha256": "932b8d506620adec60ab3287ea74f480a847bc28b7b1dd286a7e600125c8de01"
+    },
+    "val": {
+      "families": {
+        "directional_outage": 1000,
+        "predictive_directional_outage": 1000,
+        "predictive_regional_outage": 1000,
+        "regional_outage": 1000,
+        "temporal_outage": 1000
+      },
+      "mean": 63.204204427024,
+      "rows": 5000,
+      "speed_mean": 63.204204427024,
+      "speed_std": 7.846501932727223,
+      "std": 7.846501932727223,
+      "unique_groups": 5000,
+      "view_manifest_sha256": "c30cb8587be22bc6e8fc714b657216f80f04e1d9f8da3bd5d7ee67847a7c887a"
+    }
+  },
+  "stage": "development",
+  "subgraph": "TraffiDent_Net_06",
+  "time_feature_cache_audit_status": "PASS",
+  "time_feature_column": "timestamp_approx",
+  "time_feature_fingerprint": "099fbb96531f65d87fb97085ee7e69b726f2d5d2468eb31aa5a25bd83b7e4d0a",
+  "time_feature_freq_minutes": 5,
+  "time_feature_parser": "datetime_string",
+  "time_feature_revision": "traffident_time_features_v1",
+  "time_feature_source": "core/time_index.csv",
+  "time_feature_steps_per_day": 288
+}

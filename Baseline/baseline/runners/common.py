@@ -12,9 +12,15 @@ from torch.utils.data import Dataset
 
 from baseline.evaluation import evaluate_prediction_file
 from baseline.run_identity import build_run_manifest, write_run_manifest
+from baseline.shared_cache import cache_path
 from baseline.utils import load_yaml, write_json
 
 ROOT = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
+
+COMMON = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon')
+if not COMMON.exists(): COMMON = Path(__file__).resolve().parents[3] / 'ExperimentCommon'
+if str(COMMON) not in sys.path: sys.path.insert(0, str(COMMON))
+from experiment_common.predictions import save_prediction_npz, load_prediction_npz, as_unicode_array as common_unicode_array
 
 
 def config() -> dict:
@@ -39,7 +45,7 @@ def validate_stage(stage: str, method: str) -> tuple[dict, Path]:
         raise SystemExit(f'{method}: only development/formal are allowed before evaluation authorization')
     subprocess.check_call([cfg['project']['python'], str(ROOT / 'scripts' / 'validate_cache.py'), '--stage', stage])
     subprocess.check_call([cfg['project']['python'], str(ROOT / 'scripts' / 'source_lock.py'), 'verify', '--root', str(ROOT), '--sources', str(ROOT / 'configs' / 'official_sources.yaml')])
-    cache = Path(cfg['project']['exp_root']) / '_cache' / cfg['experiment']['subgraph'] / stage
+    cache = cache_path(cfg, stage)
     return cfg, cache
 
 
@@ -65,14 +71,14 @@ def as_unicode_array(values) -> np.ndarray:
     """Return a pickle-free NumPy Unicode array for portable NPZ artifacts."""
     vals = [str(v) for v in values]
     width = max(1, max((len(v) for v in vals), default=1))
-    return np.asarray(vals, dtype=f'<U{width}')
+    return common_unicode_array(vals)
 
 
 def save_val_outputs(cfg: dict, cache: Path, run_dir: Path, pred_raw: np.ndarray, method: str, seed: int, stage: str, extra_summary: dict) -> dict:
     meta = pd.read_csv(cache / 'val_manifest.csv')
     pred_path = run_dir / 'val_predictions.npz'
     view_ids = as_unicode_array(meta.view_id.astype(str).tolist())
-    np.savez_compressed(pred_path, view_id=view_ids, pred=np.asarray(pred_raw, np.float32))
+    save_prediction_npz(pred_path, view_ids, np.asarray(pred_raw,np.float32), manifest_path=run_dir/'val_predictions.manifest.json', metadata={'producer':'Baseline','method':method,'seed':int(seed),'split':'val'})
     metrics = evaluate_prediction_file(cache, 'val', pred_path)
     metrics.to_csv(run_dir / 'val_metrics.csv', index=False)
     all_row = metrics.loc[metrics.family.astype(str) == 'ALL'].iloc[0].to_dict()
@@ -193,7 +199,21 @@ def build_time_marks(cfg: dict, cache: Path, split: str) -> tuple[np.ndarray, np
         hs=axis[st:st+H]; fs=axis[st+H:st+H+P]
         for out,seq in ((xm[i],hs),(ym[i],fs)):
             for j,t in enumerate(seq): out[j]=[t.year,t.month,t.day,t.dayofweek,t.hour,t.minute]
-    source='benchmark_time_index_or_deterministic_5min_fallback'
+    # Cross-check calendar marks against the canonical cached TOD/DOW arrays.
+    cached_th=np.load(cache/f'{split}_tod_hist.npy',mmap_mode='r')
+    cached_dh=np.load(cache/f'{split}_dow_hist.npy',mmap_mode='r')
+    cached_tf=np.load(cache/f'{split}_tod_future.npy',mmap_mode='r')
+    cached_df=np.load(cache/f'{split}_dow_future.npy',mmap_mode='r')
+    shared_cfg=load_yaml((COMMON/'configs/experiment_contract.yaml') if not Path(cfg['shared_contract']['config']).exists() else Path(cfg['shared_contract']['config'])); freq=int(shared_cfg['time_features']['expected_freq_minutes'])
+    th=((xm[...,4]*60+xm[...,5])//freq).astype(np.int16)
+    dh=xm[...,3].astype(np.int8)
+    tf=((ym[...,4]*60+ym[...,5])//freq).astype(np.int16)
+    df=ym[...,3].astype(np.int8)
+    if not np.array_equal(th,np.asarray(cached_th)) or not np.array_equal(dh,np.asarray(cached_dh)):
+        raise RuntimeError(f'{split}: calendar time marks disagree with canonical cached history TOD/DOW')
+    if not np.array_equal(tf,np.asarray(cached_tf)) or not np.array_equal(df,np.asarray(cached_df)):
+        raise RuntimeError(f'{split}: calendar time marks disagree with canonical cached future TOD/DOW')
+    source='benchmark_time_index_or_deterministic_5min_fallback_verified_against_cache'
     return xm,ym,source
 
 
@@ -216,3 +236,45 @@ class SARAFTensorDataset(Dataset):
 
 
 def simple_namespace(**kwargs): return SimpleNamespace(**kwargs)
+
+
+def verify_prediction_npz(path: Path, expected_rows: int|None=None) -> None:
+    load_prediction_npz(path, expected_rows=expected_rows)
+
+def save_split_outputs(cfg: dict, cache: Path, run_dir: Path, split: str, pred_raw: np.ndarray, method: str, seed: int, extra_summary: dict) -> dict:
+    meta=pd.read_csv(cache/f'{split}_manifest.csv')
+    pred_path=run_dir/f'{split}_predictions.npz'
+    save_prediction_npz(pred_path,meta.view_id.astype(str).tolist(),np.asarray(pred_raw,np.float32),manifest_path=run_dir/f'{split}_predictions.manifest.json',metadata={'producer':'Baseline','method':method,'seed':int(seed),'split':split})
+    verify_prediction_npz(pred_path,len(meta))
+    metrics=evaluate_prediction_file(cache,split,pred_path); metrics.to_csv(run_dir/f'{split}_metrics.csv',index=False)
+    all_row=metrics.loc[metrics.family.astype(str)=='ALL'].iloc[0].to_dict()
+    summary={'method':method,'seed':int(seed),'split':split,'metrics':all_row,'prediction_file':str(pred_path),**extra_summary}
+    write_json(run_dir/f'{split}_summary.json',summary); return summary
+
+class ImputationDataset(Dataset):
+    def __init__(self, cache: Path, split: str):
+        self.cache=Path(cache); self.split=split
+        self.x=np.load(self.cache/f'{split}_x_obs_norm.npy',mmap_mode='r')
+        self.full=np.load(self.cache/f'{split}_x_full_norm.npy',mmap_mode='r')
+        self.obs=np.load(self.cache/f'{split}_history_observed.npy',mmap_mode='r')
+        self.art=np.load(self.cache/f'{split}_artificial_missing.npy',mmap_mode='r')
+        self.tod=np.load(self.cache/f'{split}_tod_hist.npy',mmap_mode='r')
+        self.dow=np.load(self.cache/f'{split}_dow_hist.npy',mmap_mode='r')
+        self.meta=pd.read_csv(self.cache/f'{split}_manifest.csv')
+    def __len__(self): return len(self.x)
+    def __getitem__(self,i):
+        return (int(i),np.array(self.x[i],np.float32,copy=True),np.array(self.full[i],np.float32,copy=True),
+                np.array(self.obs[i],np.uint8,copy=True),np.array(self.art[i],np.uint8,copy=True),
+                np.array(self.tod[i],np.int16,copy=True),np.array(self.dow[i],np.int8,copy=True))
+
+class RASTDataset(Dataset):
+    def __init__(self, cache: Path, split: str):
+        self.cache=Path(cache); self.split=split
+        self.x=np.load(self.cache/f'{split}_x_obs_norm.npy',mmap_mode='r'); self.y=np.load(self.cache/f'{split}_y_norm.npy',mmap_mode='r')
+        self.valid=np.load(self.cache/f'{split}_future_valid.npy',mmap_mode='r'); self.tod=np.load(self.cache/f'{split}_tod_hist.npy',mmap_mode='r'); self.dow=np.load(self.cache/f'{split}_dow_hist.npy',mmap_mode='r')
+        self.meta=pd.read_csv(self.cache/f'{split}_manifest.csv')
+    def __len__(self): return len(self.x)
+    def __getitem__(self,i):
+        x=np.array(self.x[i],np.float32,copy=True); H,N=x.shape
+        f=np.empty((H,N,3),np.float32); f[...,0]=x; f[...,1]=np.asarray(self.tod[i],np.float32)[:,None]/287.0; f[...,2]=np.asarray(self.dow[i],np.float32)[:,None]/6.0
+        return int(i),f,np.array(self.y[i],np.float32,copy=True),np.array(self.valid[i],np.uint8,copy=True)

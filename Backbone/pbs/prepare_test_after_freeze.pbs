@@ -7,7 +7,7 @@
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -N BackboneTestPrep
 #PBS -j oe
-#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_logs/
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_logs/out/
 set -euo pipefail
 ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG
 PROJ="$ROOT/Backbone"

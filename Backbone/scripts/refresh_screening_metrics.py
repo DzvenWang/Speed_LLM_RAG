@@ -15,6 +15,7 @@ from backbone.identity import load_cache_identity, require_identity
 from backbone.metrics import METRICS_REVISION
 from backbone.runner import evaluate
 from backbone.selection import MODELS
+from backbone.shared_cache import cache_path
 from backbone.utils import load_yaml, write_json
 from supportbench.dataset import SupportBench
 
@@ -27,7 +28,7 @@ def main():
     cfg = load_yaml(ROOT / 'configs/backbone_selection.yaml')
     exp = Path(cfg['project']['exp_root'])
     sg = cfg['experiment']['subgraph']
-    cache = exp / '_cache' / sg / 'screening'
+    cache = cache_path(cfg, 'screening')
     identity = load_cache_identity(cache)
     bench = SupportBench(sg, root=cfg['project']['benchmark_root'])
     if not torch.cuda.is_available():

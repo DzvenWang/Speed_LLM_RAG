@@ -74,3 +74,12 @@ def git_info(repo):
 
 def count_parameters(model):
     return int(sum(p.numel() for p in model.parameters() if p.requires_grad))
+
+
+def sha256_file(path):
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b''):
+            h.update(chunk)
+    return h.hexdigest()

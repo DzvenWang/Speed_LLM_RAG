@@ -1,7 +1,10 @@
-#!/usr/bin/env python3
-# Static contract smoke: Baseline v0.4.0 must consume Shared Protocol, never own sampling.
 from pathlib import Path
 root=Path(__file__).resolve().parents[1]
-s=(root/'baseline/data.py').read_text(); assert 'balanced_unique_group_pick' not in s and 'load_protocol_views' in s
-p=(root/'scripts/prepare_data.py').read_text(); assert 'protocol_stage_hash' in p and 'data_config_sha256' in p
-print('BASELINE SHARED PROTOCOL CONSUMER SMOKE PASS')
+p=(root/'scripts/prepare_data.py').read_text()
+assert 'experiment_common.cache' in p
+assert 'ensure_consumer_alias' not in p
+assert "'_cache'" not in p and '"_cache"' not in p
+helper=(root/'baseline/shared_cache.py').read_text()
+assert 'experiment_common.cache' in helper and 'cache_dir' in helper
+assert 'local_sampling' not in p
+print('SHARED PROTOCOL/DIRECT CACHE CONSUMER SMOKE PASS')

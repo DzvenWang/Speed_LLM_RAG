@@ -3,12 +3,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from .metrics import metric_bundle
+import sys
+COMMON=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon')
+if not COMMON.exists(): COMMON=Path(__file__).resolve().parents[2]/'ExperimentCommon'
+if str(COMMON) not in sys.path: sys.path.insert(0,str(COMMON))
+from experiment_common.predictions import load_prediction_npz
 
 
 def load_prediction_file(path):
-    z=np.load(path,allow_pickle=False)
-    if 'view_id' not in z or 'pred' not in z: raise ValueError('Prediction NPZ must contain view_id and pred.')
-    return z['view_id'].astype(str),np.asarray(z['pred'],np.float32)
+    return load_prediction_npz(path)
 
 
 def evaluate_prediction_file(cache_root, split, pred_path):

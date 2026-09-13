@@ -1,40 +1,48 @@
 {
-  "official_control": {
-    "description": "Existing official STDN control. Do not rerun unless needed.",
+  "d4_control": {
+    "description": "D4 reference recipe. Re-run only after the shared TOD/DOW cache is corrected, because old D4 used degenerate time features.",
     "batch_size": 64,
-    "learning_rate": 0.001,
-    "weight_decay": 0.0,
+    "learning_rate": 0.0002,
+    "weight_decay": 0.0001,
     "patience": 10,
     "epochs": 200
   },
-  "d1_bs16": {
-    "description": "Attribution D1: change batch size only (64 -> 16).",
-    "batch_size": 16,
-    "learning_rate": 0.001,
-    "weight_decay": 0.0,
-    "patience": 10,
-    "epochs": 200
-  },
-  "d2_bs16_pat30": {
-    "description": "Attribution D2: D1 + longer early-stopping patience (10 -> 30).",
-    "batch_size": 16,
-    "learning_rate": 0.001,
-    "weight_decay": 0.0,
-    "patience": 30,
-    "epochs": 200
-  },
-  "d3_regularized": {
-    "description": "Attribution D3: D2 + lower LR and explicit L2 regularization.",
-    "batch_size": 16,
-    "learning_rate": 0.0005,
+  "e2_pat30": {
+    "description": "Priority diagnostic: isolate patience 10 -> 30 at batch=64, lr=2e-4, wd=1e-4.",
+    "batch_size": 64,
+    "learning_rate": 0.0002,
     "weight_decay": 0.0001,
     "patience": 30,
     "epochs": 200
   },
-  "d4_low_lr": {
-    "description": "Sensitivity check: D3 with a smaller learning rate.",
+  "e5_wd0": {
+    "description": "Priority attribution: isolate weight decay by comparing wd=0 against corrected D4 recipe.",
+    "batch_size": 64,
+    "learning_rate": 0.0002,
+    "weight_decay": 0.0,
+    "patience": 10,
+    "epochs": 200
+  },
+  "e1_bs16_archive": {
+    "description": "Archive/replication only: batch=16 was worse than batch=64 in v3; do not prioritize.",
     "batch_size": 16,
     "learning_rate": 0.0002,
+    "weight_decay": 0.0001,
+    "patience": 10,
+    "epochs": 200
+  },
+  "e3_bs16_pat30_archive": {
+    "description": "Low-priority combination retained only for completeness.",
+    "batch_size": 16,
+    "learning_rate": 0.0002,
+    "weight_decay": 0.0001,
+    "patience": 30,
+    "epochs": 200
+  },
+  "e4_low_lr_archive": {
+    "description": "Low-priority LR sensitivity retained only for completeness.",
+    "batch_size": 16,
+    "learning_rate": 0.0001,
     "weight_decay": 0.0001,
     "patience": 30,
     "epochs": 200

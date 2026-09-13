@@ -5,6 +5,7 @@
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -j oe
 #PBS -N STDNProbe
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone/STDN_Special/logs/
 
 set -euo pipefail
 ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone
@@ -12,4 +13,5 @@ PY=/scratch/mh20/zw1165/envs/TFP/bin/python
 cd "$ROOT"
 "$PY" -u scripts/verify_official_sources.py
 "$PY" -u scripts/validate_cache.py --stage screening
+"$PY" -u STDN_Special/audit_time_features.py --stage screening
 "$PY" -u STDN_Special/probe_batch.py --stage screening --seed 10

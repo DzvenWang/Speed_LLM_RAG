@@ -1,0 +1,40 @@
+{
+  "column": "timestamp_approx",
+  "data_contract_revision": "traffident_experiment_cache_v1",
+  "diagnostics": {
+    "attempts": [
+      {
+        "accepted": true,
+        "cadence_ok": true,
+        "column": "timestamp_approx",
+        "diversity_ok": true,
+        "dow_unique": 7,
+        "length": 105408,
+        "median_positive_delta_minutes": 5.0,
+        "monotonic_non_decreasing": true,
+        "parser": "datetime_string",
+        "score": 115,
+        "tod_unique": 288,
+        "unique_timestamps": 105408,
+        "valid_fraction": 1.0
+      }
+    ]
+  },
+  "dow_max": 6,
+  "dow_min": 0,
+  "dow_rollover_consistency": 1.0,
+  "dow_unique": 7,
+  "errors": [],
+  "fingerprint": "099fbb96531f65d87fb97085ee7e69b726f2d5d2468eb31aa5a25bd83b7e4d0a",
+  "freq_minutes": 5,
+  "length": 105408,
+  "parser": "datetime_string",
+  "source": "core/time_index.csv",
+  "status": "PASS",
+  "steps_per_day": 288,
+  "time_feature_revision": "traffident_time_features_v1",
+  "tod_max": 287,
+  "tod_min": 0,
+  "tod_step_consistency": 1.0,
+  "tod_unique": 288
+}

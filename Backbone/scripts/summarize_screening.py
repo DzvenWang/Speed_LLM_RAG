@@ -7,10 +7,11 @@ sys.path.insert(0, str(ROOT))
 from backbone.utils import load_yaml, write_json
 from backbone.selection import MODELS, screening_shortlist
 from backbone.identity import load_cache_identity, require_identity, require_cache_version_compatibility
+from backbone.shared_cache import cache_path
 
 cfg = load_yaml(ROOT / 'configs/backbone_selection.yaml')
 exp = Path(cfg['project']['exp_root']); sg = cfg['experiment']['subgraph']
-expected = load_cache_identity(exp / '_cache' / sg / 'screening')
+expected = load_cache_identity(cache_path(cfg, 'screening'))
 require_cache_version_compatibility(cfg, expected, 'screening')
 rows=[]
 for model in MODELS:
@@ -18,7 +19,10 @@ for model in MODELS:
     valid=[]; rejected=[]
     for f in files:
         try:
-            s=json.load(open(f)); require_identity(s, expected, str(f)); valid.append((f,s))
+            s=json.load(open(f)); require_identity(s, expected, str(f));
+            if str(s.get('project_version')) != str(cfg['version']):
+                raise ValueError(f'code project version {s.get("project_version")} != {cfg["version"]}')
+            valid.append((f,s))
         except Exception as e:
             rejected.append((f,str(e)))
     if not valid:
@@ -31,7 +35,7 @@ for model in MODELS:
     v=s['validation']
     rows.append({'model':model,'run_dir':str(f.parent),'seed':int(s['seed']),'parameters':int(s['parameters']),
       'batch_size':int(s['batch_size']),'best_epoch':int(s['best_epoch']),'recipe_source':s.get('recipe_source'),
-      'code_project_version':s.get('project_version'),'cache_project_version':expected['project_version'],'protocol_stage_hash':expected['protocol_stage_hash'],
+      'code_project_version':s.get('project_version'),'shared_contract_version':expected['shared_contract_version'],'data_contract_revision':expected['data_contract_revision'],'time_feature_revision':expected['time_feature_revision'],'time_feature_fingerprint':expected['time_feature_fingerprint'],'protocol_stage_hash':expected['protocol_stage_hash'],
       'cache_fingerprint':expected['cache_fingerprint'],'train_view_hash':expected['split_view_hashes']['train'],
       'val_view_hash':expected['split_view_hashes']['val'],'val_MAE':v['MAE'],'val_RMSE':v['RMSE'],
       'val_masked_MAE':v['directly_masked_MAE'],'val_masked_RMSE':v.get('directly_masked_RMSE'),'val_support_MAE':v['support_dependent_MAE'],'val_support_RMSE':v.get('support_dependent_RMSE'),
@@ -40,7 +44,7 @@ for model in MODELS:
 df=pd.DataFrame(rows)
 if len(df)!=len(MODELS): raise SystemExit(f'Need all {len(MODELS)} completed screening models; found {len(df)}')
 # Explicit anti-mixing assertion.
-for col in ['cache_project_version','protocol_stage_hash','cache_fingerprint','train_view_hash','val_view_hash']:
+for col in ['shared_contract_version','data_contract_revision','time_feature_revision','time_feature_fingerprint','protocol_stage_hash','cache_fingerprint','train_view_hash','val_view_hash']:
     if df[col].nunique()!=1: raise SystemExit(f'FAIL mixed screening identity in {col}: {df[col].unique().tolist()}')
 sel=cfg['selection']; df,shortlist,best=screening_shortlist(df,float(sel['overall_tolerance']),float(sel['support_tie_tolerance_rel']),int(sel['shortlist_k']))
 out_csv=exp/'backbone_screening_summary.csv'; df.sort_values(['shortlisted','val_MAE'],ascending=[False,True]).to_csv(out_csv,index=False)

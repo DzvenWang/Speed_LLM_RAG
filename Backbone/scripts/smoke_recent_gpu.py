@@ -8,13 +8,14 @@ sys.path.insert(0,str(ROOT)); sys.path.insert(0,str(ROOT.parent/'TraffiDent_Supp
 from backbone.adapters import build_adapter
 from backbone.data import CachedSplit
 from backbone.utils import count_parameters, load_yaml
+from backbone.shared_cache import cache_path
 from supportbench.dataset import SupportBench
 
 ap=argparse.ArgumentParser(); ap.add_argument('--model',required=True,choices=['PatchSTG']); args=ap.parse_args()
 if not torch.cuda.is_available(): raise SystemExit('GPU smoke requires cuda:0')
 cfg=load_yaml(ROOT/'configs/backbone_selection.yaml'); sg=cfg['experiment']['subgraph']
 b=SupportBench(sg,root=cfg['project']['benchmark_root']); st=b.stats['channels'][b.manifest['primary_channel']]
-cache=Path(cfg['project']['exp_root'])/'_cache'/sg/'screening'; val=CachedSplit(cache,'val')
+cache=cache_path(cfg,'screening'); val=CachedSplit(cache,'val')
 mc=dict(cfg['models'][args.model]); bs=min(2,int(mc['batch_size']))
 loader=DataLoader(val,batch_size=bs,shuffle=False,num_workers=0)
 batch=next(iter(loader)); device=torch.device('cuda:0')

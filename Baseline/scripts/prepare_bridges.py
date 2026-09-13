@@ -5,6 +5,7 @@ ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline'); sys.path.insert(0,str(
 from baseline.utils import load_yaml,write_json
 from baseline.registry import METHODS
 from baseline.run_identity import build_run_manifest, write_run_manifest
+from baseline.shared_cache import cache_path
 from baseline.adapters.base import AdapterContext
 from baseline.adapters.imputeformer import ImputeFormerAdapter
 from baseline.adapters.ginar import GinARAdapter
@@ -17,13 +18,13 @@ from baseline.adapters.slpf import SLPFAdapter
 cfg=load_yaml(ROOT/'configs/baseline.yaml'); stage=sys.argv[1] if len(sys.argv)>1 else 'development'
 if stage not in ('development','formal'): raise SystemExit('prepare_bridges supports development/formal only; Test is isolated.')
 subprocess.check_call([cfg['project']['python'],str(ROOT/'scripts/validate_cache.py'),'--stage',stage])
-cache=Path(cfg['project']['exp_root'])/'_cache'/cfg['experiment']['subgraph']/stage
+cache=cache_path(cfg,stage)
 ctx=AdapterContext(ROOT,cache,Path(cfg['project']['exp_root']),Path(cfg['project']['log_root']),Path(cfg['project']['frozen_backbone_json']))
 out=Path(cfg['project']['exp_root'])/'_bridges'/stage; out.mkdir(parents=True,exist_ok=True)
 classes=[ImputeFormerAdapter,GinARAdapter,RAFTAdapter,RASTAdapter,SARAFAdapter,LEAFAdapter,SLPFAdapter]
 for cls in classes:
     a=cls(ctx); method=a.method; spec=METHODS[method]
-    run=build_run_manifest(cache,cfg['version'],method,cfg['experiment']['seed'],cfg['methods'][method]['formal_track'],{
+    run=build_run_manifest(cache,None,method,cfg['experiment']['seed'],cfg['methods'][method]['formal_track'],{
         'artifact_type':'bridge_contract','requires_frozen_backbone':bool(spec['final_forecast_requires_frozen_backbone']),
         'table_group':spec['table_group'],'runner_project_version':cfg['version']})
     md=out/method; md.mkdir(parents=True,exist_ok=True); write_run_manifest(md/'RUN_MANIFEST.json',run)

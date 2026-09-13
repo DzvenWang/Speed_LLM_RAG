@@ -1,0 +1,35 @@
+version: 1.0.0
+project:
+  root: /scratch/mh20/zw1165/Speed_LLM_RAG
+  cache_root: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCache
+  benchmark_root: /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench
+  protocol_artifact_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_artifacts
+experiment:
+  subgraph: TraffiDent_Net_06
+  history: 12
+  horizon: 12
+  normalized_fill_value: 0.0
+protocol:
+  name: protocol_v1
+  version: 1.0.0
+  no_local_sampling: true
+  stage_assertions:
+    development:
+      train_rows: 12000
+      val_rows: 5000
+    formal:
+      val_rows: 5000
+      train_policy: all_eligible_unique_groups
+    evaluation:
+      test_rows: 5000
+contract:
+  cache_schema_version: 1
+  data_contract_revision: traffident_experiment_cache_v1
+  time_feature_revision: traffident_time_features_v1
+  metrics_revision: traffident_metrics_v1
+  prediction_contract_revision: traffident_prediction_v1
+time_features:
+  allow_index_modulo_fallback: true
+  index_origin_dow: 0
+  expected_freq_minutes: 5
+  expected_steps_per_day: 288

@@ -6,6 +6,7 @@ import pandas as pd
 ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline'); sys.path.insert(0,str(ROOT))
 from baseline.utils import load_yaml, write_json
 from baseline.run_identity import load_cache_identity
+from baseline.shared_cache import cache_path
 
 
 def interval_overlap_pairs(memory_starts, query_starts, span):
@@ -19,7 +20,7 @@ def interval_overlap_pairs(memory_starts, query_starts, span):
 
 p=argparse.ArgumentParser(); p.add_argument('--stage',choices=['development','formal'],default='development'); a=p.parse_args()
 cfg=load_yaml(ROOT/'configs/baseline.yaml'); subprocess.check_call([cfg['project']['python'],str(ROOT/'scripts/validate_cache.py'),'--stage',a.stage])
-cache=Path(cfg['project']['exp_root'])/'_cache'/cfg['experiment']['subgraph']/a.stage; ident=load_cache_identity(cache,cfg['version'])
+cache=cache_path(cfg,a.stage); ident=load_cache_identity(cache,None)
 tr=pd.read_csv(cache/'train_manifest.csv'); va=pd.read_csv(cache/'val_manifest.csv')
 train_vid=set(tr.view_id.astype(str)); val_vid=set(va.view_id.astype(str)); train_gid=set(tr.view_group_id.astype(str)); val_gid=set(va.view_group_id.astype(str))
 span=int(cfg['experiment']['history'])+int(cfg['experiment']['horizon'])

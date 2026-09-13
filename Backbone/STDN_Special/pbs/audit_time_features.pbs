@@ -1,0 +1,15 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q normal
+#PBS -l ncpus=2,mem=8GB,walltime=00:20:00,jobfs=1GB
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -N STDNTFAudit
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone/STDN_Special/logs/
+
+set -euo pipefail
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone
+PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+STAGE=${STAGE:-screening}
+cd "$ROOT"
+"$PY" -u STDN_Special/audit_time_features.py --stage "$STAGE"

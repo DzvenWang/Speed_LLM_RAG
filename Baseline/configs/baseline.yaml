@@ -1,4 +1,4 @@
-version: 0.4.0
+version: 0.6.0
 project:
   root: /scratch/mh20/zw1165/Speed_LLM_RAG
   baseline_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
@@ -14,21 +14,23 @@ project:
   leaf_python: /scratch/mh20/zw1165/envs/LEAF/bin/python
   protocol_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol
   protocol_artifact_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_artifacts
-
+  common_root: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon
 experiment:
   subgraph: TraffiDent_Net_06
   history: 12
   horizon: 12
   severity: 0.4
   seed: 10
-  formal_seeds: [10, 20, 30]
+  formal_seeds:
+  - 10
+  - 20
+  - 30
   families:
-    - temporal_outage
-    - regional_outage
-    - directional_outage
-    - predictive_regional_outage
-    - predictive_directional_outage
-
+  - temporal_outage
+  - regional_outage
+  - directional_outage
+  - predictive_regional_outage
+  - predictive_directional_outage
 protocol:
   official_source_policy: exact_commit_or_first_run_resolved_commit_then_tree_sha256_lock
   test_selection_policy: physically_isolated_until_evaluation_stage
@@ -44,39 +46,41 @@ protocol:
   shared_protocol_version: 1.0.0
   consumer_policy: frozen_shared_protocol_only
   no_local_sampling: true
-  development_cache_migration_from: [0.3.1]
-
+  development_cache_migration_from: []
+  frozen_backbone_required_for:
+  - ImputeFormer
+  - RAST-PatchSTG
 baseline_story:
   main_table:
-    - FrozenBackbone
-    - ImputeFormer
-    - GinAR
-    - RAFT
-    - RAST
-    - SARAF
+  - FrozenBackbone
+  - ImputeFormer
+  - GinAR
+  - RAFT
+  - RAST
+  - SARAF
   llm_specific:
-    - LEAF
+  - LEAF
   partial_sensing_subtrack:
-    - SLPF
+  - SLPF
   optional_appendix:
-    - BiTGraph
-    - PFRP
+  - RAST-PatchSTG
+  - BiTGraph
+  - PFRP
   claim_chain:
-    - strong_numerical_forecasting
-    - reconstruction_first
-    - missing_aware_end_to_end
-    - generic_similarity_retrieval
-    - traffic_spatiotemporal_retrieval
-    - retrieval_reliability_control
-    - predictive_support_reasoning_and_control
-
+  - strong_numerical_forecasting
+  - reconstruction_first
+  - missing_aware_end_to_end
+  - generic_similarity_retrieval
+  - traffic_spatiotemporal_retrieval
+  - retrieval_reliability_control
+  - predictive_support_reasoning_and_control
 methods:
   ImputeFormer:
     enabled: true
     table_group: main
     priority: 1
     formal_track: reconstruction_then_same_frozen_backbone
-    stage_now: reconstruction_bridge_and_smoke
+    stage_now: formal_runner_ready_after_backbone_v050_freeze
     requires_frozen_backbone_for_final_forecast: true
   GinAR:
     enabled: true
@@ -96,9 +100,9 @@ methods:
     enabled: true
     table_group: main
     priority: 4
-    formal_track: traffic_rag_matched_frozen_backbone
-    stage_now: adapter_and_retrieval_audit_wait_for_backbone
-    requires_frozen_backbone_for_final_forecast: true
+    formal_track: traffic_rag_native_external_val_only_runner
+    stage_now: formal_runner_ready_requires_faiss
+    requires_frozen_backbone_for_final_forecast: false
   SARAF:
     enabled: true
     table_group: main
@@ -120,7 +124,13 @@ methods:
     formal_track: matched_fixed_partial_sensing_subtrack
     stage_now: official_native_subtrack_bridge_and_smoke
     requires_frozen_backbone_for_final_forecast: false
-
+  RAST-PatchSTG:
+    enabled: true
+    table_group: optional_appendix
+    priority: 8
+    formal_track: traffic_rag_matched_frozen_patchstg_controlled_adaptation
+    stage_now: formal_runner_ready_after_backbone_v050_freeze
+    requires_frozen_backbone_for_final_forecast: true
 runners:
   RAFT:
     batch_size: 32
@@ -139,10 +149,18 @@ runners:
     graph_size: 8
     layers: 2
     gradient_clip: 5.0
-    lr_milestones: [1, 15, 40, 70, 90]
+    lr_milestones:
+    - 1
+    - 15
+    - 40
+    - 70
+    - 90
     lr_gamma: 0.5
     patience: 20
-    input_features: [speed, tod, dow]
+    input_features:
+    - speed
+    - tod
+    - dow
   SARAF:
     batch_size: 32
     max_epochs: 20
@@ -156,7 +174,36 @@ runners:
     features: M
     retrieval_precompute_batch_size: 1024
     train_only_memory: true
-
+  ImputeFormer:
+    batch_size: 32
+    max_epochs: 120
+    learning_rate: 0.001
+    weight_decay: 0.0
+    patience: 20
+    gradient_clip: 5.0
+    input_embedding_dim: 32
+    learnable_embedding_dim: 96
+    feed_forward_dim: 256
+    num_temporal_heads: 4
+    num_layers: 3
+    dim_proj: 8
+    dropout: 0.1
+  RAST:
+    batch_size: 32
+    max_epochs: 100
+    learning_rate: 0.002
+    weight_decay: 0.0001
+    patience: 20
+    gradient_clip: 5.0
+    dropout: 0.1
+    query_dim: 256
+    retrieval_dim: 128
+    temporal_dim: 64
+    spatial_dim: 64
+    update_interval: 10
+    encoder_layers: 3
+    top_k: 3
+    use_amp: false
 protocol_assertions:
   development:
     train_rows: 12000
@@ -166,3 +213,26 @@ protocol_assertions:
     train_policy: all_eligible_unique_groups
   evaluation:
     test_rows: 5000
+evaluation:
+  require_formal_selection: true
+  require_frozen_protocol: true
+  save_predictions: true
+frozen_backbone_contract:
+  owner: Backbone
+  minimum_schema_version: 3
+  required_project_version: 0.5.0
+  required_selected_model: PatchSTG
+  use_reference_checkpoint_for_all_baseline_seeds: true
+  require_checkpoint_sha256: true
+  require_protocol_hash_match: true
+  require_time_feature_fingerprint_match: true
+  required_data_contract_revision: traffident_experiment_cache_v1
+  required_shared_contract_version: 1.0.0
+  require_shared_cache_identity_match: true
+shared_contract:
+  required_version: 1.0.0
+  config: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon/configs/experiment_contract.yaml
+  data_contract_revision: traffident_experiment_cache_v1
+  time_feature_revision: traffident_time_features_v1
+  metrics_revision: traffident_metrics_v1
+  prediction_contract_revision: traffident_prediction_v1
