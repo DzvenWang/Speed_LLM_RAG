@@ -11,7 +11,7 @@ project:
   backbone_exp_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_exps
   frozen_backbone_json: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_exps/FROZEN_BACKBONE.json
   python: /scratch/mh20/zw1165/envs/TFP/bin/python
-  leaf_python: /scratch/mh20/zw1165/envs/LEAF/bin/python
+  leaf_python: /scratch/mh20/zw1165/envs/TFP/bin/python
   protocol_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol
   protocol_artifact_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_artifacts
   common_root: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon
@@ -101,7 +101,7 @@ methods:
     table_group: main
     priority: 4
     formal_track: traffic_rag_native_external_val_only_runner
-    stage_now: formal_runner_ready_requires_faiss
+    stage_now: formal_runner_ready_faiss_optional_backbone_shim
     requires_frozen_backbone_for_final_forecast: false
   SARAF:
     enabled: true
@@ -115,7 +115,7 @@ methods:
     table_group: llm_specific
     priority: 6
     formal_track: llm_framework_reference
-    stage_now: source_runtime_audit_in_isolated_environment
+    stage_now: shared_tfp_external_branch_runner_ready
     requires_frozen_backbone_for_final_forecast: false
   SLPF:
     enabled: true
@@ -204,6 +204,19 @@ runners:
     encoder_layers: 3
     top_k: 3
     use_amp: false
+  LEAF:
+    batch_size: 16
+    max_epochs: 80
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    patience: 12
+    gradient_clip: 5.0
+    hidden_dim: 64
+    dropout: 0.0
+    stgcn_num_layers: 7
+    hgnn_num_backbone_layers: 6
+    hgnn_num_head_layers: 1
+    hgnn_num_hyper_edge: 32
 protocol_assertions:
   development:
     train_rows: 12000
@@ -236,3 +249,4 @@ shared_contract:
   time_feature_revision: traffident_time_features_v1
   metrics_revision: traffident_metrics_v1
   prediction_contract_revision: traffident_prediction_v1
+implementation_revision: 20260914_leaf_graph_compat_r5

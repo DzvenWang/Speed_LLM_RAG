@@ -1,0 +1,23 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=48GB
+#PBS -l walltime=24:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs/out/
+#PBS -N RASTDev
+set -euo pipefail
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline; LOGROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs; PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+source "$ROOT/scripts/pbs_live_log.sh"; baseline_live_log_start "RAST" "development" "seed10"; baseline_install_exit_trap
+export PYTHONPATH="$ROOT:/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon:/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench:${PYTHONPATH:-}"
+cd "$ROOT"; echo "START RAST-native Development v0.6.0 seed=10"; nvidia-smi
+"$PY" scripts/check_rast_runtime.py
+"$PY" tests/smoke_rast_import_contract.py
+"$PY" scripts/verify_official_sources.py
+"$PY" scripts/validate_cache.py --stage development
+"$PY" scripts/retrieval_leakage_audit.py --stage development
+"$PY" -u baseline/runners/rast_runner.py --stage development --seed 10 --variant native
+echo "RAST DEVELOPMENT PASS"

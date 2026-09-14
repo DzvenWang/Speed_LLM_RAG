@@ -9,11 +9,14 @@ from torch.utils.data import DataLoader
 ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline');sys.path.insert(0,str(ROOT))
 from baseline.runners.common import RASTDataset,make_run_dir,masked_l1,require_gpu,save_val_outputs,scale_stats,set_seed,validate_stage
 from baseline.backbones.patchstg_bridge import FrozenPatchSTG,PatchSTGRASTBridge
+from baseline.compat.rast_optional_backbones import install_rast_native_import_shims
 
 def import_model():
     v=ROOT/'vendor/RAST';sys.path.insert(0,str(v))
+    modes=install_rast_native_import_shims()
+    print(f'RAST NATIVE IMPORT SHIMS={modes}',flush=True)
     try: from src.arch.rast_arch import RAST
-    except Exception as e: raise RuntimeError('RAST import failed. Install faiss and official RAST dependencies. '+repr(e)) from e
+    except Exception as e: raise RuntimeError('RAST import failed after FAISS/native-import compatibility setup. '+repr(e)) from e
     return RAST
 
 def build_model(cfg,variant,seed,device,db):

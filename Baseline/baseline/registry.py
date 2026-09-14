@@ -87,9 +87,9 @@ METHODS = {
         'can_prepare_before_backbone_freeze': True,
         'final_forecast_requires_frozen_backbone': False,
         'protocol': 'official_dual_branch_plus_llm_selector_reference',
-        'execution_state': 'ISOLATED_ENV_SMOKE',
+        'execution_state': 'SHARED_TFP_BRANCH_RUNNER',
         'question': 'Does an existing traffic LLM selector explain the value of predictive-support reasoning?',
-        'compatibility_note': 'Framework-level LLM reference. Keep vLLM/legacy requirements in an isolated environment; do not install them into TFP.',
+        'compatibility_note': 'Framework-level LLM reference. Official GraphBranch/HypergraphBranch classes execute through the external TraffiDent runner in the shared TFP environment. LLM choices are consumed from JSON, so vLLM is not installed into TFP.',
     },
     'SLPF': {
         'category': 'partial_sensing',

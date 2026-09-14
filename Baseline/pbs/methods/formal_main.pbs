@@ -20,6 +20,7 @@ unset TRANSFORMERS_CACHE || true
 cd "$ROOT"
 echo "START Baseline Formal v0.6.0 method=$METHOD seed=$SEED"
 nvidia-smi
+if [[ "$METHOD" == "RAST" || "$METHOD" == "RAST-PatchSTG" ]]; then "$PY" scripts/check_rast_runtime.py; "$PY" tests/smoke_rast_import_contract.py; fi
 "$PY" scripts/preflight.py --stage formal --method "$METHOD"
 "$PY" scripts/preflight_formal.py --method "$METHOD" --seed "$SEED" --stage formal
 case "$METHOD" in

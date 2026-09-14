@@ -1,0 +1,124 @@
+version: 0.3.0
+implementation_revision: 20260914_local_support_routing_r1
+project:
+  root: /scratch/mh20/zw1165/Speed_LLM_RAG
+  presure_root: /scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe
+  exp_root: /scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe_exps
+  log_root: /scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe_logs
+  cache_root: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCache
+  backbone_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone
+  backbone_exp_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_exps
+  common_root: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon
+  supportbench_root: /scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench
+  benchmark_root: /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench
+experiment:
+  subgraph: TraffiDent_Net_06
+  history: 12
+  horizon: 12
+  seed: 10
+  stages: [development, formal]
+  reference_backbone: PatchSTG
+  reference_seed: 10
+  normalized_fill_value: 0.0
+shared_contract:
+  required_version: 1.0.0
+  config: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon/configs/experiment_contract.yaml
+  data_contract_revision: traffident_experiment_cache_v1
+  time_feature_revision: traffident_time_features_v1
+  metrics_revision: traffident_metrics_v1
+  prediction_contract_revision: traffident_prediction_v1
+backbone_artifacts:
+  batch_size: 16
+  fallback_batch_sizes: [8, 4]
+  storage_dtype: float16
+retrieval:
+  coarse_k: 64
+  search_overfetch: 256
+  final_k: 8
+  utility_candidate_k: 24
+  exclude_interval_steps: 24
+  similarity_temperature: 0.12
+  mask_feature_weight: 0.35
+  feature_node_proj_dim: 24
+  mask_node_proj_dim: 12
+  feature_seed: 10
+  oracle_expanded_k: 512
+  oracle_search_overfetch: 1024
+local_routing:
+  n_regions: 24
+  region_seed: 10
+  m3_top_k: 4
+  m4_top_k: 4
+  train_calibration_queries: 4000
+  utility_candidate_k: 24
+  direct_node_weight: 0.35
+  support_node_weight: 0.20
+oracle:
+  alpha_grid: [0.25, 0.5, 0.75, 1.0]
+  batch_size: 8
+  expanded_batch_size: 2
+  local_batch_size: 8
+  horizon_candidate_k: 128
+  node_horizon_candidate_k: 64
+  node_candidate_k: 64
+  region_horizon_candidate_k: 64
+  save_node_horizon_choices: false
+  objective_weights:
+    overall: 0.45
+    masked: 0.35
+    support: 0.20
+  continuation_gate:
+    masked_min_improvement: 0.05
+    support_min_improvement: 0.08
+    region_masked_min_improvement: 0.03
+    region_support_min_improvement: 0.04
+model:
+  feature_hidden: 192
+  embedding_dim: 128
+  residual_rank: 16
+  dropout: 0.10
+  correction_clip: 12.0
+  m1:
+    epochs: 30
+    patience: 6
+    batch_size: 64
+    lr: 0.001
+    weight_decay: 0.0001
+  m3:
+    epochs: 12
+    patience: 4
+    query_batch_size: 16
+    lr: 0.001
+    weight_decay: 0.0001
+    rank_margin: 0.04
+    candidate_scale: 1.0
+    eval_scale: 0.5
+    positive_utility_epsilon: 0.0
+  m4:
+    epochs: 12
+    patience: 4
+    query_batch_size: 10
+    lr: 0.0008
+    weight_decay: 0.0001
+    rank_margin: 0.03
+    positive_utility_epsilon: 0.0
+  m5:
+    epochs: 20
+    patience: 5
+    query_batch_size: 8
+    lr: 0.0008
+    weight_decay: 0.0001
+    harm_lambda: 1.0
+    masked_harm_lambda: 0.5
+    gate_l1_lambda: 0.002
+    node_embedding_dim: 16
+    horizon_embedding_dim: 8
+    hidden: 96
+loss:
+  overall_weight: 1.0
+  masked_weight: 0.50
+  support_weight: 0.35
+runtime:
+  num_workers: 0
+  amp: false
+  deterministic: true

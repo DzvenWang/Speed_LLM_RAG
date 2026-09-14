@@ -7,7 +7,7 @@
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -N SharedProtocol
 #PBS -j oe
-#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_logs/
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_logs/out/
 set -euo pipefail
 : "${STAGE:=development}"
 case "$STAGE" in development|formal) ;; *) echo "Use build_evaluation_protocol.pbs for STAGE=$STAGE" >&2; exit 2;; esac

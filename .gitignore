@@ -80,3 +80,8 @@ Baseline_logs/
 Baseline_exps/
 Protocol_artifacts/
 Protocol_logs/
+
+ExperimentCache/
+
+PreSuRe_logs/
+PreSuRe_exps/

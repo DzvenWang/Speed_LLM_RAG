@@ -23,6 +23,7 @@ unset TRANSFORMERS_CACHE || true
 cd "$ROOT"
 echo "START $METHOD GPU SMOKE v0.6.0"
 nvidia-smi
+if [ "$METHOD" = "RAST" ]; then "$PY" scripts/check_rast_runtime.py; "$PY" tests/smoke_rast_import_contract.py; fi
 "$PY" scripts/verify_official_sources.py
 "$PY" scripts/validate_cache.py --stage development
 if [ "$METHOD" = "GinAR" ]; then

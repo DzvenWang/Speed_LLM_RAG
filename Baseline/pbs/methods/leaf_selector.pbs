@@ -1,0 +1,19 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=04:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs/out/
+#PBS -N LEAFSelector
+set -euo pipefail
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline; LOGROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs; PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+STAGE=${STAGE:-development}; SEED=${SEED:-10}; : "${LEAF_SELECTOR_JSON:?Set LEAF_SELECTOR_JSON to official-style selector JSON}"
+source "$ROOT/scripts/pbs_live_log.sh"; baseline_live_log_start "LEAF" "$STAGE" "seed${SEED}" "selector"; baseline_install_exit_trap
+export PYTHONPATH="$ROOT:/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon:/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench:${PYTHONPATH:-}"
+cd "$ROOT"; "$PY" scripts/check_leaf_tfp_runtime.py
+"$PY" -u baseline/runners/leaf_runner.py --stage "$STAGE" --seed "$SEED" --phase selector --selector-json "$LEAF_SELECTOR_JSON"
+echo "LEAF SELECTOR PASS"
