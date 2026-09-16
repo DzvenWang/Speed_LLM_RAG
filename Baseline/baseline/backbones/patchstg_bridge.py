@@ -86,14 +86,43 @@ class FrozenPatchSTG:
         ck = torch.load(self.checkpoint, map_location='cpu', weights_only=False)
         require_reference_checkpoint_identity(ck, reg, label=str(self.checkpoint))
         bcfg = yaml.safe_load((broot / 'configs/backbone_selection.yaml').read_text())
-        if str(bcfg.get('version')) != str(reg.get('project_version')):
+        live_backbone_version = str(bcfg.get('version'))
+        frozen_backbone_version = str(reg.get('project_version'))
+
+        # The Backbone project may evolve after the reference checkpoint was frozen.
+        # Reproducibility is anchored by the frozen manifest/checkpoint identity above
+        # (checkpoint SHA256, protocol hash, time-feature fingerprint, checkpoint
+        # run_identity) rather than by requiring the *current* Backbone project version
+        # string to remain identical to the historical producer version.
+        #
+        # If the project versions differ, never fall back to the current PatchSTG
+        # configuration: construct the adapter from the model_config stored inside the
+        # frozen checkpoint and rely on strict state_dict loading to catch an
+        # incompatible current PatchSTG implementation.
+        if 'model_config' in ck:
+            mcfg = ck['model_config']
+        elif live_backbone_version == frozen_backbone_version:
+            mcfg = bcfg['models']['PatchSTG']
+        else:
             raise RuntimeError(
-                f'Current Backbone code/config version {bcfg.get("version")} != frozen manifest {reg.get("project_version")}'
+                'Frozen PatchSTG checkpoint does not contain model_config while the '
+                f'current Backbone version ({live_backbone_version}) differs from the '
+                f'frozen producer version ({frozen_backbone_version}); refusing to use '
+                'the current Backbone config as an implicit compatibility fallback.'
             )
-        mcfg = ck.get('model_config', bcfg['models']['PatchSTG'])
+
+        if live_backbone_version != frozen_backbone_version:
+            print(
+                'INFO Frozen PatchSTG producer/current Backbone versions differ '
+                f'frozen={frozen_backbone_version} current={live_backbone_version}; '
+                'accepting the frozen checkpoint by immutable identity and validating '
+                'the current adapter with strict state_dict loading.'
+            )
         sg = cfg['experiment']['subgraph']
         bench = SupportBench(sg, root=cfg['project']['benchmark_root'])
         st = bench.stats['channels'][bench.manifest['primary_channel']]
+        self.mean = float(st['mean'])
+        self.std = float(st['std'])
         adapter = build_adapter(
             'PatchSTG', broot / 'vendor', bench.N, device,
             float(st['mean']), float(st['std']), mcfg, bench.adj, bench.nodes,
@@ -122,6 +151,7 @@ class PatchSTGRASTBridge(nn.Module):
         super().__init__()
         self.frozen = frozen
         self.patchstg = frozen.adapter.model
+        self.last_prediction = None
         for p in self.patchstg.parameters():
             p.requires_grad = False
 
@@ -137,4 +167,8 @@ class PatchSTGRASTBridge(nn.Module):
         dow = torch.round(history_data[..., 2].mean(dim=2) * 6.0).long().clamp(0, 6)
         with torch.no_grad():
             p = self.frozen.predict_norm(x, tod, dow)
+        # Diagnostic-only cache used by the RAST-PatchSTG runner to measure
+        # the learned residual correction.  It is detached and never enters
+        # the optimization graph.
+        self.last_prediction = p.detach()
         return p.unsqueeze(-1)

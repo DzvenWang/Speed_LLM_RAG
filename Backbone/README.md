@@ -1,6 +1,6 @@
-# Backbone v0.5.0
+# Backbone v0.6.0
 
-Backbone v0.5.0 is the clean rerun release for the TraffiDent incomplete-sensing benchmark. It keeps the five numerical architectures and pinned official sources unchanged, while moving all cross-project experiment semantics into **ExperimentCommon v1.0.0**.
+Backbone v0.6.0 extends the TraffiDent numerical-backbone benchmark with **STLAformer (TRC 2026)** while preserving the shared ExperimentCommon v1.0.0 protocol and the existing PatchSTG downstream reference.
 
 ## Active models
 
@@ -9,8 +9,9 @@ Backbone v0.5.0 is the clean rerun release for the TraffiDent incomplete-sensing
 - BigST
 - STDN
 - PatchSTG
+- STLAformer (TRC 2026)
 
-Five-model screening remains the comparison/verification experiment. `PatchSTG` is explicitly configured as the downstream numerical reference model and is trained on the formal stage with seeds 10/20/30. Seed 10 is the fixed downstream reference checkpoint after the three-seed formal run is summarized.
+Six-model screening is the comparison/verification experiment. `PatchSTG` is explicitly configured as the downstream numerical reference model and is trained on the formal stage with seeds 10/20/30. Seed 10 is the fixed downstream reference checkpoint after the three-seed formal run is summarized.
 
 ## Shared Experiment Contract
 
@@ -46,7 +47,7 @@ python scripts/validate_cache.py --stage screening
 bash scripts/submit_screening.sh
 ```
 
-After all five screening runs finish:
+After all six screening runs finish:
 
 ```bash
 python scripts/summarize_screening.py
@@ -71,7 +72,7 @@ This creates the Backbone-owned `Backbone_exps/FROZEN_BACKBONE.json`. Baseline a
 
 ## Important
 
-Do not replace the project code underneath already-running v0.4.1 jobs and then combine those runs with v0.5.0 results. v0.5.0 intentionally changes the common cache identity and aggregate metric semantics, so its formal evidence should be rerun under this release.
+v0.6.0 adds STLAformer without changing the original five adapters, their recipes, or the Shared Protocol/cache identity. Screening summarization therefore explicitly permits current-contract v0.5.0 results for the original five models and requires v0.6.0 for STLAformer. PatchSTG remains the configured downstream reference; its compatible v0.5.0 formal/reference evidence remains reusable.
 ## Remove legacy `_cache` aliases
 
 After deploying this direct-cache revision, old symlink trees can be removed safely with:
@@ -82,3 +83,31 @@ python scripts/cleanup_legacy_cache_aliases.py
 
 The cleanup refuses to delete real files or non-empty real data directories.
 
+
+
+## STLAformer integration
+
+STLAformer is pinned from the official TRC 2026 repository and integrated without changing its architecture. The adapter maps canonical TraffiDent history into the model's official input semantics:
+
+```text
+channel 0 = normalized traffic state
+channel 1 = (day_of_week * 288 + time_of_day_slot) / 2016
+```
+
+No future TOD/DOW or target value is used. The official class is `STLformer`; project-facing method name is `STLAformer`. PatchSTG remains `selection.reference_model`.
+
+After deploying v0.6.0, install/pin the new source and refresh the source lock:
+
+```bash
+bash scripts/setup_official_models.sh
+python scripts/verify_official_sources.py
+python scripts/smoke_recent_model_contracts.py
+```
+
+Run only STLAformer screening if the previous five screening models already have current-compatible results:
+
+```bash
+qsub -v MODEL=STLAformer,STAGE=screening,SEED=10 pbs/backbone_select.pbs
+```
+
+The compatibility rule is explicit rather than silent: v0.5.0 screening evidence is reusable only for the unchanged original five models, while STLAformer must be produced by v0.6.0 under the same frozen Shared Protocol/cache identity.

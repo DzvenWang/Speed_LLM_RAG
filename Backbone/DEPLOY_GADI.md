@@ -1,4 +1,4 @@
-# Deploy Backbone v0.5.0 on Gadi
+# Deploy Backbone v0.6.0 on Gadi
 
 Place these sibling directories under the same project root:
 
@@ -14,7 +14,8 @@ Keep the existing `Backbone/vendor/` pinned source trees if already installed. T
 ```bash
 cd /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone
 conda activate TFP
-python scripts/source_lock.py verify --root . --sources configs/official_sources.yaml
+bash scripts/setup_official_models.sh
+python scripts/source_lock.py verify --root . --sources configs/backbone_selection.yaml
 python scripts/preflight.py --stage screening
 python scripts/prepare_data.py --stage screening --force
 python scripts/validate_cache.py --stage screening
@@ -29,4 +30,12 @@ python scripts/prepare_data.py --stage formal
 python scripts/validate_cache.py --stage formal
 bash scripts/submit_reference_formal.sh
 python scripts/summarize_formal.py   # only after all seeds finish
+```
+
+
+STLAformer source is pinned by `scripts/setup_official_models.sh`. A lightweight contract check is available before GPU submission:
+
+```bash
+python scripts/smoke_recent_model_contracts.py
+python scripts/preflight.py --model STLAformer --stage screening
 ```

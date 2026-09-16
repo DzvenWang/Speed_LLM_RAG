@@ -32,6 +32,8 @@ def main():
         ok=importlib.util.find_spec(pkg) is not None; print(('PASS' if ok else 'FAIL'),pkg); failed|=not ok
     if a.model=='PatchSTG':
         ok=importlib.util.find_spec('timm') is not None; print(('PASS' if ok else 'FAIL'),'timm (PatchSTG)'); failed|=not ok
+    if a.model=='STLAformer':
+        stla=ROOT/'vendor'/'STLAformer'/'model'/'STLformer.py'; ok=stla.exists(); print(('PASS' if ok else 'FAIL'),'STLAformer model source',stla); failed|=not ok
     try:
         sys.path.insert(0,str(ROOT/'vendor'/'STDN')); importlib.import_module('graph_utils'); print('PASS STDN graph_utils import')
     except Exception as e: print('FAIL STDN graph_utils import',repr(e)); failed=True
@@ -44,6 +46,8 @@ def main():
         if a.model=='PatchSTG':
             import pandas as pd, numpy as np
             lat=pd.to_numeric(b.nodes.get('lat'),errors='coerce').to_numpy(float); lng=pd.to_numeric(b.nodes.get('lng'),errors='coerce').to_numpy(float); geo=float((np.isfinite(lat)&np.isfinite(lng)).mean()); print('PASS PatchSTG static node metadata geographic_fraction=',f'{geo:.3f}')
+        if a.model=='STLAformer':
+            steps=int(cfg['models']['STLAformer'].get('steps_per_week',2016)); ok=steps==7*288; print(('PASS' if ok else 'FAIL'),'STLAformer steps_per_week=',steps); failed|=not ok
     except Exception as e: print('FAIL SupportBench/time feature',repr(e)); failed=True
     try:
         c=importlib.import_module('shared_protocol.consumer'); ps=cfg['protocol']['stage_map'][a.stage]; pm,_=c.load_frozen_stage(cfg['project']['protocol_artifact_root'],cfg['experiment']['subgraph'],cfg['protocol']['name'],ps); print('PASS frozen Protocol/'+ps,pm['stage_hash'])

@@ -320,7 +320,83 @@ class PatchSTGAdapter(BaseAdapter):
 
 
 
-ADAPTERS={'STAEformer':STAEformerAdapter,'HimNet':HimNetAdapter,'BigST':BigSTAdapter,'STDN':STDNAdapter,'PatchSTG':PatchSTGAdapter}
+def stlaformer_features(batch, steps_per_day, days_per_week, device):
+    """Build the pinned STLAformer input [B,T,N,2].
+
+    Official STLAformer consumes traffic value plus a fractional time-of-week
+    channel.  The same time-of-week channel is also used by the model's
+    embedding lookup.  TraffiDent canonical TOD/DOW are converted without
+    using future timestamps or target values.
+    """
+    speed = batch['x'].to(device, non_blocking=True).float()  # [B,T,N]
+    B,T,N = speed.shape
+    tod = batch['tod_hist'].to(device, non_blocking=True).long()
+    dow = batch['dow_hist'].to(device, non_blocking=True).long()
+    steps_per_week = int(steps_per_day) * int(days_per_week)
+    tow_slot = dow * int(steps_per_day) + tod
+    if torch.any(tow_slot < 0) or torch.any(tow_slot >= steps_per_week):
+        raise RuntimeError(
+            f'STLAformer time-of-week slot out of range [0,{steps_per_week}): '
+            f'min={int(tow_slot.min())} max={int(tow_slot.max())}'
+        )
+    # The vendor model reconstructs the embedding index with
+    # ``(tow * steps_per_week).long()``.  A plain float32 division can land
+    # infinitesimally below an integer for a few slots (e.g. 255/2016), which
+    # would shift the official embedding index by one after truncation.  Move
+    # to the next representable float toward +inf so the encoded slot round-trip
+    # is exact while preserving the fractional TOW semantics.
+    frac = tow_slot.float() / float(steps_per_week)
+    frac = torch.nextafter(frac, torch.full_like(frac, float('inf')))
+    tow = frac.unsqueeze(-1).expand(B,T,N)
+    return torch.stack([speed, tow], dim=-1)
+
+
+class STLAformerAdapter(BaseAdapter):
+    name = 'STLAformer'
+    adapter_revision = 'stlaformer_official_tow_traffident_v1'
+
+    @classmethod
+    def build(cls, vendor, num_nodes, device, mean, std, cfg, adj):
+        model_dir = Path(vendor) / 'model'
+        model_file = model_dir / 'STLformer.py'
+        if not model_file.exists():
+            raise RuntimeError(f'Missing pinned STLAformer model source: {model_file}')
+        mod = load_module('vendor_stlaformer', model_file, model_dir)
+        m = mod.STLformer(
+            num_nodes=num_nodes,
+            in_steps=12,
+            out_steps=12,
+            steps_per_week=int(cfg.get('steps_per_week', 2016)),
+            input_dim=int(cfg.get('input_dim', 2)),
+            output_dim=1,
+            input_embedding_dim=int(cfg.get('input_embedding_dim', 32)),
+            tow_embedding_dim=int(cfg.get('tow_embedding_dim', 32)),
+            feed_forward_dim=int(cfg.get('feed_forward_dim', 256)),
+            num_heads=int(cfg.get('num_heads', 4)),
+            num_layers=int(cfg.get('num_layers', 3)),
+            dropout=float(cfg.get('dropout', 0.3)),
+        )
+        obj = cls(m, device, mean, std)
+        obj.steps_per_day = int(cfg.get('tod_slots', 288))
+        obj.days_per_week = int(cfg.get('dow_slots', 7))
+        obj.adapter_metadata = {
+            'official_class': 'STLformer',
+            'input_contract': 'normalized_speed_plus_fractional_time_of_week',
+            'steps_per_week': int(cfg.get('steps_per_week', 2016)),
+            'future_time_features_used': False,
+            'adjacency_used': False,
+        }
+        return obj
+
+    def forward(self, batch, batches_seen=None, training=False):
+        x = stlaformer_features(batch, self.steps_per_day, self.days_per_week, self.device)
+        pred = self.model(x)
+        if pred.ndim == 4 and pred.shape[-1] == 1:
+            pred = pred.squeeze(-1)
+        return pred
+
+
+ADAPTERS={'STAEformer':STAEformerAdapter,'HimNet':HimNetAdapter,'BigST':BigSTAdapter,'STDN':STDNAdapter,'PatchSTG':PatchSTGAdapter,'STLAformer':STLAformerAdapter}
 
 def build_adapter(name,vendor_root,num_nodes,device,mean,std,cfg,adj,nodes=None):
     if name not in ADAPTERS: raise KeyError(name)

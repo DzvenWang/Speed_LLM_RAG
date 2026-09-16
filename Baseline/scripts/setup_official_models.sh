@@ -56,14 +56,18 @@ clone_or_keep(){
 {
   echo -e "model\tcommit\tremote\tmode"
   clone_or_keep ImputeFormer https://github.com/tongnie/ImputeFormer.git exact 1c3868cf499951ac43b4fc7280593fbb745f58c7
+  clone_or_keep LRTC-TMCP https://github.com/peterchen96/LRTC-TMCP.git resolve_once main
   clone_or_keep SLPF https://github.com/zbliu98/SLPF.git exact 8f135a96d57651dc19564bd3b94508c1f92c04fb
   clone_or_keep RAFT https://github.com/archon159/RAFT.git exact bfe2320f5d719d1e2a024330de3410b370bbb2a9
   clone_or_keep RAST https://github.com/RWLinno/RAST.git exact 4b48a47a002dd8d4151afe47be8f436f0c028a67
   clone_or_keep LEAF https://github.com/YushengZhao/LEAF.git exact 650b9e915fd4cc213387e279e4e529acbe587b85
   clone_or_keep GinAR https://github.com/GestaltCogTeam/GinAR.git resolve_once main
   clone_or_keep SARAF https://github.com/ShiqiaoZhou/SARAF.git resolve_once main
+  clone_or_keep SPRINT https://github.com/ashishbhaskar/SPRINT.git resolve_once main
+  clone_or_keep MoGERNN https://github.com/ZJU-TSELab/MoGERNN.git resolve_once main
+  clone_or_keep ReMFT https://github.com/IansSUn/ReMFT.git exact af61bef8ec872ba7b12e78675a39aeb0a20088a6
 } | tee "$VENDOR/OFFICIAL_COMMITS.tsv"
 
 "$PY" "$ROOT/scripts/source_lock.py" create --root "$ROOT" --sources "$SOURCES"
 echo "Official repositories ready and frozen by SOURCE_LOCK.json."
-echo "GinAR/SARAF use resolve-once: the first successful setup resolves main to an exact SHA; later runs reuse that SHA."
+echo "LRTC-TMCP/GinAR/SARAF/SPRINT/MoGERNN use resolve-once: the first successful setup resolves main to an exact SHA; later runs reuse that SHA."

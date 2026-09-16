@@ -8,12 +8,27 @@ from torch.utils.data import DataLoader
 ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline');sys.path.insert(0,str(ROOT))
 from baseline.runners.common import ImputationDataset,make_run_dir,require_gpu,save_val_outputs,set_seed,validate_stage
 from baseline.backbones.patchstg_bridge import FrozenPatchSTG
+from baseline.compat.imputeformer_tsl_shim import install_imputeformer_tsl_shim
 
 def import_model():
-    exp=ROOT/'vendor/ImputeFormer/experiments';sys.path.insert(0,str(exp))
+    exp=ROOT/'vendor/ImputeFormer/experiments'
+    bundled_tsl=exp/'tsl/__init__.py'
+    bundled_model=exp/'imputeformer/models/__init__.py'
+    if not bundled_tsl.exists():
+        raise RuntimeError(f'Missing bundled ImputeFormer TSL implementation: {bundled_tsl}')
+    if not bundled_model.exists():
+        raise RuntimeError(f'Missing bundled ImputeFormer model package: {bundled_model}')
+    if str(exp) not in sys.path:
+        sys.path.insert(0,str(exp))
+    shim = install_imputeformer_tsl_shim()
     try:
         from imputeformer.models import ImputeFormerModel
-    except Exception as e: raise RuntimeError('ImputeFormer import failed. The official model requires torch-spatiotemporal (tsl). '+repr(e)) from e
+    except Exception as e:
+        raise RuntimeError(
+            'ImputeFormer import failed after installing the minimal TSL '
+            'compatibility shim. '+repr(e)
+        ) from e
+    print('IMPUTEFORMER TSL COMPAT', shim, flush=True)
     return ImputeFormerModel
 
 def build_model(cfg,N):
@@ -45,13 +60,45 @@ def forecast_val(model,dl,patch,device):
     return np.concatenate(out,0).astype(np.float32)
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--stage',choices=['formal'],default='formal');ap.add_argument('--seed',type=int,required=True);ap.add_argument('--smoke',action='store_true');a=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--stage',choices=['development','formal'],default='development');ap.add_argument('--seed',type=int,required=True);ap.add_argument('--smoke',action='store_true');a=ap.parse_args()
     cfg,cache=validate_stage(a.stage,'ImputeFormer');set_seed(a.seed);device=require_gpu();patch=FrozenPatchSTG(cfg,device);c=cfg['runners']['ImputeFormer']
     tr=ImputationDataset(cache,'train');va=ImputationDataset(cache,'val');N=tr.x.shape[2];model=build_model(cfg,N).to(device);nparams=sum(p.numel() for p in model.parameters() if p.requires_grad)
     dl=lambda ds,sh:DataLoader(ds,batch_size=int(c['batch_size']),shuffle=sh,num_workers=0,pin_memory=True)
     trl,val=dl(tr,True),dl(va,False);opt=torch.optim.Adam(model.parameters(),lr=float(c['learning_rate']),weight_decay=float(c['weight_decay']))
     if a.smoke:
-        b=next(iter(trl));opt.zero_grad();_,x,full,obs,art,_tod,_dow,u=batch_tensors(b,device);p=model(x.unsqueeze(-1),u,obs.unsqueeze(-1));loss=reconstruction_loss(p,full,art);loss.backward();opt.step();print('IMPUTEFORMER GPU SMOKE PASS',float(loss));return
+        # 1) verify the official ImputeFormer path can train for one step;
+        # 2) verify the completed history can actually be consumed by the
+        #    frozen PatchSTG reference on GPU.  The second check is important:
+        #    a standalone imputer smoke is not sufficient for this controlled
+        #    reconstruction-then-forecast baseline.
+        b=next(iter(trl))
+        opt.zero_grad(set_to_none=True)
+        _,x,full,obs,art,_tod,_dow,u=batch_tensors(b,device)
+        p=model(x.unsqueeze(-1),u,obs.unsqueeze(-1))
+        loss=reconstruction_loss(p,full,art)
+        loss.backward()
+        nn.utils.clip_grad_norm_(model.parameters(),float(c['gradient_clip']))
+        opt.step()
+
+        # Keep the bridge smoke deliberately tiny while exercising the real
+        # FrozenPatchSTG adapter, time features and output contract.
+        bs=min(2,int(x.shape[0]))
+        b_small=tuple(v[:bs] for v in b)
+        model.eval()
+        with torch.no_grad():
+            _idx,comp,tod,dow=completed_history(model,b_small,device)
+            pred_raw=patch.predict_raw(comp,tod,dow)
+        expected=(bs,int(cfg['experiment']['horizon']),N)
+        if tuple(pred_raw.shape)!=expected:
+            raise RuntimeError(f'ImputeFormer -> Frozen PatchSTG smoke shape {tuple(pred_raw.shape)} != {expected}')
+        if not torch.isfinite(pred_raw).all():
+            raise RuntimeError('ImputeFormer -> Frozen PatchSTG smoke produced non-finite predictions')
+        print('IMPUTEFORMER GPU SMOKE PASS',float(loss),flush=True)
+        print('IMPUTEFORMER -> FROZEN PATCHSTG GPU SMOKE PASS',
+              {'prediction_shape':tuple(pred_raw.shape),
+               'patchstg_reference_seed':patch.reference_seed,
+               'patchstg_checkpoint':str(patch.checkpoint)},flush=True)
+        return
     best=float('inf');state=None;be=0;stale=0;t0=time.time()
     for ep in range(1,int(c['max_epochs'])+1):
         model.train();tot=den=0

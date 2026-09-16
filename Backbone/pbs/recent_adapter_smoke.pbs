@@ -10,8 +10,8 @@
 #PBS -j oe
 #PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_logs/out/
 set -euo pipefail
-: "${MODEL:?Submit with MODEL=PatchSTG}"
-case "$MODEL" in PatchSTG) ;; *) echo "Unknown MODEL=$MODEL"; exit 2;; esac
+: "${MODEL:?Submit with MODEL=PatchSTG|STLAformer}"
+case "$MODEL" in PatchSTG|STLAformer) ;; *) echo "Unknown MODEL=$MODEL"; exit 2;; esac
 ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG
 PROJ="$ROOT/Backbone"; ENVROOT=/scratch/mh20/zw1165/envs/TFP; PY="$ENVROOT/bin/python"
 LOGROOT="$ROOT/Backbone_logs"; mkdir -p "$LOGROOT"; STAMP=$(date +%Y%m%d_%H%M%S)

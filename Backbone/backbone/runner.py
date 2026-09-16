@@ -76,6 +76,15 @@ def make_scheduler(optimizer, mc):
         return torch.optim.lr_scheduler.ExponentialLR(
             optimizer, gamma=float(mc.get('lr_gamma', 0.5))
         )
+    if name in ('plateau', 'reduceonplateau', 'reduce_lr_on_plateau'):
+        return torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode='min',
+            factor=float(mc.get('lr_gamma', 0.1)),
+            patience=int(mc.get('scheduler_patience', 20)),
+            threshold=float(mc.get('scheduler_threshold', 1e-8)),
+            min_lr=float(mc.get('min_lr', 0.0)),
+        )
     raise ValueError(f'Unknown scheduler={name}')
 
 
@@ -218,13 +227,16 @@ def _train_once(model_name, cfg, cache_dir, run_dir, vendor_root, benchmark_adj,
                     f'epoch={epoch:03d} batch={bi:05d}/{len(train_loader):05d} '
                     f'train_loss={np.mean(losses[-print_every:]):.6f}'
                 )
-        if scheduler is not None:
+        scheduler_name = str(mc.get('scheduler', 'none')).lower()
+        if scheduler is not None and scheduler_name not in ('plateau', 'reduceonplateau', 'reduce_lr_on_plateau'):
             interval = max(1, int(mc.get('scheduler_step_interval', 1)))
             if epoch % interval == 0:
                 scheduler.step()
 
         _, _, vs = evaluate(adapter, val_loader, val.meta, device)
         v = float(vs['MAE'])
+        if scheduler is not None and scheduler_name in ('plateau', 'reduceonplateau', 'reduce_lr_on_plateau'):
+            scheduler.step(v)
         rec = {
             'epoch': epoch,
             'train_loss': float(np.mean(losses)),
@@ -302,6 +314,7 @@ def _train_once(model_name, cfg, cache_dir, run_dir, vendor_root, benchmark_adj,
             k: mc.get(k) for k in [
                 'optimizer', 'learning_rate', 'adam_eps', 'weight_decay',
                 'scheduler', 'milestones', 'step_size', 'lr_gamma', 'scheduler_step_interval',
+                'scheduler_patience', 'scheduler_threshold', 'min_lr',
                 'max_epochs', 'patience', 'grad_clip', 'train_loss'
             ] if k in mc
         },

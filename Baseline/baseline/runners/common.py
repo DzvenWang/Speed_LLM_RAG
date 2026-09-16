@@ -82,15 +82,22 @@ def save_val_outputs(cfg: dict, cache: Path, run_dir: Path, pred_raw: np.ndarray
     metrics = evaluate_prediction_file(cache, 'val', pred_path)
     metrics.to_csv(run_dir / 'val_metrics.csv', index=False)
     all_row = metrics.loc[metrics.family.astype(str) == 'ALL'].iloc[0].to_dict()
-    manifest = build_run_manifest(cache, cfg['version'], method, seed, cfg['methods'][method]['formal_track'], {
-        'artifact_type': 'method_result', 'runner_project_version': cfg['version'], 'status': 'COMPLETE'
-    })
+    manifest_extra = {
+        'artifact_type': 'method_result',
+        'runner_project_version': cfg['version'],
+        'status': 'COMPLETE',
+    }
+    manifest = build_run_manifest(
+        cache, cfg['version'], method, seed, cfg['methods'][method]['formal_track'],
+        manifest_extra,
+    )
     write_run_manifest(run_dir / 'RUN_MANIFEST.json', manifest)
     summary = {
         **manifest,
         'val': all_row,
         'prediction_file': str(pred_path),
         **extra_summary,
+        'selection_valid': bool(extra_summary.get('selection_valid', True)),
     }
     write_json(run_dir / 'summary.json', summary)
     latest = run_dir.parent / 'LATEST_RUN.txt'; latest.write_text(str(run_dir) + '\n')

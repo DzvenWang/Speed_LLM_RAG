@@ -1,0 +1,10 @@
+% Manuscript-ready positioning for the SPRINT baseline.
+% Insert/adapt this text in the Baseline/Experimental Comparison section.
+
+\paragraph{Specialized traffic reconstruction comparator.}
+SPRINT is included as a traffic-specific reconstruction reference rather than as a strictly input-matched baseline in the main $H{=}12$ comparison. Its native formulation exploits recurring traffic patterns across multiple days, whereas the main benchmark exposes only the current incomplete 12-step history. To preserve this native assumption without introducing future leakage, we construct a causal historical-day tensor for each query using the same clock-aligned 12-step segment from the preceding 7 days and append the current incomplete history as the final day. The one-week context length is fixed a priori rather than selected on validation performance. Thus, SPRINT receives an $8\times N\times 12$ day--sensor--interval tensor. All historical intervals precede the query origin. The artificially hidden values of the current history, the 12-step forecast target, later timestamps, query predictions, and labels are never provided. After reconstruction, values observed in the current query are restored exactly, and only the reconstructed current 12-step history is passed to the same frozen PatchSTG forecaster used by the reconstruction-first comparison.
+
+Because this adaptation provides SPRINT with additional causal historical context that is unavailable to the strict $H{=}12$ main-table methods, we report it separately as a \emph{specialized reconstruction comparator}. Its result is used to answer whether a traffic-specific imputer with native recurring-day evidence can provide a strong reconstruction-first reference, rather than to claim an input-matched ranking against the main baselines.
+
+% Suggested table note:
+% \textit{SPRINT uses 7 prior same-clock historical-day segments in addition to the current incomplete H12 query; it is therefore reported as a specialized causal-history comparator and is not input-matched to the main H12 baselines.}

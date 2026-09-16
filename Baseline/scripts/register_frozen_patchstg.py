@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Deprecated compatibility entrypoint.
 
-Baseline v0.6.0 never creates or overwrites Backbone_exps/FROZEN_BACKBONE.json.
+Baseline v1.0.0 never creates or overwrites Backbone_exps/FROZEN_BACKBONE.json.
 The Backbone project is the sole owner of model selection/freezing. This command
 is kept only so old deployment notes fail safe: it performs read-only validation.
 """

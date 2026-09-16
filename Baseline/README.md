@@ -1,108 +1,101 @@
-# Baseline v0.6.0
+# Baseline v1.0.0 — Clean Primary-7 Experiment Project
 
-Baseline v0.6.0 is the clean rerun release aligned with Backbone v0.5.0 and ExperimentCommon v1.0.0. Baseline methods keep their existing architectures/vendor sources; the release consolidates shared data, metrics, prediction artifacts, and frozen-backbone consumption.
+This is the clean-slate Baseline project for Task 1. Previous Baseline logs and experiment artifacts are intentionally not reused.
 
-## Experiment groups
+## Primary Baselines
 
-Main table:
+The main experiment contains exactly seven external baselines:
 
-- FrozenBackbone
-- ImputeFormer
-- GinAR
-- RAFT
-- RAST
-- SARAF
+1. **ImputeFormer** — neural reconstruction-first forecasting
+2. **LRTC-TMCP** — TRC 2024 low-rank tensor completion + the same frozen PatchSTG
+3. **GinAR** — direct variable-missing forecasting
+4. **RAFT** — generic retrieval-augmented forecasting
+5. **RAST** — traffic-specific retrieval-augmented forecasting
+6. **SARAF** — reliability/stationarity-aware retrieval
+7. **ReMFT** — TRC 2026 LLM-enhanced traffic forecasting
 
-Additional tracks:
+`PatchSTG` is the frozen numerical reference, not an external Baseline entry.
 
-- LEAF — LLM-specific comparison
-- SLPF — fixed partial-sensing sub-track
-- RAST-PatchSTG — controlled appendix adaptation
+## Secondary / controlled experiments
 
-## Shared cache
+Existing implementations are retained but are not submitted by the primary workflow:
 
-Baseline no longer materializes or aliases a second copy of the benchmark. Every runner reads **directly** from:
+- SPRINT
+- SLPF
+- MoGERNN
+- LEAF
+- LEAF-Qwen1.5B
+- RAST-PatchSTG
 
-```text
-ExperimentCache/TraffiDent_Net_06/development
-ExperimentCache/TraffiDent_Net_06/formal
-ExperimentCache/TraffiDent_Net_06/evaluation
-```
+## Clean-slate policy
 
-`Baseline_exps/` contains method/run artifacts only. No `Baseline_exps/_cache` directory or symlink is created or required.
+- Only results produced by **Baseline v1.0.0** are eligible for Formal selection.
+- There is no result-version compatibility layer and no old-result migration.
+- Every Primary method is rerun from the current Development/Formal caches.
+- `FORMAL_SELECTION.json` accepts only `status=COMPLETE`, `selection_valid=true`, current-version artifacts with the frozen run identity.
 
-Backbone, Baseline, and future OwnModel experiments therefore use exactly the same sample order, masks, TOD/DOW, scaling statistics, protocol hash, metric implementation, and prediction layout.
-
-## Frozen PatchSTG policy
-
-Baseline is a read-only consumer of `Backbone_exps/FROZEN_BACKBONE.json`.
-
-- Baseline never scans Backbone runs to choose a checkpoint.
-- Baseline never writes or overwrites the Backbone frozen manifest.
-- ImputeFormer and RAST-PatchSTG use the same single PatchSTG reference checkpoint for Baseline seeds 10/20/30.
-
-## Prepare data
+## Primary workflow
 
 ```bash
 cd /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
 conda activate TFP
 
-python scripts/preflight.py --stage development
-python scripts/prepare_data.py --stage development
-python scripts/validate_cache.py --stage development
+# 0. Install/freeze official source trees and local ReMFT BERT
+bash scripts/setup_official_models.sh
+bash scripts/setup_remft_bert.sh   # REMFT_BERT_PATH must point to the local BERT checkpoint if not already installed
+
+# 1. Prepare/validate shared caches and frozen PatchSTG reference
+qsub pbs/prepare_data.pbs
+qsub pbs/prepare_formal.pbs
+
+# 2. Cheap contract smoke for all seven Primary baselines
+bash scripts/submit_primary_smoke.sh
+
+# 3. Development experiments
+bash scripts/submit_primary_development.sh
+
+# 4. GinAR only: full-Formal-population stability probe before any Formal GinAR job
+bash scripts/submit_ginar_stability_probe.sh 10
+
+# 5a. First Formal pass
+bash scripts/submit_primary_formal_seed10.sh
+
+# 5b. Final multi-seed Formal pass (use after seed10 is confirmed healthy)
+bash scripts/submit_primary_formal_remaining.sh  # seeds 20/30 after seed10 sanity check
+
+# 6. Inspect and freeze Formal selection
+python scripts/primary_run_status.py
+python scripts/freeze_formal_selection.py
+
+# 7. Evaluation
+bash scripts/submit_evaluation_all.sh
 ```
 
-For formal:
+LRTC-TMCP is deterministic under the benchmark adapter and therefore uses seed 10 only.
+
+## Validity rules that matter
+
+### GinAR
+
+A Formal run that triggers validation divergence is **invalid**. The runner exits non-zero before writing a selectable Formal artifact. The current clean configuration uses a conservative Formal LR and gradient clipping; the Formal-population stability probe must pass first.
+
+### ReMFT
+
+The local pretrained BERT checkpoint and runtime encoder architecture must match. The official notebook can instantiate more layers than a standard local BERT checkpoint; the adapter removes runtime-only random layers and then enforces an exact frozen checkpoint/runtime depth contract. A remaining mismatch is a hard failure.
+
+### LRTC-TMCP
+
+For the main table, LRTC-TMCP is restricted to the query's current incomplete H12. It cannot use the forecast horizon, other validation/test queries, or extra historical days. Observed entries are protected before the completed history enters the same frozen PatchSTG used by ImputeFormer.
+
+## Secondary experiments
+
+Secondary code is preserved and can be run after the Primary Baseline is complete:
 
 ```bash
-python scripts/preflight.py --stage formal
-python scripts/prepare_data.py --stage formal
-python scripts/validate_cache.py --stage formal
-python scripts/retrieval_leakage_audit.py --stage formal
+bash scripts/submit_secondary_development.sh SPRINT 10
+bash scripts/submit_secondary_development.sh MoGERNN 10
+bash scripts/submit_secondary_development.sh LEAF 10
+bash scripts/submit_secondary_development.sh LEAF-Qwen1.5B 10
 ```
 
-If the shared formal cache was already built by Backbone v0.5.0, these commands validate and reuse it directly rather than rematerializing it.
-
-Before methods that depend on PatchSTG:
-
-```bash
-python scripts/validate_frozen_patchstg.py
-```
-
-Then submit the main formal methods according to the supplied scripts. Freeze Baseline selection only after all required formal seeds are complete.
-## Remove legacy `_cache` aliases
-
-After deploying this direct-cache revision, old symlink trees can be removed safely with:
-
-```bash
-python scripts/cleanup_legacy_cache_aliases.py
-```
-
-The cleanup refuses to delete real files or non-empty real data directories.
-
-
-## 2026-09-13 runtime hotfix: RAST + LEAF
-
-- RAST keeps `vendor/RAST` frozen. The Baseline runner installs an import-only compatibility shim for RAST's eager optional STID/AGCRN imports. The shim raises immediately if native RAST unexpectedly tries to instantiate either optional pretrained backbone.
-- RAST uses the existing TFP environment with `faiss-gpu`; run `bash scripts/setup_rast_faiss.sh` once if FAISS is missing.
-- LEAF no longer requires `/envs/LEAF`. GraphBranch and HypergraphBranch run in the shared TFP environment through `baseline/runners/leaf_runner.py`.
-- LEAF's LLM selector is intentionally post-hoc JSON. No vLLM installation is performed in TFP. A selector JSON contains one row-major query-node entry per element with `final_answer` equal to 1 (GraphBranch), 2 (HypergraphBranch), or null (defaults to GraphBranch).
-
-Quick checks:
-
-```bash
-python tests/smoke_rast_leaf_hotfix.py
-python scripts/check_rast_runtime.py
-python scripts/check_leaf_tfp_runtime.py
-```
-
-Resubmit only the failed jobs:
-
-```bash
-bash scripts/resubmit_rast_development.sh
-bash scripts/resubmit_leaf_development.sh
-```
-
-## RAST native-import compatibility r4
-
-The external native RAST runner deliberately does not install EasyTorch/BasicTS training dependencies.  Frozen RAST eagerly imports optional pretrained-backbone helpers, which in turn import `basicts.utils`; importing the vendor `basicts` package would execute its launcher and require EasyTorch even though native RAST never uses that path.  The Baseline compatibility layer therefore injects guarded import-only placeholders for `baselines.STID`, `baselines.AGCRN`, and `basicts.utils` before importing frozen RAST.  If a pretrained STID/AGCRN path is ever requested, the placeholders fail loudly instead of silently changing the experiment.
+They are not part of `formal_selection_methods` and cannot enter the main-table selection artifact.

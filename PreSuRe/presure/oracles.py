@@ -228,3 +228,60 @@ def oracle_region_horizon_batch(base, y, valid, direct, support, residuals, alph
         best_alpha[:, :, r] = ba
         gains[:, :, r] = base_obj - best
     return final, best_idx, best_alpha, gains
+
+
+def oracle_node_selected_batch(base, y, valid, residuals_bnkp, alphas, candidate_mask=None):
+    """Node-local oracle over a node-specific candidate set.
+
+    base/y/valid: [B,P,N]
+    residuals_bnkp: [B,N,K,P]
+    candidate_mask: optional [B,N,K] deployable-candidate availability mask.
+    One support+alpha is chosen per (query,node), shared over all horizons.
+    Diagnostic only; uses query future.
+    """
+    B,P,N=base.shape; K=residuals_bnkp.shape[2]
+    vv=valid.bool().permute(0,2,1)                  # [B,N,P]
+    bb=base.permute(0,2,1); yy=y.permute(0,2,1)    # [B,N,P]
+    den=vv.sum(-1).clamp_min(1)
+    base_obj=(torch.abs(bb-yy)*vv).sum(-1)/den
+    best=base_obj.clone(); best_idx=torch.full((B,N),-1,dtype=torch.long,device=base.device)
+    best_alpha=torch.zeros((B,N),dtype=base.dtype,device=base.device)
+    cm = torch.ones((B,N,K),dtype=torch.bool,device=base.device) if candidate_mask is None else candidate_mask.bool()
+    for alpha in alphas:
+        pred=bb[:,:,None,:]+float(alpha)*residuals_bnkp
+        obj=(torch.abs(pred-yy[:,:,None,:])*vv[:,:,None,:]).sum(-1)/den[:,:,None]
+        obj=obj.masked_fill(~cm, float('inf'))
+        val,idx=obj.min(2); take=val<best
+        best=torch.where(take,val,best); best_idx=torch.where(take,idx,best_idx)
+        best_alpha=torch.where(take,torch.full_like(best_alpha,float(alpha)),best_alpha)
+    safe=best_idx.clamp_min(0)
+    selected=torch.gather(residuals_bnkp,2,safe[:,:,None,None].expand(-1,-1,1,P)).squeeze(2)
+    use=(best_idx>=0).to(base.dtype)
+    final_bn=bb+use[:,:,None]*best_alpha[:,:,None]*selected
+    return final_bn.permute(0,2,1).contiguous(),best_idx,best_alpha,base_obj-best
+
+
+def oracle_node_horizon_selected_batch(base, y, valid, residuals_bnkp, alphas, candidate_mask=None):
+    """Node×horizon oracle over node-specific Top-K candidates.
+
+    Every valid (query,node,horizon) may choose a support/alpha or NO-SUPPORT.
+    Diagnostic only; uses query future.
+    """
+    B,P,N=base.shape; K=residuals_bnkp.shape[2]
+    bb=base.permute(0,2,1); yy=y.permute(0,2,1); vv=valid.bool().permute(0,2,1)
+    base_err=torch.abs(bb-yy); best=base_err.clone()
+    best_idx=torch.full((B,N,P),-1,dtype=torch.long,device=base.device)
+    best_alpha=torch.zeros((B,N,P),dtype=base.dtype,device=base.device)
+    cm = torch.ones((B,N,K),dtype=torch.bool,device=base.device) if candidate_mask is None else candidate_mask.bool()
+    for alpha in alphas:
+        err=torch.abs(bb[:,:,None,:]+float(alpha)*residuals_bnkp-yy[:,:,None,:])
+        err=err.masked_fill(~cm[:,:,:,None], float('inf'))
+        val,idx=err.min(2); take=(val<best)&vv
+        best=torch.where(take,val,best); best_idx=torch.where(take,idx,best_idx)
+        best_alpha=torch.where(take,torch.full_like(best_alpha,float(alpha)),best_alpha)
+    safe=best_idx.clamp_min(0)
+    selected=torch.gather(residuals_bnkp,2,safe[:,:,None,:]).squeeze(2)
+    use=(best_idx>=0).to(base.dtype)
+    final_bn=bb+use*best_alpha*selected
+    gain=(base_err-best)*vv
+    return final_bn.permute(0,2,1).contiguous(),best_idx,best_alpha,gain

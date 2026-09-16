@@ -1,101 +1,45 @@
-# PreSuRe v0.3.0 — Local Predictive Support Routing
+# PreSuRe v0.7.5 — Deployment-Aligned Specialist + Expert-Preference Routing Probe
 
-PreSuRe is the support-aware correction framework built on the fixed PatchSTG numerical backbone under incomplete sensing. This version is the first **local-routing** implementation, motivated directly by the v0.2 Development findings:
+v0.7.5 is the current development diagnostic release. v0.7.4 established an important asymmetry: the Hard-q90 specialist improves utility discrimination when the true hard regime is known, but direct routing by predicted Need-q90 does not preserve that advantage. v0.7.5 therefore tests whether the remaining bottleneck is **deployment-distribution alignment and expert preference**, rather than another Need threshold.
 
-- query-global Oracle-A/B had only small headroom;
-- horizon-local Oracle-C increased headroom materially;
-- node×horizon Oracle-D showed that useful residual evidence is highly local;
-- deployable M2/M3 correctly chose no-op under the old global residual-transfer design.
+The probe compares four deployable utility experts (`Generic`, `Hard-q90`, `Pred10`, `Pred20`) and an Expert-Preference Router. Pred10/Pred20 are trained on cells selected by Train-derived predicted-Need thresholds. The router is trained only on Train `utility_dev` to learn which expert's selected support has higher true utility; current-query future is never an inference feature. A privileged `oracle_router` is reported only as a ceiling.
 
-The v0.3 design therefore does **not** try to make global sample retrieval stronger. It changes the correction unit.
-
-## Scientific ladder
-
-### Non-deployable Oracle diagnostics
-
-All Oracle diagnostics retrieve from Train memory only and use Validation future **only for diagnostic selection**.
-
-- **Oracle-A**: Top-64, one support + one global alpha per query.
-- **Oracle-B**: expanded Top-512, one support + one global alpha per query.
-- **Oracle-C**: one support + alpha independently for each forecast horizon.
-- **Oracle-E**: one support + alpha independently for each node, shared across all horizons.
-- **Oracle-F**: one support + alpha independently for each **graph-region × horizon** role.
-- **Oracle-D**: one support + alpha independently for every node×horizon cell; intentionally loose ceiling.
-
-The key diagnostic chain is:
-
-`A/B -> C -> {E,F} -> D`
-
-Oracle-F is the most important architecture-matched upper bound for M4. The graph regions are built from the fixed SupportBench adjacency only; no Validation/Test target is used to create them.
-
-### Deployable M0–M5 ladder
-
-- **M0** — frozen PatchSTG.
-- **M1** — sensing-aware query representation + query-only diagnostic correction head.
-- **M2** — global similarity-based retrieval residual correction. This is intentionally retained as the negative-control retrieval stage.
-- **M3** — **horizon-aware predictive utility routing**. Candidate utility is predicted separately for H1…H12. The utility model sees the query/candidate representation plus deployable horizon-local descriptors of the historical residual evidence. Each horizon has an explicit no-support path and a Train-only calibrated correction scale.
-- **M4** — **graph-region × horizon predictive support routing and local residual transport**. Each candidate receives a separate utility for each graph-region×horizon role. Local residual, base-forecast, sensing coverage, direct-mask, and support-mask descriptors are used. Each role can reject all support. Correction scales are calibrated using Train only.
-- **M5** — **node×horizon sensing-aware safe gate** over M4 local correction. It receives the query representation, node/horizon embeddings, local base/correction values, observation fraction, direct mask and support mask. Training includes overall no-harm and masked no-harm penalties.
-
-Core form:
-
-`Y_final = Y_PatchSTG + G(node,horizon,query) * Delta_local_support`
-
-## Why graph regions instead of jumping directly to 388×12 routing
-
-Oracle-D is intentionally too flexible to be a realistic deployable target. v0.3 inserts graph-region×horizon routing between horizon-only and node×horizon routing. For Net-06 the default is 24 graph regions (~16 nodes/region on average), obtained deterministically from the fixed traffic adjacency using spectral graph partitioning with a dependency-free NumPy k-means implementation.
-
-This gives a learnable local routing problem while preserving an interpretable connection to traffic-network structure.
-
-## Leakage controls
-
-- Retrieval memory: Train only.
-- Same view group excluded.
-- History+future interval overlap excluded.
-- M3/M4 utility labels: Train future only.
-- M3 horizon scales: Train calibration only.
-- M4 region×horizon scales: Train calibration only.
-- Validation future: model selection / reporting and explicitly labelled Oracles only.
-- Test is not instantiated in Development.
-
-## Output contract
-
-Experiments:
-
-`/scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe_exps`
-
-Live logs:
-
-`/scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe_logs/*.live.log`
-
-PBS `.OU`:
-
-`/scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe_logs/out/`
-
-## Development run
+## Run on Gadi
 
 ```bash
 cd /scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe
 conda activate TFP
+
 python tests/smoke_static.py
-python tests/smoke_oracle_math.py
-python tests/smoke_local_routing.py
-python scripts/preflight.py --stage development
-bash scripts/submit_development.sh
+python tests/smoke_deployment_aligned_utility_router_probe.py
+python scripts/deployment_aligned_router_preflight.py --stage development
+bash scripts/submit_deployment_aligned_utility_router_probe.sh
 ```
 
-The dependency chain is:
+Primary outputs are `deployment_router_validation_summary.json`, `deployment_router_comparison.csv`, `train_only_predicted_need_thresholds.json`, `expert_preference_router_best.pt`, `summary.json`, and `DECISION.txt`.
 
-`PatchSTG artifacts -> retrieval + graph regions -> {Oracle A/B/C/E/F/D, M0, M1 -> M2 -> M3 -> M4 -> M5}`
+The decisive deployment slice is **Masked / frozen Train-threshold PredTop10**. `true_q90` and `oracle_router` are privileged diagnostics only. See `MIGRATION_v0.7.4_to_v0.7.5.md`.
 
-## Main readout
+# PreSuRe v0.7.6 — Regret-Aware Support Proposal Meta-Ranking Probe
 
-The important comparisons are:
+v0.7.6 is the current development diagnostic release. v0.7.5 showed that the expert pool has substantial privileged complementarity, but ordinary expert classification does not translate into better support selection. v0.7.6 therefore removes discrete expert classification as the primary objective.
 
-1. `Oracle-C vs Oracle-F`: how much spatial graph-local routing adds beyond horizon routing.
-2. `Oracle-F vs Oracle-D`: how much remaining headroom requires node-specific routing rather than region routing.
-3. `M2 vs M3`: whether predictive horizon utility beats global similarity retrieval.
-4. `M3 vs M4`: whether graph-region×horizon local routing converts the Oracle-F headroom into deployable gains.
-5. `M4 vs M5`: whether local safety control lowers harmful augmentation while preserving/improving Masked and Support MAE.
+For every node x horizon cell, the frozen `Generic`, `Hard-q90`, `Pred10`, and `Pred20` experts each submit one Top1 support proposal. Duplicates are merged. A new proposal-level meta-ranker estimates which proposal is actually useful using only deployment-safe query/support context, predicted Need-q90, expert score/confidence summaries, M3 confidence, historical residual summaries, and expert agreement.
 
-The v0.3 numerical goal is not to approach the extremely loose Oracle-D. A useful first target is a reproducible **Masked/Support improvement of roughly 4–8% over M0** with a reduced harmful-augmentation rate. Only after this numerical local-routing system is validated should Qwen reasoning be added as M6/M7.
+The loss is explicitly utility aligned: `pairwise ranking + utility regression + beneficial/harmful classification + expected selection regret`. Unlike v0.7.5, ambiguous expert cases are retained instead of discarded. Small utility differences naturally create small regret, whereas selecting a harmful proposal when a beneficial one exists creates a large penalty.
+
+`direct_mask` is allowed only as Train weighting and evaluation view; it is not a model feature. Current-query future is used only for Train proposal-utility supervision and final Validation reporting.
+
+## Run on Gadi
+
+```bash
+cd /scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe
+conda activate TFP
+
+python tests/smoke_static.py
+python tests/smoke_regret_aware_support_proposal_meta_probe.py
+python scripts/proposal_meta_ranker_preflight.py --stage development
+bash scripts/submit_regret_aware_support_proposal_meta_probe.sh
+```
+
+Primary outputs are `proposal_meta_validation_summary.json`, `proposal_meta_comparison.csv`, `proposal_meta_ranker_best.pt`, `summary.json`, and `DECISION.txt`. The decisive deployment slice is **Masked / PredTop10**. See `MIGRATION_v0.7.5_to_v0.7.6.md`.

@@ -1,20 +1,17 @@
 #!/bin/bash
 set -euo pipefail
+cat <<'EOF'
+Baseline v1.0.0 clean Primary-7 workflow
 
-ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
-cd "$ROOT"
+Primary: ImputeFormer, LRTC-TMCP, GinAR, RAFT, RAST, SARAF, ReMFT
+Secondary: SPRINT, SLPF, MoGERNN, LEAF/LEAF-Qwen1.5B, RAST-PatchSTG
 
-echo "Baseline v0.4.0 submission guide"
-echo ""
-echo "Runnable before final backbone freeze: GinAR, RAFT, SARAF Development."
-echo "GPU smoke is recommended for first-time adapter validation, but it is NOT required for submission."
-echo ""
-echo "Optional GPU smoke commands:"
-echo "  qsub -v METHOD=GinAR pbs/methods/new_main_gpu_smoke.pbs"
-echo "  qsub -v METHOD=RAFT  pbs/methods/new_main_gpu_smoke.pbs"
-echo "  qsub -v METHOD=SARAF pbs/methods/new_main_gpu_smoke.pbs"
-echo ""
-echo "Development submission (performs hard cache/source/leakage checks, then only warns about smoke status):"
-echo "  bash scripts/submit_prebackbone_main_development.sh"
-echo ""
-echo "Wait for the final frozen backbone before formal ImputeFormer/RAST matched-backbone runs."
+1) bash scripts/submit_primary_smoke.sh
+2) bash scripts/submit_primary_development.sh
+3) bash scripts/submit_ginar_stability_probe.sh 10
+4) bash scripts/submit_primary_formal_seed10.sh
+5) bash scripts/submit_primary_formal_remaining.sh  # seeds20/30 after seed10 sanity check
+6) python scripts/primary_run_status.py
+7) python scripts/freeze_formal_selection.py
+8) bash scripts/submit_evaluation_all.sh
+EOF

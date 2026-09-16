@@ -1,4 +1,4 @@
-version: 0.5.0
+version: 0.6.0
 project:
   root: /scratch/mh20/zw1165/Speed_LLM_RAG
   supportbench_project: /scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench
@@ -25,6 +25,9 @@ official_sources:
   PatchSTG:
     remote: https://github.com/LMissher/PatchSTG.git
     commit: 8b298b230227a304a082e05241c69dca3740a73d
+  STLAformer:
+    remote: https://github.com/laibajiu/STLAformer.git
+    commit: f3eba25e2c63023a4834fd87d88da1c3347f16a9
 experiment:
   subgraph: TraffiDent_Net_06
   history: 12
@@ -202,6 +205,35 @@ models:
     tod_slots: 288
     dow_slots: 7
     spatial_layout: official_kdtree_on_traffident_nodes_plus_official_adjacency_padding
+  STLAformer:
+    recipe_source: STLAformer paper Sec. 5.3 + pinned model/STLformer.py defaults
+    batch_size: 16
+    fallback_batch_sizes:
+    - 8
+    - 4
+    optimizer: adam
+    learning_rate: 0.001
+    adam_eps: 1.0e-08
+    weight_decay: 0.0
+    scheduler: plateau
+    lr_gamma: 0.1
+    max_epochs: 200
+    patience: 200
+    grad_clip: 0.0
+    train_loss: huber
+    input_dim: 2
+    input_embedding_dim: 32
+    tow_embedding_dim: 32
+    feed_forward_dim: 256
+    num_heads: 4
+    num_layers: 6
+    dropout: 0.3
+    steps_per_week: 2016
+    tod_slots: 288
+    dow_slots: 7
+    input_contract: normalized_speed_plus_fractional_time_of_week
+    scheduler_patience: 20
+    scheduler_threshold: 1.0e-08
 protocol:
   name: protocol_v1
   version: 1.0.0
@@ -227,3 +259,28 @@ shared_contract:
   time_feature_revision: traffident_time_features_v1
   metrics_revision: traffident_metrics_v1
   prediction_contract_revision: traffident_prediction_v1
+compatibility:
+  screening_project_versions_by_model:
+    STAEformer:
+    - 0.5.0
+    - 0.6.0
+    HimNet:
+    - 0.5.0
+    - 0.6.0
+    BigST:
+    - 0.5.0
+    - 0.6.0
+    STDN:
+    - 0.5.0
+    - 0.6.0
+    PatchSTG:
+    - 0.5.0
+    - 0.6.0
+    STLAformer:
+    - 0.6.0
+  formal_reference_project_versions:
+    PatchSTG:
+    - 0.5.0
+    - 0.6.0
+  rationale: v0.6.0 adds STLAformer only; existing v0.5.0 model adapters/recipes and
+    Shared Protocol identity for the original five remain unchanged.

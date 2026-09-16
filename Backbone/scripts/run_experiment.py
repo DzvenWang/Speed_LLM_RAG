@@ -12,7 +12,7 @@ from supportbench.dataset import SupportBench
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--model', required=True, choices=['STAEformer', 'HimNet', 'BigST', 'STDN', 'PatchSTG'])
+    ap.add_argument('--model', required=True, choices=['STAEformer', 'HimNet', 'BigST', 'STDN', 'PatchSTG', 'STLAformer'])
     ap.add_argument('--stage', required=True, choices=['screening', 'formal'])
     ap.add_argument('--seed', type=int, required=True)
     ap.add_argument('--config', default=str(ROOT / 'configs/backbone_selection.yaml'))

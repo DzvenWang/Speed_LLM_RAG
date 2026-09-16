@@ -64,7 +64,6 @@ def main():
     ap.add_argument('--stage', default='development', choices=['development', 'formal'])
     ap.add_argument('--run-dir', default=None)
     ap.add_argument('--seed', type=int, default=None)
-    ap.add_argument('--assume-current-cache', action='store_true', help='Explicitly allow recovery of a run without RUN_MANIFEST.json only when it was started under the current v0.6.0 cache.')
     args = ap.parse_args()
 
     cfg = load_yaml(ROOT / 'configs' / 'baseline.yaml')
@@ -77,14 +76,9 @@ def main():
 
     expected_identity = load_cache_identity(cache, cfg['version'])
     existing_manifest = run_dir / 'RUN_MANIFEST.json'
-    if existing_manifest.exists():
-        require_same_identity(json.loads(existing_manifest.read_text()), expected_identity, label=str(existing_manifest))
-    elif not args.assume_current_cache:
-        raise SystemExit(
-            'REFUSE: incomplete run has no RUN_MANIFEST.json, so v0.6.0 cannot prove which cache produced it. '
-            'Old pre-v0.6.0 runs must not be rebound to the new identity. If this run definitely started after '
-            'the v0.6.0 cache rebuild, rerun with --assume-current-cache.'
-        )
+    if not existing_manifest.exists():
+        raise SystemExit('REFUSE: current-version recovery requires RUN_MANIFEST.json')
+    require_same_identity(json.loads(existing_manifest.read_text()), expected_identity, label=str(existing_manifest))
 
     pred_path = rewrite_prediction_npz(cache, run_dir)
     metrics = evaluate_prediction_file(cache, 'val', pred_path)
@@ -92,27 +86,29 @@ def main():
     all_row = metrics.loc[metrics.family.astype(str) == 'ALL'].iloc[0].to_dict()
 
     seed = int(cfg['experiment']['seed'] if args.seed is None else args.seed)
+    ckmeta = checkpoint_metadata(run_dir / 'best.pt')
+    manifest_extra = {
+        'artifact_type': 'method_result',
+        'runner_project_version': cfg['version'],
+        'status': 'COMPLETE',
+    }
     manifest = build_run_manifest(
         cache,
         cfg['version'],
         args.method,
         seed,
         cfg['methods'][args.method]['formal_track'],
-        {
-            'artifact_type': 'method_result',
-            'runner_project_version': cfg['version'],
-            'status': 'COMPLETE',
-        },
+        manifest_extra,
     )
     write_run_manifest(run_dir / 'RUN_MANIFEST.json', manifest)
-    ckmeta = checkpoint_metadata(run_dir / 'best.pt')
     summary = {
         **manifest,
         'val': all_row,
         'prediction_file': str(pred_path),
         **ckmeta,
         'recovered_from_incomplete_run': True,
-        'recovery_reason': 'pickle_free_view_id_hotfix_20260911',
+        'recovery_reason': 'current_version_incomplete_artifact_recovery',
+        'selection_valid': True,
         'checkpoint_selection': 'val_only',
         'test_access': False,
     }

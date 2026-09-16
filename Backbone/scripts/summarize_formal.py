@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Summarize the configured downstream reference backbone over formal seeds.
 
-Backbone v0.5.0 treats five-model screening as a comparison/verification table,
+Backbone v0.6.0 treats six-model screening as a comparison/verification table,
 while the downstream numerical reference is explicitly configured (PatchSTG).
 This removes the unnecessary dependency between formal reference training and a
 screening shortlist file.
@@ -26,8 +26,10 @@ def main():
     for f in files:
         try:
             s=json.load(open(f)); require_identity(s,expected,str(f));
-            if str(s.get('project_version')) != str(cfg['version']):
-                raise ValueError(f'code project version {s.get("project_version")} != {cfg["version"]}')
+            compat=cfg.get('compatibility',{}).get('formal_reference_project_versions',{})
+            allowed=[str(x) for x in compat.get(model,[cfg['version']])]
+            if str(s.get('project_version')) not in allowed:
+                raise ValueError(f'code project version {s.get("project_version")} not in allowed {allowed} for formal reference {model}')
             seed=int(s['seed'])
         except Exception:
             continue

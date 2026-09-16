@@ -1,10 +1,13 @@
+#!/usr/bin/env python3
 from pathlib import Path
-import sys,yaml
-ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
-from baseline.registry import MAIN_ORDER,LLM_ORDER,SUBTRACK_ORDER
+import yaml
+ROOT=Path(__file__).resolve().parents[1]
 cfg=yaml.safe_load((ROOT/'configs/baseline.yaml').read_text())
-assert cfg['baseline_story']['main_table']==['FrozenBackbone']+MAIN_ORDER
-assert cfg['baseline_story']['llm_specific']==LLM_ORDER
-assert cfg['baseline_story']['partial_sensing_subtrack']==SUBTRACK_ORDER
-assert 'GinAR' in cfg['methods'] and 'SARAF' in cfg['methods']
-print('BASELINE STORY CONTRACT SMOKE PASS')
+main=['ImputeFormer','LRTC-TMCP','GinAR','RAFT','RAST','SARAF','ReMFT']
+assert cfg['baseline_story']['main_table']==main
+assert cfg['formal_selection_methods']==main
+for m in main:
+    assert cfg['methods'][m]['table_group']=='main'
+for m in ['SPRINT','SLPF','MoGERNN','LEAF']:
+    assert cfg['methods'][m]['table_group']=='secondary'
+print('STORY CONTRACT PASS')

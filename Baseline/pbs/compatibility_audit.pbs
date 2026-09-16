@@ -16,7 +16,7 @@ source "$ROOT/scripts/pbs_live_log.sh"
 baseline_live_log_start "BaselineCompatibility" "audit"
 baseline_install_exit_trap
 cd "$ROOT"
-echo "START Baseline compatibility audit v0.6.0"
+echo "START Baseline compatibility audit v1.0.0"
 "$PY" scripts/verify_official_sources.py
 "$PY" scripts/audit_official_compatibility.py
 "$PY" scripts/runtime_contract_audit.py

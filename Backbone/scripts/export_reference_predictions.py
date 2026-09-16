@@ -110,9 +110,17 @@ def main() -> None:
         if not frozen_path.exists():
             raise RuntimeError('Backbone is not frozen: missing FROZEN_BACKBONE.json')
         frozen = json.load(open(frozen_path))
-        if int(frozen.get('schema_version', 0)) < 3 or str(frozen.get('project_version')) != str(cfg.get('version')):
-            raise RuntimeError('Frozen manifest is incompatible with Backbone v0.5.0; rerun formal reference experiments and summarize_formal.py.')
+        if int(frozen.get('schema_version', 0)) < 3:
+            raise RuntimeError('Frozen manifest is old/incompatible; rerun formal reference experiments and summarize_formal.py.')
         model = frozen['selected_model']
+        compat = cfg.get('compatibility', {}).get('formal_reference_project_versions', {})
+        allowed_versions = [str(x) for x in compat.get(model, [cfg.get('version')])]
+        frozen_version = str(frozen.get('project_version'))
+        if frozen_version not in allowed_versions:
+            raise RuntimeError(
+                f'Frozen manifest project_version={frozen_version} is incompatible with current Backbone '
+                f'v{cfg.get("version")} for model={model}; allowed={allowed_versions}.'
+            )
         checkpoint = frozen['reference_checkpoint']
         if a.model is not None and a.model != model:
             raise RuntimeError(f'CLI model={a.model} conflicts with frozen model={model}')

@@ -20,7 +20,7 @@ baseline_install_exit_trap
 if [ ! -f "$FREEZE" ]; then echo "REFUSE: missing $FREEZE"; exit 2; fi
 if [ ! -f "$SELECTION" ]; then echo "REFUSE: missing $SELECTION"; exit 2; fi
 cd "$ROOT"
-echo "START Baseline evaluation-only cache v0.6.0"
+echo "START Baseline evaluation-only cache v1.0.0"
 "$PY" scripts/preflight.py --stage evaluation
 "$PY" scripts/prepare_data.py --stage evaluation --force
 "$PY" scripts/validate_cache.py --stage evaluation

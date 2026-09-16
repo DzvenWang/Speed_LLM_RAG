@@ -8,7 +8,7 @@ c=yaml.safe_load(open('configs/backbone_selection.yaml'))
 print(c['experiment']['screening']['seed'])
 PY2
 )
-for M in STAEformer HimNet BigST STDN PatchSTG; do
+for M in STAEformer HimNet BigST STDN PatchSTG STLAformer; do
   jid=$(qsub -v MODEL="$M",STAGE=screening,SEED="$SEED" pbs/backbone_select.pbs)
   echo "$M screening seed=$SEED -> $jid"
 done

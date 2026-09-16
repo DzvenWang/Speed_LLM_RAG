@@ -37,7 +37,7 @@ def main():
     res=np.load(art/'train_residual.npy',mmap_mode='r')
     regions=np.load(art/'node_regions.npy')
     cf=candidate_file(art,a.oracle_type)
-    if not cf.exists(): raise RuntimeError(f'Missing {cf}; rebuild retrieval candidates with PreSuRe v0.3.0')
+    if not cf.exists(): raise RuntimeError(f'Missing {cf}; rebuild retrieval candidates with PreSuRe v0.7.0')
     cand=np.load(cf)['indices']
     oc=cfg['oracle']; alphas=[float(x) for x in oc['alpha_grid']]; w=oc['objective_weights']
     if a.oracle_type=='B': bs=int(oc['expanded_batch_size'])

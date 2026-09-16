@@ -28,8 +28,15 @@ from supportbench.dataset import SupportBench
 def _validate_frozen_manifest(cfg: dict, frozen: dict, checkpoint: Path) -> None:
     if int(frozen.get('schema_version', 0)) < 3:
         raise RuntimeError('FROZEN_BACKBONE.json is old/incompatible; rerun current formal experiments and summarize_formal.py.')
-    if str(frozen.get('project_version')) != str(cfg.get('version')):
-        raise RuntimeError('Frozen backbone project version does not match current Backbone version.')
+    model = str(frozen.get('selected_model', ''))
+    compat = cfg.get('compatibility', {}).get('formal_reference_project_versions', {})
+    allowed_versions = [str(x) for x in compat.get(model, [cfg.get('version')])]
+    frozen_version = str(frozen.get('project_version'))
+    if frozen_version not in allowed_versions:
+        raise RuntimeError(
+            f'Frozen backbone project_version={frozen_version} is incompatible with current Backbone '
+            f'v{cfg.get("version")} for model={model}; allowed={allowed_versions}.'
+        )
     expected_sha = str(frozen.get('reference_checkpoint_sha256', ''))
     if not expected_sha:
         raise RuntimeError('Frozen manifest does not contain reference_checkpoint_sha256.')

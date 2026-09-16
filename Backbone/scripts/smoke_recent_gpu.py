@@ -11,7 +11,7 @@ from backbone.utils import count_parameters, load_yaml
 from backbone.shared_cache import cache_path
 from supportbench.dataset import SupportBench
 
-ap=argparse.ArgumentParser(); ap.add_argument('--model',required=True,choices=['PatchSTG']); args=ap.parse_args()
+ap=argparse.ArgumentParser(); ap.add_argument('--model',required=True,choices=['PatchSTG','STLAformer']); args=ap.parse_args()
 if not torch.cuda.is_available(): raise SystemExit('GPU smoke requires cuda:0')
 cfg=load_yaml(ROOT/'configs/backbone_selection.yaml'); sg=cfg['experiment']['subgraph']
 b=SupportBench(sg,root=cfg['project']['benchmark_root']); st=b.stats['channels'][b.manifest['primary_channel']]

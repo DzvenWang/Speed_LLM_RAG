@@ -3,6 +3,10 @@ official_sources:
     remote: https://github.com/tongnie/ImputeFormer.git
     commit: 1c3868cf499951ac43b4fc7280593fbb745f58c7
     policy: exact
+  LRTC-TMCP:
+    remote: https://github.com/peterchen96/LRTC-TMCP.git
+    ref: main
+    policy: resolve_once
   SLPF:
     remote: https://github.com/zbliu98/SLPF.git
     commit: 8f135a96d57651dc19564bd3b94508c1f92c04fb
@@ -27,3 +31,15 @@ official_sources:
     remote: https://github.com/ShiqiaoZhou/SARAF.git
     ref: main
     policy: resolve_once
+  SPRINT:
+    remote: https://github.com/ashishbhaskar/SPRINT.git
+    ref: main
+    policy: resolve_once
+  MoGERNN:
+    remote: https://github.com/ZJU-TSELab/MoGERNN.git
+    ref: main
+    policy: resolve_once
+  ReMFT:
+    remote: https://github.com/IansSUn/ReMFT.git
+    commit: af61bef8ec872ba7b12e78675a39aeb0a20088a6
+    policy: exact

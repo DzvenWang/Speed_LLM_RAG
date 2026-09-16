@@ -1,0 +1,27 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=48GB
+#PBS -l walltime=48:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs/out/
+#PBS -N LEAFQwen15Formal
+set -euo pipefail
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline; PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+STAGE=formal; SEED=${SEED:-10}
+source "$ROOT/scripts/pbs_live_log.sh"; baseline_live_log_start "LEAF-Qwen1.5B" "$STAGE" "seed${SEED}" "predict_select_supervise"; baseline_install_exit_trap
+export PYTHONPATH="$ROOT:/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon:/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench:${PYTHONPATH:-}"
+export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false
+cd "$ROOT"; nvidia-smi
+"$PY" scripts/check_leaf_tfp_runtime.py
+"$PY" scripts/check_leaf_qwen_runtime.py --gpu-load
+"$PY" tests/smoke_leaf_qwen_contract.py
+"$PY" scripts/verify_official_sources.py
+"$PY" scripts/validate_cache.py --stage formal
+ARGS=(--stage formal --seed "$SEED")
+if [[ -n "${LEAF_RESUME_DIR:-}" ]]; then ARGS+=(--resume-dir "$LEAF_RESUME_DIR"); fi
+"$PY" -u baseline/runners/leaf_qwen_runner.py "${ARGS[@]}"
+echo "LEAF-QWEN1.5B FORMAL PASS"

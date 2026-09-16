@@ -8,12 +8,16 @@ from baseline.run_identity import build_run_manifest, write_run_manifest
 from baseline.shared_cache import cache_path
 from baseline.adapters.base import AdapterContext
 from baseline.adapters.imputeformer import ImputeFormerAdapter
+from baseline.adapters.lrtc_tmcp import LRTCTMCPAdapter
 from baseline.adapters.ginar import GinARAdapter
 from baseline.adapters.raft import RAFTAdapter
 from baseline.adapters.rast import RASTAdapter
 from baseline.adapters.saraf import SARAFAdapter
 from baseline.adapters.leaf import LEAFAdapter
 from baseline.adapters.slpf import SLPFAdapter
+from baseline.adapters.sprint import SPRINTAdapter
+from baseline.adapters.mogernn import MoGERNNAdapter
+from baseline.adapters.remft import ReMFTAdapter
 
 cfg=load_yaml(ROOT/'configs/baseline.yaml'); stage=sys.argv[1] if len(sys.argv)>1 else 'development'
 if stage not in ('development','formal'): raise SystemExit('prepare_bridges supports development/formal only; Test is isolated.')
@@ -21,7 +25,7 @@ subprocess.check_call([cfg['project']['python'],str(ROOT/'scripts/validate_cache
 cache=cache_path(cfg,stage)
 ctx=AdapterContext(ROOT,cache,Path(cfg['project']['exp_root']),Path(cfg['project']['log_root']),Path(cfg['project']['frozen_backbone_json']))
 out=Path(cfg['project']['exp_root'])/'_bridges'/stage; out.mkdir(parents=True,exist_ok=True)
-classes=[ImputeFormerAdapter,GinARAdapter,RAFTAdapter,RASTAdapter,SARAFAdapter,LEAFAdapter,SLPFAdapter]
+classes=[ImputeFormerAdapter,LRTCTMCPAdapter,SPRINTAdapter,GinARAdapter,RAFTAdapter,RASTAdapter,SARAFAdapter,LEAFAdapter,ReMFTAdapter,SLPFAdapter,MoGERNNAdapter]
 for cls in classes:
     a=cls(ctx); method=a.method; spec=METHODS[method]
     run=build_run_manifest(cache,None,method,cfg['experiment']['seed'],cfg['methods'][method]['formal_track'],{

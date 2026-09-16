@@ -20,8 +20,10 @@ for model in MODELS:
     for f in files:
         try:
             s=json.load(open(f)); require_identity(s, expected, str(f));
-            if str(s.get('project_version')) != str(cfg['version']):
-                raise ValueError(f'code project version {s.get("project_version")} != {cfg["version"]}')
+            compat=cfg.get('compatibility',{}).get('screening_project_versions_by_model',{})
+            allowed=[str(x) for x in compat.get(model,[cfg['version']])]
+            if str(s.get('project_version')) not in allowed:
+                raise ValueError(f'code project version {s.get("project_version")} not in allowed {allowed} for {model}')
             valid.append((f,s))
         except Exception as e:
             rejected.append((f,str(e)))
