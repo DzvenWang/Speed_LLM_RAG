@@ -1,93 +1,120 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse, copy, json, os, sys, time
-from contextlib import contextmanager
+import argparse
+import json
+import math
+import os
+import sys
+import time
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
+
 import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
-GADI_ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
-ROOT=GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path: sys.path.insert(0,str(ROOT))
+GADI_ROOT = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
+ROOT = GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-from baseline.runners.common import make_run_dir, masked_mse, require_gpu, save_val_outputs, scale_stats, set_seed, validate_stage
+from baseline.runners.common import (
+    make_run_dir,
+    masked_mse,
+    require_gpu,
+    save_val_outputs,
+    scale_stats,
+    set_seed,
+    validate_stage,
+)
 
 
 class ReMFTDataset(Dataset):
-    def __init__(self,cache:Path,split:str):
-        self.x=np.load(cache/f'{split}_x_obs_norm.npy',mmap_mode='r')
-        self.y=np.load(cache/f'{split}_y_norm.npy',mmap_mode='r')
-        self.valid=np.load(cache/f'{split}_future_valid.npy',mmap_mode='r')
-    def __len__(self): return int(self.x.shape[0])
-    def __getitem__(self,i):
+    def __init__(self, cache: Path, split: str):
+        self.x = np.load(cache / f'{split}_x_obs_norm.npy', mmap_mode='r')
+        self.y = np.load(cache / f'{split}_y_norm.npy', mmap_mode='r')
+        self.valid = np.load(cache / f'{split}_future_valid.npy', mmap_mode='r')
+
+    def __len__(self):
+        return int(self.x.shape[0])
+
+    def __getitem__(self, i):
         # Official ReMFT convention is [sensor, time].
-        return (np.array(self.x[i].T,np.float32,copy=True),np.array(self.y[i].T,np.float32,copy=True),np.array(self.valid[i].T,np.uint8,copy=True))
+        return (
+            np.array(self.x[i].T, np.float32, copy=True),
+            np.array(self.y[i].T, np.float32, copy=True),
+            np.array(self.valid[i].T, np.uint8, copy=True),
+        )
 
 
 @contextmanager
-def chdir(path:Path):
-    old=Path.cwd(); os.chdir(path)
-    try: yield
-    finally: os.chdir(old)
+def chdir(path: Path):
+    old = Path.cwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(old)
 
 
 def load_official_namespace() -> dict:
-    """Execute architecture cells only, stopping before official data/test code."""
-    nb_path=ROOT/'vendor/ReMFT/run.ipynb'
-    obj=json.loads(nb_path.read_text())
-    ns={'__name__':'remft_official_arch'}
-    executed=0
+    """Execute only official ReMFT architecture cells.
+
+    Stock dataset/training/test notebook cells are intentionally not executed.
+    """
+    nb_path = ROOT / 'vendor/ReMFT/run.ipynb'
+    obj = json.loads(nb_path.read_text())
+    ns = {'__name__': 'remft_official_arch'}
+    executed = 0
     with chdir(nb_path.parent):
-        for cell in obj.get('cells',[]):
-            if cell.get('cell_type')!='code': continue
-            code=''.join(cell.get('source',[]))
+        for cell in obj.get('cells', []):
+            if cell.get('cell_type') != 'code':
+                continue
+            code = ''.join(cell.get('source', []))
             if 'data_file = os.path.join' in code or '# load data' in code:
                 break
-            if not code.strip(): continue
-            exec(compile(code,f'{nb_path.name}:cell{executed}','exec'),ns,ns); executed+=1
-    for name in ['MultiScaleSeasonMixing','MultiScaleTrendMixing','PHI','llmodel']:
-        if name not in ns: raise RuntimeError(f'Official ReMFT notebook architecture missing {name}')
+            if not code.strip():
+                continue
+            exec(compile(code, f'{nb_path.name}:cell{executed}', 'exec'), ns, ns)
+            executed += 1
+    for name in ['MultiScaleSeasonMixing', 'MultiScaleTrendMixing', 'PHI', 'llmodel']:
+        if name not in ns:
+            raise RuntimeError(f'Official ReMFT notebook architecture missing {name}')
     return ns
 
 
-def build_phi(ns:dict,cfg:dict) -> nn.Module:
-    """Build the official PHI for the benchmark history length without namespace monkey-patching.
-
-    The official notebook lets PHI(seq_len=...) control pooling/fusion layers, but
-    constructs MultiScaleSeasonMixing/TrendMixing with their default seq_len=96.
-    Rebinding those class names to lambdas breaks the classes' explicit
-    ``super(ClassName, self)`` calls.  Construct PHI normally, then replace only
-    its two mixer *instances* with the same official classes configured for H=12.
-    """
-    c=cfg['runners']['ReMFT']
-    H=int(cfg['experiment']['history'])
-    ds_window=int(c['down_sampling_window'])
-    ds_layers=int(c['down_sampling_layers'])
-    scale=ds_window ** ds_layers
+def build_phi(ns: dict, cfg: dict) -> nn.Module:
+    """Build official PHI for H=12 without altering the PHI mechanism."""
+    c = cfg['runners']['ReMFT']
+    H = int(cfg['experiment']['history'])
+    ds_window = int(c['down_sampling_window'])
+    ds_layers = int(c['down_sampling_layers'])
+    scale = ds_window ** ds_layers
     if H % scale != 0:
         raise ValueError(
             f'ReMFT history={H} must be divisible by '
             f'down_sampling_window**down_sampling_layers={scale}'
         )
 
-    Season=ns['MultiScaleSeasonMixing']
-    Trend=ns['MultiScaleTrendMixing']
-    PHI=ns['PHI']
-    phi=PHI(
+    Season = ns['MultiScaleSeasonMixing']
+    Trend = ns['MultiScaleTrendMixing']
+    PHI = ns['PHI']
+    phi = PHI(
         seq_len=H,
         k=ds_layers,
         c=ds_window,
         layers=int(c['phi_layers']),
     )
-    phi.mixing_multi_scale_season=Season(
+    # The official PHI constructor hard-codes the mixer defaults at seq_len=96.
+    # Recreate only those two official mixer instances at the benchmark H=12.
+    phi.mixing_multi_scale_season = Season(
         seq_len=H,
         down_sampling_window=ds_window,
         down_sampling_layers=ds_layers,
     )
-    phi.mixing_multi_scale_trend=Trend(
+    phi.mixing_multi_scale_trend = Trend(
         seq_len=H,
         down_sampling_window=ds_window,
         down_sampling_layers=ds_layers,
@@ -96,102 +123,71 @@ def build_phi(ns:dict,cfg:dict) -> nn.Module:
 
 
 class ReMFT12(nn.Module):
-    def __init__(self,cfg:dict):
-        super().__init__(); c=cfg['runners']['ReMFT']; H=int(cfg['experiment']['history']); P=int(cfg['experiment']['horizon'])
-        ns=load_official_namespace()
-        self.phi=build_phi(ns,cfg)
-        repo=ROOT/'vendor/ReMFT'
+    def __init__(self, cfg: dict):
+        super().__init__()
+        c = cfg['runners']['ReMFT']
+        H = int(cfg['experiment']['history'])
+        P = int(cfg['experiment']['horizon'])
+        ns = load_official_namespace()
+        self.phi = build_phi(ns, cfg)
+        repo = ROOT / 'vendor/ReMFT'
         with chdir(repo):
-            self.llmodel=ns['llmodel'](patch_len=int(c['patch_len']),stride=int(c['stride']),pred_len=P,seq_len=H)
-    def forward(self,x): return self.llmodel(self.phi(x))
+            self.llmodel = ns['llmodel'](
+                patch_len=int(c['patch_len']),
+                stride=int(c['stride']),
+                pred_len=P,
+                seq_len=H,
+            )
+
+    def forward(self, x):
+        # Preserve the original ReMFT path: incomplete history -> PHI -> llmodel.
+        return self.llmodel(self.phi(x))
 
 
-def enforce_checkpoint_consistent_bert_depth(model: nn.Module) -> dict:
-    """Align the frozen ReMFT BERT runtime to the local pretrained checkpoint.
+def _checkpoint_depth(bert_dir: Path) -> int:
+    cfg = json.loads((bert_dir / 'config.json').read_text())
+    depth = int(cfg.get('num_hidden_layers', 0))
+    if depth <= 0:
+        raise RuntimeError('ReMFT local BERT config has invalid num_hidden_layers')
+    return depth
 
-    The pinned ReMFT notebook may overwrite ``num_hidden_layers`` before
-    ``from_pretrained``. With a standard 12-layer BERT checkpoint this creates
-    extra randomly initialized encoder layers which are then frozen. Those
-    layers are neither pretrained nor trainable and therefore are not an
-    acceptable baseline. We keep the pretrained layers and remove only runtime
-    layers that have no checkpoint counterpart.
+
+def normalize_bert_depth_to_checkpoint(model: nn.Module) -> dict:
+    """Remove vendor-created random BERT layers beyond the pinned checkpoint depth.
+
+    The pinned local checkpoint is authoritative for the pretrained frozen BERT.
+    This does not change pretrained layers or the ReMFT mechanism; it prevents
+    randomly initialized, frozen layers that have no checkpoint provenance from
+    being used by the baseline.
     """
     bert_dir = ROOT / 'vendor/ReMFT/LLM/BERT'
-    local_cfg = json.loads((bert_dir / 'config.json').read_text())
+    target_depth = _checkpoint_depth(bert_dir)
     llm = model.llmodel.llm_model
-    runtime_cfg = getattr(llm, 'config', None)
     encoder = getattr(llm, 'encoder', None)
-    if runtime_cfg is None or encoder is None or not hasattr(encoder, 'layer'):
-        raise RuntimeError('ReMFT BERT runtime does not expose config/encoder.layer')
-
-    local_depth = int(local_cfg['num_hidden_layers'])
-    local_hidden = int(local_cfg['hidden_size'])
-    local_heads = int(local_cfg['num_attention_heads'])
-    runtime_hidden = int(getattr(runtime_cfg, 'hidden_size'))
-    runtime_heads = int(getattr(runtime_cfg, 'num_attention_heads'))
-    runtime_depth = len(encoder.layer)
-
-    if runtime_hidden != local_hidden or runtime_heads != local_heads:
+    if encoder is None or not hasattr(encoder, 'layer'):
+        raise RuntimeError('ReMFT BERT encoder.layer not found')
+    runtime_before = len(encoder.layer)
+    if runtime_before < target_depth:
         raise RuntimeError(
-            'ReMFT local/runtime BERT architecture mismatch beyond depth: '
-            f'local hidden/heads={local_hidden}/{local_heads}, '
-            f'runtime={runtime_hidden}/{runtime_heads}'
+            f'ReMFT runtime BERT depth {runtime_before} is shallower than checkpoint depth {target_depth}'
         )
-    if runtime_depth < local_depth:
-        raise RuntimeError(
-            f'ReMFT runtime BERT has only {runtime_depth} layers but checkpoint config requires {local_depth}'
-        )
-
     trimmed = 0
-    if runtime_depth > local_depth:
-        trimmed = runtime_depth - local_depth
-        encoder.layer = nn.ModuleList(list(encoder.layer)[:local_depth])
-        runtime_cfg.num_hidden_layers = local_depth
-        print(
-            'REMFT BERT DEPTH NORMALIZED '
-            f'runtime_before={runtime_depth} checkpoint_depth={local_depth} trimmed_random_layers={trimmed}',
-            flush=True,
-        )
-
-    return {
-        'checkpoint_num_hidden_layers': local_depth,
-        'runtime_layers_before_alignment': runtime_depth,
-        'trimmed_random_runtime_layers': trimmed,
-        'policy': 'checkpoint_consistent_pretrained_bert_depth',
+    if runtime_before > target_depth:
+        encoder.layer = nn.ModuleList(list(encoder.layer[:target_depth]))
+        trimmed = runtime_before - target_depth
+    runtime_cfg = getattr(llm, 'config', None)
+    if runtime_cfg is not None and hasattr(runtime_cfg, 'num_hidden_layers'):
+        runtime_cfg.num_hidden_layers = target_depth
+    meta = {
+        'runtime_before': runtime_before,
+        'checkpoint_depth': target_depth,
+        'trimmed_random_layers': trimmed,
     }
-
-
-def build_model(cfg:dict,device:torch.device):
-    repo=ROOT/'vendor/ReMFT'; bert=repo/'LLM/BERT'
-    if not (bert/'config.json').exists():
-        raise RuntimeError('ReMFT requires vendor/ReMFT/LLM/BERT. Run scripts/setup_remft_bert.sh with a local BERT checkpoint.')
-    m=ReMFT12(cfg)
-    depth_alignment = enforce_checkpoint_consistent_bert_depth(m)
-    # The official notebook loads BERT with device_map='auto'. Calling .to() on
-    # an Accelerate-dispatched parent can fail when any module is managed by the
-    # device map. Keep the frozen BERT exactly where the official loader placed
-    # it and move only the trainable benchmark-side modules to cuda:0.
-    llm_device=next(m.llmodel.llm_model.parameters()).device
-    if llm_device != device:
-        raise RuntimeError(
-            f'ReMFT official BERT was placed on {llm_device}, expected {device}. '
-            'Use the single-GPU PBS job and ensure the local BERT fits on that GPU.'
-        )
-    m.phi.to(device)
-    for name in ['mapping_layer','patch_embedding','reprogramming_layer','output_projection']:
-        getattr(m.llmodel,name).to(device)
-    m._llm_contract = {**llm_contract_metadata(m), **depth_alignment}
-    return m
-
+    print('REMFT BERT DEPTH NORMALIZED ' + ' '.join(f'{k}={v}' for k, v in meta.items()), flush=True)
+    return meta
 
 
 def llm_contract_metadata(model: nn.Module) -> dict:
-    """Audit the pinned ReMFT LLM without changing its architecture.
-
-    The frozen LLM must exactly match the local pretrained checkpoint after
-    checkpoint-depth alignment. Any remaining architecture mismatch is a hard
-    failure, as is any trainable BERT parameter.
-    """
     bert_dir = ROOT / 'vendor/ReMFT/LLM/BERT'
     local_cfg = json.loads((bert_dir / 'config.json').read_text())
     llm = model.llmodel.llm_model
@@ -204,9 +200,9 @@ def llm_contract_metadata(model: nn.Module) -> dict:
             'ReMFT frozen-LLM contract failed; BERT has trainable parameters: '
             + str(trainable[:20])
         )
-    runtime_layers = getattr(runtime_cfg, 'num_hidden_layers', None)
     encoder = getattr(llm, 'encoder', None)
     encoder_layers = len(encoder.layer) if encoder is not None and hasattr(encoder, 'layer') else None
+    runtime_layers = getattr(runtime_cfg, 'num_hidden_layers', None)
     meta = {
         'local_model_path': str(bert_dir),
         'local_num_hidden_layers': local_cfg.get('num_hidden_layers'),
@@ -219,82 +215,470 @@ def llm_contract_metadata(model: nn.Module) -> dict:
         'llm_frozen': frozen,
         'runtime_matches_local_depth': (
             runtime_layers == local_cfg.get('num_hidden_layers')
-            if runtime_layers is not None and local_cfg.get('num_hidden_layers') is not None
-            else None
+            and encoder_layers == local_cfg.get('num_hidden_layers')
         ),
         'policy': 'checkpoint_consistent_pretrained_bert_depth',
     }
     print('REMFT LLM CONTRACT ' + json.dumps(meta, default=str), flush=True)
-    if meta['runtime_matches_local_depth'] is not True:
-        raise RuntimeError(
-            'ReMFT frozen-LLM checkpoint/runtime depth mismatch remains after alignment: ' + str(meta)
-        )
-    if meta['runtime_hidden_size'] != meta['local_hidden_size'] or meta['runtime_num_attention_heads'] != meta['local_num_attention_heads']:
-        raise RuntimeError('ReMFT frozen-LLM hidden/head configuration does not match local checkpoint')
+    if not meta['runtime_matches_local_depth']:
+        raise RuntimeError('ReMFT runtime/checkpoint BERT depth mismatch after normalization')
     return meta
 
 
+def build_model(cfg: dict, device: torch.device):
+    repo = ROOT / 'vendor/ReMFT'
+    bert = repo / 'LLM/BERT'
+    if not (bert / 'config.json').exists():
+        raise RuntimeError(
+            'ReMFT requires vendor/ReMFT/LLM/BERT. '
+            'Run scripts/setup_remft_bert.sh with a local BERT checkpoint.'
+        )
+    m = ReMFT12(cfg)
+    m._depth_normalization = normalize_bert_depth_to_checkpoint(m)
+
+    # The official notebook uses device_map='auto'. Keep BERT where the official
+    # loader placed it; move only the trainable benchmark-side modules.
+    llm_device = next(m.llmodel.llm_model.parameters()).device
+    if llm_device != device:
+        raise RuntimeError(
+            f'ReMFT official BERT was placed on {llm_device}, expected {device}. '
+            'Use the single-GPU PBS job and ensure the local BERT fits on that GPU.'
+        )
+    m.phi.to(device)
+    for name in ['mapping_layer', 'patch_embedding', 'reprogramming_layer', 'output_projection']:
+        getattr(m.llmodel, name).to(device)
+    m._llm_contract = llm_contract_metadata(m)
+    return m
+
+
 def trainable_state_dict(model: nn.Module) -> dict[str, torch.Tensor]:
-    names={name for name,p in model.named_parameters() if p.requires_grad}
-    sd=model.state_dict()
-    return {k:v.detach().cpu().clone() for k,v in sd.items() if k in names}
+    names = {name for name, p in model.named_parameters() if p.requires_grad}
+    sd = model.state_dict()
+    return {k: v.detach().cpu().clone() for k, v in sd.items() if k in names}
 
 
 def load_trainable_state_dict(model: nn.Module, state: dict[str, torch.Tensor]) -> None:
-    result=model.load_state_dict(state,strict=False)
+    result = model.load_state_dict(state, strict=False)
     if result.unexpected_keys:
         raise RuntimeError(f'ReMFT checkpoint has unexpected keys: {result.unexpected_keys[:10]}')
 
 
-def predict(model,dl,device,mean,std):
-    model.eval(); out=[]
+def _bool_env(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {'0', 'false', 'no', 'off'}
+
+
+def resolve_training_plan(c: dict, stage: str, train_rows: int) -> dict:
+    """Resolve a reproducible compute plan while preserving effective batch size.
+
+    Development remains exactly at the selected FP32 protocol. Formal can use a
+    larger micro-batch + smaller accumulation, AMP, and a frozen optimizer-update
+    budget derived from the completed Development selection.
+    """
+    dev_micro = int(c['batch_size'])
+    dev_accum = max(1, int(c['gradient_accumulation_steps']))
+    effective = int(c.get('effective_batch_size', dev_micro * dev_accum))
+    if effective != dev_micro * dev_accum:
+        raise RuntimeError(
+            'ReMFT effective_batch_size must equal development batch_size * '
+            'gradient_accumulation_steps so the completed Development protocol remains frozen'
+        )
+
+    if stage == 'development':
+        micro = dev_micro
+        eval_batch = int(c.get('eval_batch_size', dev_micro))
+        accum = dev_accum
+        use_amp = bool(c.get('development_use_amp', False))
+        max_updates = None
+    else:
+        micro = int(os.getenv('REMFT_FORMAL_BATCH_SIZE', c.get('formal_batch_size', dev_micro)))
+        eval_batch = int(os.getenv('REMFT_FORMAL_EVAL_BATCH_SIZE', c.get('formal_eval_batch_size', micro)))
+        if effective % micro != 0:
+            raise RuntimeError(
+                f'ReMFT formal micro-batch {micro} must divide effective_batch_size={effective}'
+            )
+        accum = effective // micro
+        use_amp = _bool_env('REMFT_FORMAL_AMP', bool(c.get('formal_use_amp', True)))
+        cfg_budget = c.get('formal_max_optimizer_updates')
+        env_budget = os.getenv('REMFT_FORMAL_MAX_UPDATES')
+        max_updates = int(env_budget if env_budget is not None else cfg_budget) if (env_budget is not None or cfg_budget is not None) else None
+        if max_updates is None or max_updates <= 0:
+            raise RuntimeError(
+                'ReMFT Formal requires a frozen formal_max_optimizer_updates selected from Development'
+            )
+        ref_epoch = int(c.get('formal_reference_development_best_epoch', 0))
+        ref_rows = int(c.get('formal_reference_development_train_rows', 0))
+        if ref_epoch <= 0 or ref_rows <= 0:
+            raise RuntimeError(
+                'ReMFT Formal requires formal_reference_development_best_epoch and '
+                'formal_reference_development_train_rows for update-budget provenance'
+            )
+        expected_budget = math.ceil(ref_rows / effective) * ref_epoch
+        if env_budget is None and max_updates != expected_budget:
+            raise RuntimeError(
+                f'ReMFT formal_max_optimizer_updates={max_updates} does not match '
+                f'Development-derived budget={expected_budget} '
+                f'(rows={ref_rows}, effective_batch={effective}, best_epoch={ref_epoch})'
+            )
+
+    workers = int(c.get('data_loader_workers', 2))
+    plan = {
+        'stage': stage,
+        'train_rows': int(train_rows),
+        'micro_batch_size': micro,
+        'eval_batch_size': eval_batch,
+        'effective_batch_size': effective,
+        'gradient_accumulation_steps': accum,
+        'use_amp': use_amp,
+        'max_optimizer_updates': max_updates,
+        'data_loader_workers': workers,
+    }
+    print('REMFT TRAINING PLAN ' + json.dumps(plan, sort_keys=True), flush=True)
+    return plan
+
+
+def _autocast(enabled: bool):
+    if not enabled:
+        return nullcontext()
+    return torch.autocast(device_type='cuda', dtype=torch.float16)
+
+
+def _make_scaler(enabled: bool):
+    try:
+        return torch.amp.GradScaler('cuda', enabled=enabled)
+    except (AttributeError, TypeError):
+        return torch.cuda.amp.GradScaler(enabled=enabled)
+
+
+
+
+def _optimizer_step(
+    *,
+    opt,
+    scaler,
+    trainable,
+    gradient_clip: float,
+    use_amp: bool,
+) -> dict:
+    """Apply one optimizer step with correct AMP overflow semantics.
+
+    In AMP mode, GradScaler owns overflow handling: an inf/nan gradient causes
+    scaler.step(optimizer) to skip optimizer.step(), then scaler.update() lowers
+    the loss scale. Such a skipped step is not a fatal training error and must
+    not count toward the frozen optimizer-update budget.
+
+    In FP32 mode, non-finite gradients remain fatal because there is no dynamic
+    loss scaling mechanism that can safely recover from them.
+    """
+    if use_amp:
+        scaler.unscale_(opt)
+        grad_norm = nn.utils.clip_grad_norm_(
+            trainable,
+            float(gradient_clip),
+            error_if_nonfinite=False,
+        )
+        grad_finite = bool(torch.isfinite(torch.as_tensor(grad_norm)).item())
+        scale_before = float(scaler.get_scale())
+        scaler.step(opt)
+        scaler.update()
+        scale_after = float(scaler.get_scale())
+        skipped = scale_after < scale_before
+
+        # A non-finite gradient is expected to be absorbed by GradScaler. If the
+        # scale did not back off, fail loudly rather than silently accepting an
+        # optimizer state with undefined numerical behaviour.
+        if (not grad_finite) and (not skipped):
+            raise RuntimeError(
+                'ReMFT non-finite AMP gradient was not skipped by GradScaler '
+                f'(scale_before={scale_before}, scale_after={scale_after})'
+            )
+        return {
+            'grad_norm': float(torch.as_tensor(grad_norm).detach().cpu()),
+            'grad_finite': grad_finite,
+            'skipped': bool(skipped),
+            'scale_before': scale_before,
+            'scale_after': scale_after,
+        }
+
+    grad_norm = nn.utils.clip_grad_norm_(
+        trainable,
+        float(gradient_clip),
+        error_if_nonfinite=False,
+    )
+    grad_finite = bool(torch.isfinite(torch.as_tensor(grad_norm)).item())
+    if not grad_finite:
+        raise RuntimeError(f'ReMFT non-finite FP32 grad norm: {grad_norm}')
+    opt.step()
+    return {
+        'grad_norm': float(torch.as_tensor(grad_norm).detach().cpu()),
+        'grad_finite': True,
+        'skipped': False,
+        'scale_before': 1.0,
+        'scale_after': 1.0,
+    }
+
+
+def _loader(ds: Dataset, batch_size: int, shuffle: bool, workers: int) -> DataLoader:
+    kwargs = dict(
+        dataset=ds,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=workers,
+        pin_memory=True,
+        drop_last=False,
+    )
+    if workers > 0:
+        kwargs.update(persistent_workers=True, prefetch_factor=2)
+    return DataLoader(**kwargs)
+
+
+def predict(model, dl, device, mean, std, use_amp: bool):
+    model.eval()
+    out = []
     with torch.no_grad():
-        for x,_y,_v in dl:
-            p=model(x.float().to(device)) # [B,N,P]
-            if not torch.isfinite(p).all(): raise RuntimeError('ReMFT produced non-finite prediction')
-            out.append((p.transpose(1,2).cpu().numpy()*np.float32(std)+np.float32(mean)).astype(np.float32))
-    return np.concatenate(out,0)
+        for x, _y, _v in dl:
+            x = x.float().to(device, non_blocking=True)
+            with _autocast(use_amp):
+                p = model(x)  # [B,N,P]
+            if not torch.isfinite(p).all():
+                raise RuntimeError('ReMFT produced non-finite prediction')
+            out.append(
+                (p.transpose(1, 2).float().cpu().numpy() * np.float32(std) + np.float32(mean)).astype(np.float32)
+            )
+    return np.concatenate(out, 0)
 
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument('--stage',choices=['development','formal'],required=True); ap.add_argument('--seed',type=int,required=True); ap.add_argument('--smoke',action='store_true'); a=ap.parse_args()
-    cfg,cache=validate_stage(a.stage,'ReMFT'); set_seed(a.seed); device=require_gpu(); c=cfg['runners']['ReMFT']
-    tr=ReMFTDataset(cache,'train'); va=ReMFTDataset(cache,'val')
-    trl=DataLoader(tr,batch_size=int(c['batch_size']),shuffle=True,num_workers=0,pin_memory=True); val=DataLoader(va,batch_size=int(c['batch_size']),shuffle=False,num_workers=0,pin_memory=True)
-    model=build_model(cfg,device); trainable=[p for p in model.parameters() if p.requires_grad]; nparams=sum(p.numel() for p in trainable)
-    opt=torch.optim.Adam(trainable,lr=float(c['learning_rate']),weight_decay=float(c['weight_decay']),eps=1e-4)
-    accum=max(1,int(c['gradient_accumulation_steps']))
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--stage', choices=['development', 'formal'], required=True)
+    ap.add_argument('--seed', type=int, required=True)
+    ap.add_argument('--smoke', action='store_true')
+    a = ap.parse_args()
+
+    cfg, cache = validate_stage(a.stage, 'ReMFT')
+    set_seed(a.seed)
+    device = require_gpu()
+    c = cfg['runners']['ReMFT']
+
+    tr = ReMFTDataset(cache, 'train')
+    va = ReMFTDataset(cache, 'val')
+    plan = resolve_training_plan(c, a.stage, len(tr))
+    trl = _loader(tr, plan['micro_batch_size'], True, plan['data_loader_workers'])
+    val = _loader(va, plan['eval_batch_size'], False, plan['data_loader_workers'])
+
+    model = build_model(cfg, device)
+    trainable = [p for p in model.parameters() if p.requires_grad]
+    nparams = sum(p.numel() for p in trainable)
+    opt = torch.optim.Adam(
+        trainable,
+        lr=float(c['learning_rate']),
+        weight_decay=float(c['weight_decay']),
+        eps=1e-4,
+    )
+    accum = int(plan['gradient_accumulation_steps'])
+    use_amp = bool(plan['use_amp'])
+    scaler = _make_scaler(use_amp)
+
     if a.smoke:
-        x,y,v=next(iter(trl)); opt.zero_grad(set_to_none=True); p=model(x.float().to(device)); loss=masked_mse(p,y.float().to(device),v.to(device)); loss.backward(); nn.utils.clip_grad_norm_(trainable,float(c['gradient_clip'])); opt.step()
-        exp=(int(c['batch_size']),tr.x.shape[2],int(cfg['experiment']['horizon']))
-        if tuple(p.shape)!=exp or not torch.isfinite(p).all(): raise RuntimeError(f'ReMFT smoke shape {tuple(p.shape)} != {exp}')
-        print('REMFT GPU SMOKE PASS',{'loss':float(loss),'shape':tuple(p.shape),'trainable_params':nparams},flush=True); return
-    best=float('inf'); state=None; be=0; stale=0; t0=time.time()
-    for ep in range(1,int(c['max_epochs'])+1):
-        model.train(); opt.zero_grad(set_to_none=True); tt=tn=0.0
-        for bi,(x,y,v) in enumerate(trl,1):
-            p=model(x.float().to(device)); loss=masked_mse(p,y.float().to(device),v.to(device)); (loss/accum).backward(); tt+=float(loss.item()); tn+=1
-            if bi%accum==0 or bi==len(trl): nn.utils.clip_grad_norm_(trainable,float(c['gradient_clip'])); opt.step(); opt.zero_grad(set_to_none=True)
-        model.eval(); vt=vn=0.0
+        x, y, v = next(iter(trl))
+        x = x.float().to(device, non_blocking=True)
+        y = y.float().to(device, non_blocking=True)
+        v = v.to(device, non_blocking=True)
+        opt.zero_grad(set_to_none=True)
+        with _autocast(use_amp):
+            p = model(x)
+            loss = masked_mse(p, y, v)
+        if not torch.isfinite(loss):
+            raise RuntimeError('ReMFT smoke produced non-finite loss')
+        scaler.scale(loss).backward()
+        step_meta = _optimizer_step(
+            opt=opt,
+            scaler=scaler,
+            trainable=trainable,
+            gradient_clip=float(c['gradient_clip']),
+            use_amp=use_amp,
+        )
+        if step_meta['skipped']:
+            raise RuntimeError('ReMFT smoke AMP step overflowed; retry smoke or lower smoke batch')
+        exp = (plan['micro_batch_size'], tr.x.shape[2], int(cfg['experiment']['horizon']))
+        if tuple(p.shape) != exp or not torch.isfinite(p).all():
+            raise RuntimeError(f'ReMFT smoke shape {tuple(p.shape)} != {exp}')
+        print(
+            'REMFT GPU SMOKE PASS',
+            {
+                'loss': float(loss.detach()),
+                'shape': tuple(p.shape),
+                'trainable_params': nparams,
+                'plan': plan,
+            },
+            flush=True,
+        )
+        return
+
+    best = float('inf')
+    state = None
+    be = 0
+    stale = 0
+    optimizer_updates = 0
+    amp_skipped_steps = 0
+    samples_seen = 0
+    stop_for_budget = False
+    t0 = time.time()
+
+    for ep in range(1, int(c['max_epochs']) + 1):
+        ep_t0 = time.time()
+        model.train()
+        opt.zero_grad(set_to_none=True)
+        tt = tn = 0.0
+        micro_since_step = 0
+
+        for bi, (x, y, v) in enumerate(trl, 1):
+            x = x.float().to(device, non_blocking=True)
+            y = y.float().to(device, non_blocking=True)
+            v = v.to(device, non_blocking=True)
+            with _autocast(use_amp):
+                p = model(x)
+                loss = masked_mse(p, y, v)
+            if not torch.isfinite(loss):
+                raise RuntimeError(f'ReMFT non-finite loss epoch={ep} batch={bi}')
+
+            scaler.scale(loss / accum).backward()
+            tt += float(loss.detach().item())
+            tn += 1
+            samples_seen += int(x.shape[0])
+            micro_since_step += 1
+
+            should_step = micro_since_step >= accum or bi == len(trl)
+            if should_step:
+                step_meta = _optimizer_step(
+                    opt=opt,
+                    scaler=scaler,
+                    trainable=trainable,
+                    gradient_clip=float(c['gradient_clip']),
+                    use_amp=use_amp,
+                )
+                opt.zero_grad(set_to_none=True)
+                micro_since_step = 0
+
+                if step_meta['skipped']:
+                    amp_skipped_steps += 1
+                    if amp_skipped_steps <= 10 or amp_skipped_steps % 50 == 0:
+                        print(
+                            f'REMFT AMP SKIP epoch={ep} batch={bi} '
+                            f'grad_norm={step_meta["grad_norm"]} '
+                            f'scale_before={step_meta["scale_before"]:.1f} '
+                            f'scale_after={step_meta["scale_after"]:.1f} '
+                            f'amp_skipped_steps={amp_skipped_steps}',
+                            flush=True,
+                        )
+                else:
+                    optimizer_updates += 1
+
+                budget = plan['max_optimizer_updates']
+                if budget is not None and optimizer_updates >= int(budget):
+                    stop_for_budget = True
+                    break
+
+        model.eval()
+        vt = vn = 0.0
         with torch.no_grad():
-            for x,y,v in val:
-                p=model(x.float().to(device)); loss=masked_mse(p,y.float().to(device),v.to(device)); vt+=float(loss.item()); vn+=1
-        score=vt/max(vn,1); print(f'EPOCH {ep:03d} train_MSE_norm={tt/max(tn,1):.6f} val_MSE_norm={score:.6f}',flush=True)
-        if score<best-1e-8: best=score; be=ep; stale=0; state=trainable_state_dict(model)
+            for x, y, v in val:
+                x = x.float().to(device, non_blocking=True)
+                y = y.float().to(device, non_blocking=True)
+                v = v.to(device, non_blocking=True)
+                with _autocast(use_amp):
+                    p = model(x)
+                    loss = masked_mse(p, y, v)
+                if not torch.isfinite(loss):
+                    raise RuntimeError(f'ReMFT non-finite validation loss epoch={ep}')
+                vt += float(loss.detach().item())
+                vn += 1
+
+        score = vt / max(vn, 1)
+        ep_sec = time.time() - ep_t0
+        print(
+            f'EPOCH {ep:03d} train_MSE_norm={tt/max(tn,1):.6f} '
+            f'val_MSE_norm={score:.6f} optimizer_updates={optimizer_updates} '
+            f'amp_skipped_steps={amp_skipped_steps} samples_seen={samples_seen} sec={ep_sec:.1f}',
+            flush=True,
+        )
+        if score < best - 1e-8:
+            best = score
+            be = ep
+            stale = 0
+            state = trainable_state_dict(model)
         else:
-            stale+=1
-            if stale>=int(c['patience']): print(f'EARLY STOP epoch={ep} best_epoch={be}',flush=True); break
-    if state is None: raise RuntimeError('ReMFT produced no checkpoint')
-    load_trainable_state_dict(model,state); mean,std=scale_stats(cache); raw=predict(model,val,device,mean,std)
-    rd=make_run_dir(cfg,'ReMFT',a.stage,a.seed); torch.save({'model':state,'checkpoint_format':'trainable_state_only_v1','best_epoch':be,'best_val_mse_norm':best,'history':int(cfg['experiment']['history']),'horizon':int(cfg['experiment']['horizon']),'llm_contract':getattr(model,'_llm_contract',{})},rd/'best.pt')
-    sm=save_val_outputs(cfg,cache,rd,raw,'ReMFT',a.seed,a.stage,{
-        'best_epoch':be,'best_val_MSE_norm':best,'trainable_params':nparams,'wall_seconds':time.time()-t0,
-        'official_architecture':'vendor/ReMFT/run.ipynb architecture cells through Model definition',
-        'adaptation':'official PHI + BERT reprogramming; seq_len 96->12 via post-construction official mixer instances; frozen BERT depth aligned to the local pretrained checkpoint; incomplete history fed directly; no stock data/train/test cells executed',
-        'table_group':'main','checkpoint_selection':'Val masked MSE only',
-        'llm_contract':getattr(model,'_llm_contract',{}),'selection_valid':True,'test_access':False,
-    })
-    print('REMFT COMPLETE',json.dumps({'run_dir':str(rd),'val':sm['val']},default=str))
+            stale += 1
+            if stale >= int(c['patience']):
+                print(f'EARLY STOP epoch={ep} best_epoch={be}', flush=True)
+                break
+
+        if stop_for_budget:
+            print(
+                f'FORMAL UPDATE BUDGET REACHED optimizer_updates={optimizer_updates} '
+                f'budget={plan["max_optimizer_updates"]} best_epoch={be}',
+                flush=True,
+            )
+            break
+
+    if state is None:
+        raise RuntimeError('ReMFT produced no checkpoint')
+
+    load_trainable_state_dict(model, state)
+    mean, std = scale_stats(cache)
+    raw = predict(model, val, device, mean, std, use_amp=use_amp)
+    rd = make_run_dir(cfg, 'ReMFT', a.stage, a.seed)
+    checkpoint = {
+        'model': state,
+        'checkpoint_format': 'trainable_state_only_v1',
+        'best_epoch': be,
+        'best_val_mse_norm': best,
+        'history': int(cfg['experiment']['history']),
+        'horizon': int(cfg['experiment']['horizon']),
+        'method_implementation_revision': cfg.get('method_implementation_revisions', {}).get('ReMFT'),
+        'llm_contract': getattr(model, '_llm_contract', {}),
+        'depth_normalization': getattr(model, '_depth_normalization', {}),
+        'training_plan': plan,
+        'optimizer_updates': optimizer_updates,
+        'amp_skipped_steps': amp_skipped_steps,
+        'samples_seen': samples_seen,
+    }
+    torch.save(checkpoint, rd / 'best.pt')
+
+    sm = save_val_outputs(
+        cfg,
+        cache,
+        rd,
+        raw,
+        'ReMFT',
+        a.seed,
+        a.stage,
+        {
+            'best_epoch': be,
+            'best_val_MSE_norm': best,
+            'trainable_params': nparams,
+            'wall_seconds': time.time() - t0,
+            'optimizer_updates': optimizer_updates,
+            'amp_skipped_steps': amp_skipped_steps,
+            'samples_seen': samples_seen,
+            'training_plan': plan,
+            'official_architecture': 'vendor/ReMFT/run.ipynb architecture cells through Model definition',
+            'adaptation': (
+                'official PHI + frozen BERT reprogramming; seq_len 96->12 via '
+                'post-construction official mixer instances; checkpoint-consistent BERT depth; '
+                'incomplete history fed directly; no stock data/train/test cells executed'
+            ),
+            'table_group': 'llm_specific',
+            'checkpoint_selection': 'Val masked MSE only',
+            'llm_contract': getattr(model, '_llm_contract', {}),
+            'depth_normalization': getattr(model, '_depth_normalization', {}),
+            'test_access': False,
+        },
+    )
+    print('REMFT COMPLETE', json.dumps({'run_dir': str(rd), 'val': sm['val']}, default=str))
 
 
-if __name__=='__main__': main()
+if __name__ == '__main__':
+    main()

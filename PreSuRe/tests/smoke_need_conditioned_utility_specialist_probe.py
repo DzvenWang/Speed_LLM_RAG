@@ -10,7 +10,7 @@ from presure.utils import load_yaml
 from presure.utility_specialist import true_q90_mask,specialist_loss,two_expert_score,CandidateMetricAccumulator
 
 cfg=load_yaml(R/'configs/presure.yaml')
-assert cfg['version'] in {'0.7.4','0.7.5','0.7.6'}
+assert cfg['version'] in {'0.7.4','0.7.5','0.7.6','0.8.0','0.9.0','0.9.1','0.9.2','0.9.2','0.9.2','0.9.2','0.9.2','0.9.3','0.9.4','0.9.5','0.9.5.1'}
 assert cfg['need_conditioned_utility_specialist_probe']['initialize_from_utility_a'] is True
 
 # Horizon-specific q90 labels are supervision only.

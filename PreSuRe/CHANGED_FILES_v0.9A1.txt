@@ -1,0 +1,26 @@
+PreSuRe v0.9A.1 Safe Top-Selection additions / edits
+
+ADDED
+- scripts/run_predictive_utility_safe_selection_probe.py
+- scripts/predictive_utility_safe_selection_preflight.py
+- scripts/submit_predictive_utility_safe_selection_probe.sh
+- pbs/predictive_utility_safe_selection_probe.pbs
+- tests/smoke_predictive_utility_safe_selection.py
+- MIGRATION_v0.9.0_to_v0.9.1.md
+
+MODIFIED
+- presure/predictive_utility.py (listwise Top-1 loss, focal sign loss, absolute score barrier, combined safe score, abstention calibration/metrics)
+- configs/presure.yaml (v0.9A.1 config; v0.9A block retained unchanged)
+- VERSION
+- presure/__init__.py
+- README.md
+- old v0.9A runner/preflight and smoke tests: version compatibility relaxed to include 0.9.1
+
+UNCHANGED / FROZEN
+- candidate pool: same leakage-safe K=24 candidates
+- PredictiveUtilityRerankerV09A architecture
+- PatchSTG backbone
+- M1/M3/M4 legacy baselines
+- Predictive Need
+- Dual Memory (not yet enabled)
+- Qwen reasoning (not used in v0.9A.1)

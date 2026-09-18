@@ -1,0 +1,27 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=48GB
+#PBS -l walltime=06:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe_logs/out/
+#PBS -N PreBaseArt
+set -euo pipefail
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe
+LOGROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe_logs
+PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+STAGE=${STAGE:-development}
+SEED=${SEED:-10}
+source "$ROOT/scripts/pbs_live_log.sh"
+presure_live_log_start "PreBaseArt" "$STAGE" "seed${SEED}"
+presure_install_exit_trap
+export PYTHONPATH="$ROOT:/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone:/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon:/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench:${PYTHONPATH:-}"
+cd "$ROOT"
+echo "START PreBaseArt stage=$STAGE seed=$SEED"
+nvidia-smi
+"$PY" scripts/preflight.py --stage "$STAGE"
+"$PY" scripts/prepare_backbone_artifacts.py --stage "$STAGE"
+echo "PreBaseArt PASS"

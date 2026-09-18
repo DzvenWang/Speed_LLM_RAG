@@ -3,7 +3,7 @@ from pathlib import Path
 import ast,re,yaml
 R=Path(__file__).resolve().parents[1]
 for p in R.rglob('*.py'): ast.parse(p.read_text(),filename=str(p))
-c=yaml.safe_load((R/'configs/presure.yaml').read_text());assert c['version']=='0.7.6';assert 'regret_aware_support_proposal_meta_ranking' in c['implementation_revision'];assert c['project']['exp_root'].endswith('/PreSuRe_exps');assert int(c['node_routing']['utility_candidate_k'])>=8
+c=yaml.safe_load((R/'configs/presure.yaml').read_text());assert c['version'] in {'0.9.5','0.9.5.1'};assert ('query_error_state_representation_v095' in c['implementation_revision'] or 'query_error_state_representation_diagnostics_v0951' in c['implementation_revision']);assert c['project']['exp_root'].endswith('/PreSuRe_exps');assert int(c['node_routing']['utility_candidate_k'])>=8
 for p in R.glob('pbs/*.pbs'):
  s=p.read_text();assert '#PBS -j oe' in s and '/PreSuRe_logs/out/' in s and 'presure_live_log_start' in s
  if '#PBS -q gpuvolta' in s:
@@ -36,4 +36,6 @@ assert c['deployment_aligned_utility_router_probe']['reuse_v074_hard_specialist'
 meta=(R/'scripts/run_regret_aware_support_proposal_meta_probe.py').read_text(); assert 'RegretAwareSupportProposalMetaRankingProbe' in meta and 'SupportProposalMetaRanker' in meta and 'oracle_proposal' in meta
 mpbs=(R/'pbs/regret_aware_support_proposal_meta_probe.pbs').read_text(); assert 'LOGROOT=' in mpbs and 'run_regret_aware_support_proposal_meta_probe.py' in mpbs and '#PBS -l ngpus=1' in mpbs
 assert c['proposal_meta_ranking_probe']['reuse_v075_experts'] is True
-print('PRESURE V0.7.6 REGRET-AWARE SUPPORT PROPOSAL META-RANKING STATIC CONTRACT SMOKE PASS')
+sel=(R/'scripts/run_predictive_utility_selective_acceptance_probe.py').read_text(); assert 'Selective Utility Acceptance' in sel and 'fallback_used' in sel and 'top1_only' in sel
+sp=(R/'pbs/predictive_utility_selective_acceptance_probe.pbs').read_text(); assert 'PreUtilA3' in sp and 'no fallback / no re-ranking' in sp
+print('PRESURE V0.9.5 QUERY ERROR-STATE STATIC CONTRACT SMOKE PASS')

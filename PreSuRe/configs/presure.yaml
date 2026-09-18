@@ -1,5 +1,5 @@
-version: 0.7.6
-implementation_revision: 20260916_regret_aware_support_proposal_meta_ranking_r1
+version: 0.9.5.1
+implementation_revision: query_error_state_representation_diagnostics_v0951
 project:
   root: /scratch/mh20/zw1165/Speed_LLM_RAG
   presure_root: /scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe
@@ -431,8 +431,6 @@ deployment_aligned_utility_router_probe:
     masked_pred_top10_rank_conditional: 0.63
     rank_gain_conditional: 0.01
     selected_harmful_conditional: 0.48
-
-
 proposal_meta_ranking_probe:
   role: development_diagnostic_after_v075_classification_router_nogo_before_v08
   reuse_v075_experts: true
@@ -453,7 +451,7 @@ proposal_meta_ranking_probe:
     rank_weight: 1.0
     utility_weight: 0.35
     classification_weight: 0.25
-    regret_weight: 0.80
+    regret_weight: 0.8
     rank_margin: 0.1
     rank_min_gap: 0.02
     huber_beta: 0.1
@@ -473,9 +471,600 @@ proposal_meta_ranking_probe:
     rank_gain_go: 0.02
     selected_beneficial_go: 0.53
     selected_harmful_go: 0.45
-    mean_regret_reduction_go: 0.20
+    mean_regret_reduction_go: 0.2
     harmful_regret_go: 0.18
     masked_pred_top10_rank_conditional: 0.63
     rank_gain_conditional: 0.01
     selected_harmful_conditional: 0.48
-    mean_regret_reduction_conditional: 0.10
+    mean_regret_reduction_conditional: 0.1
+qwen_support_value_probe:
+  role: development_probe_after_numerical_support_value_nogo_before_full_v08_forecasting
+  trigger:
+    predicted_need_subset: pred_top20
+    min_unique_proposals: 2
+    require_expert_disagreement: true
+    evaluation_primary_view: masked
+  labels:
+    beneficial_threshold: 0.02
+    reject_threshold: -0.02
+    actions:
+    - USE
+    - REJECT
+    - ABSTAIN
+    no_support_value: 0.0
+  dataset:
+    train_fraction: 0.8
+    train_max_records: 12000
+    dev_max_records: 3000
+    final_val_max_records: 4000
+    balance_train_actions: true
+    sampling_seed_offset: 8001
+    context_round_digits: 4
+  models:
+    qwen_0_5b:
+      name: Qwen2.5-0.5B-Instruct
+      selector_cache: /scratch/mh20/zw1165/cache/huggingface/models--Qwen--Qwen2.5-0.5B-Instruct
+      train_batch_size: 2
+      grad_accumulation: 8
+      eval_batch_size: 4
+      infer_batch_size: 8
+      learning_rate: 0.0002
+      epochs: 3
+      lora_r: 16
+      lora_alpha: 32
+      lora_dropout: 0.05
+    qwen_1_5b:
+      name: Qwen2.5-1.5B-Instruct
+      selector_cache: /scratch/mh20/zw1165/cache/huggingface/models--Qwen--Qwen2.5-1.5B-Instruct
+      train_batch_size: 1
+      grad_accumulation: 16
+      eval_batch_size: 2
+      infer_batch_size: 4
+      learning_rate: 0.00015
+      epochs: 3
+      lora_r: 16
+      lora_alpha: 32
+      lora_dropout: 0.05
+    common:
+      max_length: 768
+      max_new_tokens: 40
+      gradient_checkpointing: true
+      fp16: true
+      attn_implementation: eager
+      trust_remote_code: false
+      local_files_only: true
+      target_modules:
+      - q_proj
+      - k_proj
+      - v_proj
+      - o_proj
+      - gate_proj
+      - up_proj
+      - down_proj
+  evaluation:
+    compare_variants:
+    - generic_always_use
+    - v076_meta_always_use
+    - qwen_zero_shot
+    - qwen_lora
+    - oracle_action
+    primary_subset: masked_pred_top20_disagreement
+  decision:
+    selected_beneficial_go: 0.53
+    selected_harmful_go: 0.45
+    mean_regret_reduction_vs_generic_go: 0.1
+    use_precision_go: 0.58
+    harmful_regret_go: 0.1
+    selected_harmful_conditional: 0.48
+    mean_regret_reduction_vs_generic_conditional: 0.05
+predictive_utility_retrieval:
+  role: v09a_mainline_unified_predictive_utility_reranking
+  candidate_k: 24
+  top_k: 4
+  initialize_encoder_from_m1: true
+  split:
+    train_queries: 3500
+    dev_queries: 500
+    final_val_queries: 1200
+  model:
+    encoder_hidden: 160
+    state_dim: 64
+    node_dim: 24
+    residual_dim: 48
+    pair_dim: 128
+    hidden: 192
+    horizon_dim: 16
+    attention_heads: 4
+    dropout: 0.1
+    min_sigma: 0.03
+    max_sigma: 2.0
+  training:
+    epochs: 14
+    patience: 4
+    batch_size: 4
+    eval_batch_size: 6
+    lr: 0.0005
+    encoder_lr_scale: 0.35
+    weight_decay: 0.0001
+    huber_beta: 0.1
+    utility_weight: 0.35
+    rank_weight: 1.0
+    classification_weight: 0.35
+    hard_harmful_weight: 0.75
+    classification_temperature: 0.2
+    beneficial_threshold: 0.02
+    harmful_threshold: 0.02
+    rank_margin: 0.1
+    rank_min_gap: 0.02
+    hard_margin: 0.12
+    hard_similarity_weight: 1.0
+    hard_utility_weight: 0.5
+    train_risk_beta: 0.25
+    alpha_grid:
+    - 0.25
+    - 0.5
+    - 0.75
+    - 1.0
+    - 1.25
+    - 1.5
+    gain_floor: 0.1
+    utility_clip: 1.5
+    grad_clip: 5.0
+  risk:
+    beta_grid:
+    - 0.0
+    - 0.25
+    - 0.5
+    - 0.75
+    - 1.0
+    dev_score_rank_weight: 1.0
+    dev_score_benefit_weight: 0.5
+    dev_score_harm_weight: 0.5
+  decision:
+    masked_pairwise_rank_go: 0.67
+    selected_beneficial_go: 0.6
+    selected_harmful_go: 0.35
+    regret_reduction_go: 0.2
+    masked_pairwise_rank_conditional: 0.64
+    selected_harmful_conditional: 0.42
+predictive_utility_safe_selection:
+  role: v09a1_safe_top_selection_mainline
+  candidate_k: 24
+  initialize_from_v09a: true
+  require_v09a_checkpoint: true
+  split:
+    train_queries: 3500
+    dev_queries: 500
+    final_val_queries: 1200
+  model:
+    encoder_hidden: 160
+    state_dim: 64
+    node_dim: 24
+    residual_dim: 48
+    pair_dim: 128
+    hidden: 192
+    horizon_dim: 16
+    attention_heads: 4
+    dropout: 0.1
+    min_sigma: 0.03
+    max_sigma: 2.0
+  training:
+    epochs: 10
+    patience: 4
+    batch_size: 4
+    eval_batch_size: 6
+    lr: 0.0002
+    encoder_lr_scale: 0.1
+    weight_decay: 0.0001
+    huber_beta: 0.1
+    utility_weight: 0.2
+    rank_weight: 0.3
+    classification_weight: 0.8
+    hard_harmful_weight: 0.6
+    listwise_weight: 1.0
+    barrier_weight: 0.75
+    focal_gamma: 1.5
+    listwise_temperature: 0.2
+    beneficial_threshold: 0.02
+    harmful_threshold: 0.02
+    rank_margin: 0.1
+    rank_min_gap: 0.02
+    hard_margin: 0.12
+    hard_similarity_weight: 1.0
+    hard_utility_weight: 0.5
+    train_risk_beta: 0.5
+    train_benefit_logit_weight: 0.25
+    barrier_positive_margin: 0.08
+    barrier_harmful_margin: -0.08
+    alpha_grid:
+    - 0.25
+    - 0.5
+    - 0.75
+    - 1.0
+    - 1.25
+    - 1.5
+    gain_floor: 0.1
+    utility_clip: 1.5
+    grad_clip: 5.0
+  risk:
+    beta_grid:
+    - 0.0
+    - 0.25
+    - 0.5
+    - 0.75
+    - 1.0
+    benefit_logit_weight_grid:
+    - 0.0
+    - 0.1
+    - 0.25
+    - 0.5
+    checkpoint_rank_weight: 0.05
+    checkpoint_benefit_weight: 1.0
+    checkpoint_harm_weight: 1.2
+    checkpoint_strong_harm_weight: 0.8
+    checkpoint_regret_weight: 0.5
+  policy:
+    coverage_grid:
+    - 0.35
+    - 0.45
+    - 0.55
+    - 0.65
+    - 0.75
+    - 0.85
+    - 1.0
+    min_coverage: 0.35
+    capture_reward: 0.02
+    harmful_exposure_penalty: 0.05
+    strong_harm_exposure_penalty: 0.1
+  decision:
+    masked_pairwise_rank_go: 0.67
+    coverage_go: 0.35
+    accepted_beneficial_go: 0.6
+    accepted_harmful_go: 0.35
+    safe_regret_reduction_go: 0.2
+    coverage_conditional: 0.3
+    accepted_harmful_conditional: 0.4
+    safe_regret_reduction_conditional: 0.1
+predictive_utility_rank_then_veto:
+  role: v09a2_frozen_rank_then_independent_strong_harm_veto
+  candidate_k: 24
+  require_v09a_checkpoint: true
+  reuse_v09a_splits: true
+  model:
+    hidden: 96
+    dropout: 0.1
+  training:
+    epochs: 10
+    patience: 3
+    batch_size: 4
+    eval_batch_size: 6
+    lr: 0.001
+    weight_decay: 0.0001
+    focal_gamma: 2.0
+    focal_alpha: 0.55
+    strong_harm_threshold: 0.02
+    top_rank_weight: 2.0
+    top_rank_k: 6
+    grad_clip: 5.0
+    alpha_grid:
+    - 0.25
+    - 0.5
+    - 0.75
+    - 1.0
+    - 1.25
+    - 1.5
+    gain_floor: 0.1
+    utility_clip: 1.5
+  policy:
+    veto_threshold_grid:
+    - 0.2
+    - 0.3
+    - 0.4
+    - 0.5
+    - 0.6
+    - 0.7
+    - 0.8
+    max_checks_grid:
+    - 1
+    - 2
+    - 4
+    - 8
+    min_coverage: 0.35
+    capture_reward: 0.05
+    harmful_exposure_penalty: 0.1
+    strong_harm_exposure_penalty: 0.3
+    regret_penalty: 0.35
+  decision:
+    coverage_go: 0.35
+    accepted_beneficial_go: 0.6
+    accepted_harmful_go: 0.35
+    accepted_strong_harm_go: 0.15
+    safe_regret_reduction_go: 0.2
+    coverage_conditional: 0.3
+    accepted_harmful_conditional: 0.4
+    accepted_strong_harm_conditional: 0.2
+    safe_regret_reduction_conditional: 0.1
+predictive_utility_selective_acceptance:
+  role: v09a3_frozen_top1_selective_utility_acceptance
+  candidate_k: 24
+  require_v09a_checkpoint: true
+  reuse_v09a_splits: true
+  model:
+    hidden: 128
+    dropout: 0.1
+  training:
+    epochs: 12
+    patience: 4
+    batch_size: 4
+    eval_batch_size: 6
+    lr: 0.0008
+    weight_decay: 0.0001
+    grad_clip: 5.0
+    positive_utility_threshold: 0.0
+    ambiguous_abs_utility: 0.005
+    ambiguous_weight: 0.25
+    utility_weight_scale: 1.5
+    utility_weight_clip: 4.0
+    masked_weight: 1.5
+    support_weight: 1.25
+    alpha_grid:
+    - 0.25
+    - 0.5
+    - 0.75
+    - 1.0
+    - 1.25
+    - 1.5
+    gain_floor: 0.1
+    utility_clip: 1.5
+  policy:
+    threshold_grid:
+    - 0.25
+    - 0.3
+    - 0.35
+    - 0.4
+    - 0.45
+    - 0.5
+    - 0.55
+    - 0.6
+    - 0.65
+    - 0.7
+    - 0.75
+    - 0.8
+    min_coverage: 0.2
+    capture_reward: 0.01
+    harmful_exposure_penalty: 0.02
+  decision:
+    coverage_go: 0.2
+    accepted_beneficial_go: 0.65
+    accepted_harmful_go: 0.3
+    safe_regret_reduction_go: 0.1
+    coverage_conditional: 0.15
+    accepted_harmful_conditional: 0.38
+    safe_regret_reduction_conditional: 0.03
+query_future_error_direction_probe:
+  role: development_diagnostic_after_v09a3_nogo_before_residual_alignment
+  reuse_v09a_splits: true
+  split_source: PredictiveUtilityRetrieval
+  thresholds:
+    train_direction_quantile: 0.5
+    evaluation_quantiles:
+    - 0.5
+    - 0.75
+    - 0.9
+  model:
+    encoder_hidden: 192
+    state_dim: 96
+    node_embedding_dim: 24
+    horizon_embedding_dim: 24
+    hidden: 192
+    dropout: 0.1
+  training:
+    epochs: 20
+    patience: 4
+    batch_size: 24
+    eval_batch_size: 48
+    lr: 0.0008
+    weight_decay: 0.0001
+    huber_beta: 0.25
+    regression_weight: 0.6
+    direction_weight: 1.0
+    magnitude_weight: 0.5
+    target_weight_clip: 3.0
+    grad_clip: 5.0
+    metric_sample_points: 500000
+    direction_threshold_grid:
+    - 0.3
+    - 0.35
+    - 0.4
+    - 0.45
+    - 0.5
+    - 0.55
+    - 0.6
+    - 0.65
+    - 0.7
+  decision:
+    masked_q75_auroc_go: 0.65
+    masked_q75_balanced_accuracy_go: 0.6
+    masked_q90_auroc_go: 0.66
+    masked_q90_balanced_accuracy_go: 0.61
+    masked_q75_auroc_conditional: 0.6
+    masked_q75_balanced_accuracy_conditional: 0.57
+    masked_q90_auroc_conditional: 0.61
+    masked_q90_balanced_accuracy_conditional: 0.58
+    masked_regression_spearman_go: 0.15
+query_error_state_probe:
+  role: development_representation_diagnostic_after_v094_query_representation_nogo
+  reuse_v09a_splits: true
+  split_source: PredictiveUtilityRetrieval
+  artifact_batch_size: 192
+  thresholds:
+    evaluation_quantiles:
+    - 0.5
+    - 0.75
+    - 0.9
+  hidden_artifact:
+    discovery_batch_size: 2
+    batch_size: 16
+    projected_dim: 96
+    projection_seed: 10
+    min_raw_width: 16
+    max_raw_width: 8192
+    include_regex: .*
+    exclude_regex: (^$|output|head$|predictor)
+  recent_error:
+    expected_stride: 12
+    min_stride_confidence: 0.98
+    max_lag_queries: 4
+    max_gap_steps: 48
+    step_minutes: 5
+  variants:
+    base:
+      use_hidden: false
+      use_recent: false
+      use_physical: false
+    hidden:
+      use_hidden: true
+      use_recent: false
+      use_physical: false
+    recent_error:
+      use_hidden: false
+      use_recent: true
+      use_physical: false
+    physical:
+      use_hidden: false
+      use_recent: false
+      use_physical: true
+    hidden_physical:
+      use_hidden: true
+      use_recent: false
+      use_physical: true
+    full:
+      use_hidden: true
+      use_recent: true
+      use_physical: true
+  model:
+    encoder_hidden: 192
+    state_dim: 96
+    node_embedding_dim: 24
+    horizon_embedding_dim: 24
+    extra_dim: 48
+    hidden: 192
+    dropout: 0.1
+  training:
+    epochs: 20
+    patience: 4
+    batch_size: 24
+    eval_batch_size: 48
+    lr: 0.0008
+    weight_decay: 0.0001
+    huber_beta: 0.25
+    regression_weight: 0.6
+    direction_weight: 1.0
+    magnitude_weight: 0.5
+    target_weight_clip: 3.0
+    grad_clip: 5.0
+    metric_sample_points: 500000
+    direction_threshold_grid:
+    - 0.3
+    - 0.35
+    - 0.4
+    - 0.45
+    - 0.5
+    - 0.55
+    - 0.6
+    - 0.65
+    - 0.7
+  decision:
+    masked_q75_auroc_go: 0.65
+    masked_q75_balanced_accuracy_go: 0.6
+    masked_q90_auroc_go: 0.7
+    masked_q90_balanced_accuracy_go: 0.62
+    masked_regression_spearman_go: 0.15
+    masked_q75_auroc_conditional: 0.61
+    masked_q90_auroc_conditional: 0.64
+query_error_state_diagnostics:
+  role: representation_diagnostic_after_v095_incomplete_hidden_recent_tests
+  reuse_v09a_splits: true
+  split_source: PredictiveUtilityRetrieval
+  artifact_batch_size: 192
+  thresholds:
+    evaluation_quantiles:
+    - 0.5
+    - 0.75
+    - 0.9
+  layer_sweep:
+    discovery_batch_size: 2
+    inference_batch_size: 16
+    projected_dim: 64
+    projection_seed: 951
+    min_raw_width: 16
+    max_raw_width: 8192
+    include_regex: .*
+    exclude_regex: (^$|output|head$|predictor)
+    max_candidates: 10
+    screen_epochs: 12
+    screen_patience: 3
+    confirm_top_k: 2
+    confirm_seeds:
+    - 10
+    - 20
+    - 30
+  recent_error_repair:
+    max_lag_queries: 6
+    max_gap_steps: 288
+    validation_history_source: train_only
+    required_manifest_field_preference:
+    - window_start
+    - query_index
+    - anchor_index
+    - forecast_start_idx
+  model:
+    encoder_hidden: 192
+    state_dim: 96
+    node_embedding_dim: 24
+    horizon_embedding_dim: 24
+    extra_dim: 48
+    hidden: 192
+    dropout: 0.1
+  training:
+    epochs: 20
+    patience: 4
+    batch_size: 24
+    eval_batch_size: 48
+    lr: 0.0008
+    weight_decay: 0.0001
+    huber_beta: 0.25
+    regression_weight: 0.6
+    direction_weight: 1.0
+    magnitude_weight: 0.5
+    target_weight_clip: 3.0
+    grad_clip: 5.0
+    metric_sample_points: 500000
+    direction_threshold_grid:
+    - 0.3
+    - 0.35
+    - 0.4
+    - 0.45
+    - 0.5
+    - 0.55
+    - 0.6
+    - 0.65
+    - 0.7
+  representation_variants:
+  - base
+  - physical
+  - recent_repaired
+  - physical_recent
+  - best_hidden
+  - best_hidden_physical
+  - full_repaired
+  decision:
+    masked_q75_auroc_go: 0.65
+    masked_q75_balanced_accuracy_go: 0.6
+    masked_q90_auroc_go: 0.7
+    masked_q90_balanced_accuracy_go: 0.62
+    masked_regression_spearman_go: 0.15
+    masked_q75_auroc_conditional: 0.61
+    masked_q90_auroc_conditional: 0.64
+    minimum_hidden_gain_over_v095_input_fc: 0.02
+    minimum_recent_gain_over_without_recent: 0.01

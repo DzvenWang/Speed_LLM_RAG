@@ -1,0 +1,38 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l walltime=03:00:00
+#PBS -l mem=48GB
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe_logs/out/
+#PBS -N PreHardUtil
+set -euo pipefail
+
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe
+LOGROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe_logs
+PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+STAGE=${STAGE:-development}
+SEED=${SEED:-10}
+
+source "$ROOT/scripts/pbs_live_log.sh"
+presure_live_log_start "PreHardUtil" "$STAGE" "seed${SEED}"
+trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"; exit $rc' EXIT
+
+cd "$ROOT"
+echo "============================================================"
+echo "START Need-Conditioned Utility Specialist Probe $(date '+%F %T')"
+echo "Train: Hard-q90 Specialist + Need-weighted Specialist"
+echo "Compare: Generic Utility-A / Hard / Weighted / General+Hard Two-Expert"
+echo "True q90: Train supervision + privileged validation subset only"
+echo "Deployable conditioning: predicted Need-q90 only"
+echo "============================================================"
+
+"$PY" scripts/need_conditioned_specialist_preflight.py --stage "$STAGE"
+"$PY" scripts/run_need_conditioned_utility_specialist_probe.py --stage "$STAGE" --seed "$SEED"
+
+echo "============================================================"
+echo "Need-Conditioned Utility Specialist Probe PASS $(date '+%F %T')"
+echo "============================================================"

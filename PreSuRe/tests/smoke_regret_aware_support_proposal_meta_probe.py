@@ -13,7 +13,7 @@ from presure.proposal_meta import (
 )
 
 cfg=load_yaml(R/'configs/presure.yaml')
-assert cfg['version']=='0.7.6'
+assert cfg['version'] in {'0.7.6','0.8.0','0.9.0','0.9.1','0.9.2','0.9.2','0.9.2','0.9.3','0.9.4','0.9.5','0.9.5.1'}
 order=['generic','hard','pred10','pred20']
 B=N=1;L=4;P=2
 # Four experts propose complementary supports; pred10 duplicates generic on h0 only.

@@ -156,3 +156,180 @@ class SensingAwareSafeGate(nn.Module):
         ne=self.node_emb.weight[None,None,:,:].expand(B,P,N,-1); he=self.h_emb.weight[None,:,None,:].expand(B,P,N,-1)
         local=torch.stack([base,corr,torch.abs(corr),support_mass,disagreement],-1)
         return torch.sigmoid(self.net(torch.cat([qe,qse,ne,he,local],-1)).squeeze(-1))
+
+
+class PredictiveUtilityRerankerV09A(nn.Module):
+    """Unified node-horizon predictive-utility reranker for PreSuRe v0.9A.
+
+    The model scores the existing leakage-safe 24-candidate pool directly, without
+    the legacy M3 Top-4 compression.  It uses only deployment-safe query/support
+    state, historical Train residuals, and coarse retrieval confidence.  Current
+    query future targets are used only by the training loss outside this module.
+
+    Outputs for every [query,node,candidate,horizon] cell:
+      * mu: expected relative predictive utility;
+      * sigma: aleatoric/selection uncertainty (>0);
+      * beneficial_logit: calibrated auxiliary probability logit.
+    """
+    def __init__(
+        self,
+        node_feature_dim,
+        num_nodes,
+        P,
+        encoder_hidden=160,
+        state_dim=64,
+        node_dim=24,
+        sense_dim=6,
+        residual_dim=48,
+        pair_dim=128,
+        hidden=192,
+        horizon_dim=16,
+        attention_heads=4,
+        dropout=0.1,
+        min_sigma=0.03,
+        max_sigma=2.0,
+    ):
+        super().__init__()
+        self.P = int(P)
+        self.N = int(num_nodes)
+        self.F = int(node_feature_dim)
+        self.state_dim = int(state_dim)
+        self.sense_dim = int(sense_dim)
+        self.pair_dim = int(pair_dim)
+        self.min_sigma = float(min_sigma)
+        self.max_sigma = float(max_sigma)
+        self.encoder = NodeSensingEncoder(
+            self.F, self.N, hidden=int(encoder_hidden), demb=self.state_dim,
+            node_dim=int(node_dim), dropout=float(dropout),
+        )
+        self.residual = nn.Sequential(
+            nn.LayerNorm(2 * self.P),
+            nn.Linear(2 * self.P, int(residual_dim)), nn.GELU(), nn.Dropout(float(dropout)),
+            nn.Linear(int(residual_dim), int(residual_dim)), nn.GELU(),
+        )
+        pair_in = 4 * self.state_dim + 3 * self.sense_dim + int(residual_dim) + 1
+        self.pair = nn.Sequential(
+            nn.Linear(pair_in, int(hidden)), nn.LayerNorm(int(hidden)), nn.GELU(), nn.Dropout(float(dropout)),
+            nn.Linear(int(hidden), self.pair_dim), nn.GELU(),
+        )
+        heads = max(1, int(attention_heads))
+        if self.pair_dim % heads != 0:
+            heads = 1
+        self.cross = nn.MultiheadAttention(self.pair_dim, heads, dropout=float(dropout), batch_first=True)
+        self.cross_norm = nn.LayerNorm(self.pair_dim)
+        self.h_emb = nn.Embedding(self.P, int(horizon_dim))
+        # local: residual, |residual|, query base, support base,
+        # support-query base difference, normalized coarse retrieval score.
+        role_in = self.pair_dim + int(horizon_dim) + 6
+        self.role = nn.Sequential(
+            nn.Linear(role_in, int(hidden)), nn.LayerNorm(int(hidden)), nn.GELU(), nn.Dropout(float(dropout)),
+            nn.Linear(int(hidden), 96), nn.GELU(),
+        )
+        self.mu_head = nn.Linear(96, 1)
+        self.sigma_head = nn.Linear(96, 1)
+        self.benefit_head = nn.Linear(96, 1)
+
+    def encode_query(self, qctx):
+        return self.encoder(qctx)
+
+    def encode_support(self, sctx):
+        # sctx [B,N,K,F] -> shared encoder over B*K episodes, retaining node identity.
+        B, N, K, F = sctx.shape
+        if N != self.N or F != self.F:
+            raise ValueError(f'Support context shape {tuple(sctx.shape)} incompatible with N={self.N}, F={self.F}')
+        x = sctx.permute(0, 2, 1, 3).reshape(B * K, N, F)
+        z = self.encoder(x)
+        return z.reshape(B, K, N, self.state_dim).permute(0, 2, 1, 3).contiguous()
+
+    def forward_features(self, qctx, sctx, qs, ss, rr_norm, qbase_norm, sbase_norm, coarse_score):
+        """Return the frozen deployment-safe role representation and v0.9A outputs.
+
+        v0.9A.2 uses ``role_features`` only as input to an independent strong-harm
+        veto head.  The method introduces no new parameters and therefore keeps
+        all existing v0.9A checkpoints state-dict compatible.
+        """
+        # qctx [B,N,F], sctx [B,N,K,F], rr/sbase [B,N,K,P], qbase [B,P,N]
+        B, N, K, _ = sctx.shape
+        q = self.encode_query(qctx)
+        s = self.encode_support(sctx)
+        qe = q[:, :, None, :].expand(-1, -1, K, -1)
+        qse = qs[:, :, None, :].expand(-1, -1, K, -1)
+        rseq = self.residual(torch.cat([rr_norm, torch.abs(rr_norm)], dim=-1))
+        cs = coarse_score[:, None, :, None].expand(-1, N, -1, 1)
+        pair = self.pair(torch.cat([
+            qe, s, torch.abs(qe - s), qe * s,
+            qse, ss, torch.abs(qse - ss),
+            rseq, cs,
+        ], dim=-1))
+        flat = pair.reshape(B * N, K, self.pair_dim)
+        att, _ = self.cross(flat, flat, flat, need_weights=False)
+        pair = self.cross_norm(flat + att).reshape(B, N, K, self.pair_dim)
+
+        pe = pair[:, :, :, None, :].expand(-1, -1, -1, self.P, -1)
+        he = self.h_emb.weight[None, None, None, :, :].expand(B, N, K, -1, -1)
+        qb = qbase_norm.permute(0, 2, 1)[:, :, None, :].expand(-1, -1, K, -1)
+        csh = coarse_score[:, None, :, None].expand(-1, N, -1, self.P)
+        local = torch.stack([
+            rr_norm, torch.abs(rr_norm), qb, sbase_norm, sbase_norm - qb, csh,
+        ], dim=-1)
+        role_features = self.role(torch.cat([pe, he, local], dim=-1))
+        mu = self.mu_head(role_features).squeeze(-1)
+        raw_sigma = self.sigma_head(role_features).squeeze(-1)
+        sigma = torch.nn.functional.softplus(raw_sigma) + self.min_sigma
+        sigma = torch.clamp(sigma, max=self.max_sigma)
+        beneficial_logit = self.benefit_head(role_features).squeeze(-1)
+        return role_features, mu, sigma, beneficial_logit
+
+    def forward(self, qctx, sctx, qs, ss, rr_norm, qbase_norm, sbase_norm, coarse_score):
+        _, mu, sigma, beneficial_logit = self.forward_features(
+            qctx, sctx, qs, ss, rr_norm, qbase_norm, sbase_norm, coarse_score
+        )
+        return mu, sigma, beneficial_logit
+
+
+class StrongHarmVetoHead(nn.Module):
+    """Independent v0.9A.2 veto head.
+
+    The v0.9A ranker is frozen.  This head receives its detached 96-D role
+    representation plus its frozen numerical outputs and predicts only whether a
+    candidate is strongly harmful.  It never re-orders safe candidates; it can
+    only veto them.
+    """
+    def __init__(self, role_dim=96, hidden=96, dropout=0.1):
+        super().__init__()
+        in_dim = int(role_dim) + 4  # mu, sigma, beneficial logit, frozen rank score
+        self.net = nn.Sequential(
+            nn.LayerNorm(in_dim),
+            nn.Linear(in_dim, int(hidden)), nn.GELU(), nn.Dropout(float(dropout)),
+            nn.Linear(int(hidden), int(hidden) // 2), nn.GELU(),
+            nn.Linear(int(hidden) // 2, 1),
+        )
+
+    def forward(self, role_features, mu, sigma, beneficial_logit, rank_score):
+        x = torch.cat([
+            role_features,
+            mu[..., None], sigma[..., None], beneficial_logit[..., None], rank_score[..., None],
+        ], dim=-1)
+        return self.net(x).squeeze(-1)
+
+
+class SelectedSupportAcceptanceHead(nn.Module):
+    """v0.9A.3 acceptance head for the frozen v0.9A Top-1 support only.
+
+    Input is the frozen Top-1 96-D role representation plus 12 deployment-safe
+    ranking-context scalars (utility/risk outputs, rank margins, score dispersion,
+    entropy, candidate coverage and relative uncertainty).  This head cannot
+    reorder candidates; it predicts only USE-vs-ABSTAIN for the existing Top-1.
+    """
+    def __init__(self, role_dim=96, context_dim=12, hidden=128, dropout=0.1):
+        super().__init__()
+        din = int(role_dim) + int(context_dim)
+        self.net = nn.Sequential(
+            nn.LayerNorm(din),
+            nn.Linear(din, int(hidden)), nn.GELU(), nn.Dropout(float(dropout)),
+            nn.Linear(int(hidden), int(hidden) // 2), nn.GELU(), nn.Dropout(float(dropout)),
+            nn.Linear(int(hidden) // 2, 1),
+        )
+
+    def forward(self, selected_features):
+        return self.net(selected_features).squeeze(-1)

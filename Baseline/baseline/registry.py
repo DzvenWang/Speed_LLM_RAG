@@ -15,14 +15,14 @@ METHODS = {
         'repo': 'https://github.com/peterchen96/LRTC-TMCP.git', 'commit': None, 'source_policy': 'resolve_once',
         'official_entrypoints': ['lrtc-tmcp-demo.ipynb', 'utils.py'],
         'can_prepare_before_backbone_freeze': True, 'final_forecast_requires_frozen_backbone': True,
-        'protocol': 'strict_h12_query_local_lrtc_tmcp_then_same_frozen_backbone',
+        'protocol': 'causal_multiday_query_local_lrtc_tmcp_then_same_frozen_backbone',
         'execution_state': 'PRIMARY_SMOKE_REQUIRED',
         'question': 'Can recent TRC low-rank tensor completion recover enough history for accurate forecasting?',
         'compatibility_note': (
             'The official TMCP update equations are preserved in an external batched compatibility implementation. '
-            'To keep the main table input-matched and causal, each query is completed using only its current incomplete H12, '
-            'represented as nodes x one-query-day x H12; no future horizon, other validation/test queries, or extra historical days are exposed. '
-            'Observed values are protected exactly and the completed H12 is forecast by the same frozen PatchSTG reference as ImputeFormer.'
+            'Each query uses 28 strictly earlier day-aligned H12 slices plus the current incomplete H12, forming a '
+            'nodes x causal-days x query-slots tensor. No P12 future or hidden current value is exposed. '
+            'Observed current values are protected exactly and the completed H12 is forecast by the same frozen PatchSTG reference as ImputeFormer.'
         ),
     },
     'SPRINT': {

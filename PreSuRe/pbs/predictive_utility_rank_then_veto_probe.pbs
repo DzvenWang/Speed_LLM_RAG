@@ -1,0 +1,34 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=48GB
+#PBS -l walltime=08:00:00
+#PBS -l storage=gdata/mh20+scratch/mh20
+#PBS -j oe
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe_logs/out/
+#PBS -N PreUtilA2
+set -euo pipefail
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe
+LOGROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/PreSuRe_logs
+PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+STAGE=${STAGE:-development}
+SEED=${SEED:-10}
+source "$ROOT/scripts/pbs_live_log.sh"
+presure_live_log_start "PreUtilA2" "$STAGE" "seed${SEED}"
+presure_install_exit_trap
+cd "$ROOT"
+echo "============================================================"
+echo "START PreSuRe v0.9A.2 Rank-then-Veto $(date '+%F %T')"
+echo "Frozen ranking: completed v0.9A Predictive-Utility Reranker"
+echo "Independent safety: strong-harm veto head only"
+echo "Policy: inspect candidates in frozen rank order; veto dangerous supports; fallback to next candidate"
+echo "ABSTAIN only if all inspected candidates are vetoed"
+echo "Same K=24 / same v0.9A splits; no Dual Memory and no Qwen"
+echo "============================================================"
+"$PY" scripts/predictive_utility_rank_then_veto_preflight.py --stage "$STAGE"
+"$PY" scripts/run_predictive_utility_rank_then_veto_probe.py --stage "$STAGE" --seed "$SEED"
+echo "============================================================"
+echo "PreSuRe v0.9A.2 Rank-then-Veto PASS $(date '+%F %T')"
+echo "============================================================"

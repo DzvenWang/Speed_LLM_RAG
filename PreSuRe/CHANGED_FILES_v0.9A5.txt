@@ -1,0 +1,19 @@
+PreSuRe v0.9.5 Query Error-State Representation
+
+NEW
+- presure/backbone_hidden.py
+- presure/query_error_state.py
+- scripts/prepare_query_error_state_artifacts.py
+- scripts/query_error_state_preflight.py
+- scripts/run_query_error_state_probe.py
+- scripts/submit_query_error_state_probe.sh
+- pbs/query_error_state_probe.pbs
+- tests/smoke_query_error_state_probe.py
+- MIGRATION_v0.9.4_to_v0.9.5.md
+
+MODIFIED
+- VERSION
+- configs/presure.yaml
+- README.md
+- scripts/run_query_future_error_direction_probe.py (allow v0.9.5 replay)
+- scripts/query_future_error_direction_preflight.py (allow v0.9.5 replay)

@@ -1,0 +1,18 @@
+VERSION
+configs/presure.yaml
+README.md
+MIGRATION_v0.9.5_to_v0.9.5.1.md
+CHANGED_FILES_v0.9A5_1.txt
+presure/backbone_hidden.py
+presure/query_error_state.py
+scripts/prepare_query_error_state_representation_diagnostics.py
+scripts/query_error_state_representation_diagnostics_preflight.py
+scripts/run_query_error_state_representation_diagnostics.py
+scripts/submit_query_error_state_representation_diagnostics.sh
+pbs/query_error_state_representation_diagnostics.pbs
+tests/smoke_query_error_state_representation_diagnostics.py
+# Compatibility-only version guards / smoke assertions updated for 0.9.5.1:
+scripts/prepare_query_error_state_artifacts.py
+scripts/query_error_state_preflight.py
+scripts/run_query_error_state_probe.py
+tests/smoke_*.py

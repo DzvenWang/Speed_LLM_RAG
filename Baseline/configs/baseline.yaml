@@ -183,8 +183,8 @@ methods:
     enabled: true
     table_group: main
     priority: 2
-    formal_track: strict_h12_lrtc_tmcp_imputation_then_same_frozen_backbone
-    stage_now: smoke_then_development_then_formal_seed10
+    formal_track: causal_multiday_lrtc_tmcp_imputation_then_same_frozen_backbone
+    stage_now: causal_multiday_contract_smoke_then_rerun_development_and_formal_seed10
     requires_frozen_backbone_for_final_forecast: true
     deterministic: true
     formal_seeds:
@@ -357,6 +357,16 @@ runners:
     local_model_env: REMFT_BERT_PATH
     checkpoint_consistent_llm_depth: true
     require_exact_llm_checkpoint_architecture: true
+    effective_batch_size: 24
+    development_use_amp: false
+    formal_batch_size: 8
+    formal_eval_batch_size: 8
+    formal_use_amp: true
+    formal_reference_development_best_epoch: 18
+    formal_reference_development_train_rows: 12000
+    formal_max_optimizer_updates: 9000
+    data_loader_workers: 2
+    formal_gradient_accumulation_steps: 3
   LRTC-TMCP:
     batch_size: 64
     rho: 1.0e-05
@@ -368,9 +378,14 @@ runners:
     max_iter: 200
     smoke_max_iter: 3
     protect_observed_values: true
-    tensor_layout: nodes_x_single_query_day_x_history
-    strict_h12_only: true
+    tensor_layout: nodes_x_causal_days_x_query_slots
+    strict_h12_only: false
     use_raw_speed_space: true
+    historical_days: 28
+    day_steps: 288
+    canonical_speed_match_mae_max: 0.05
+    canonical_valid_agreement_min: 0.9999
+    extra_causal_context: true
 protocol_assertions:
   development:
     train_rows: 12000
@@ -418,3 +433,5 @@ secondary_methods:
 - LEAF
 - LEAF-Qwen1.5B
 - RAST-PatchSTG
+method_implementation_revisions:
+  ReMFT: remft_phi12_checkpointdepth_amp_batch8_updatebudget_r3

@@ -14,7 +14,7 @@ from presure.deployment_routing import (
 )
 
 cfg=load_yaml(R/'configs/presure.yaml')
-assert cfg['version'] in {'0.7.5','0.7.6'}
+assert cfg['version'] in {'0.7.5','0.7.6','0.8.0','0.9.0','0.9.1','0.9.2','0.9.2','0.9.2','0.9.2','0.9.3','0.9.4','0.9.5','0.9.5.1'}
 
 # Train-only horizon-specific predicted-Need thresholds.
 p=np.array([[[0.1,0.9],[0.2,0.8]],[[0.3,0.7],[0.4,0.6]]],np.float32) # B=2,P=2,N=2

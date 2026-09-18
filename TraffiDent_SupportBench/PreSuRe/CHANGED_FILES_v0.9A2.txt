@@ -1,0 +1,27 @@
+VERSION
+README.md
+MIGRATION_v0.9.1_to_v0.9.2.md
+CHANGED_FILES_v0.9A2.txt
+configs/presure.yaml
+presure/__init__.py
+presure/models.py
+presure/harm_veto.py
+scripts/run_predictive_utility_rank_then_veto_probe.py
+scripts/predictive_utility_rank_then_veto_preflight.py
+scripts/submit_predictive_utility_rank_then_veto_probe.sh
+pbs/predictive_utility_rank_then_veto_probe.pbs
+tests/smoke_predictive_utility_rank_then_veto.py
+
+Compatibility-only version relaxations:
+scripts/run_predictive_utility_reranker_probe.py
+scripts/run_predictive_utility_safe_selection_probe.py
+scripts/predictive_utility_reranker_preflight.py
+scripts/predictive_utility_safe_selection_preflight.py
+tests/smoke_deployment_aligned_utility_router_probe.py
+tests/smoke_need_conditioned_utility_specialist_probe.py
+tests/smoke_need_gated_utility_probe.py
+tests/smoke_predictive_utility_retrieval.py
+tests/smoke_predictive_utility_safe_selection.py
+tests/smoke_qwen_support_value_reasoning.py
+tests/smoke_regret_aware_support_proposal_meta_probe.py
+tests/smoke_static.py

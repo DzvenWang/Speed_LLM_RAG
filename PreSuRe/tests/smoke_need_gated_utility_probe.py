@@ -14,7 +14,7 @@ from presure.need_gated import (
 from presure.utils import load_yaml
 
 cfg=load_yaml(R/'configs/presure.yaml')
-assert cfg['version'] in {'0.7.3','0.7.4','0.7.5','0.7.6'}
+assert cfg['version'] in {'0.7.3','0.7.4','0.7.5','0.7.6','0.8.0','0.9.0','0.9.1','0.9.2','0.9.2','0.9.2','0.9.2','0.9.2','0.9.2','0.9.3','0.9.4','0.9.5','0.9.5.1'}
 assert cfg['need_gated_utility_probe']['reuse_only'] is True
 
 # Quantile gate must retain the highest-score tail.
