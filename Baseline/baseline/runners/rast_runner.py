@@ -34,6 +34,11 @@ from baseline.backbones.patchstg_bridge import (  # noqa: E402
     PatchSTGRASTBridge,
 )
 from baseline.compat.rast_optional_backbones import install_rast_native_import_shims  # noqa: E402
+from baseline.runners.retrieval_impact import (  # noqa: E402
+    accumulate_impact,
+    empty_impact_stats,
+    finalize_impact,
+)
 
 
 def import_model():
@@ -172,6 +177,7 @@ def run_epoch(model, dl, device, ep, train, opt=None, max_batches=None, clip=5.0
     corr_sq_sum = 0.0
     corr_max_abs = 0.0
     corr_count = 0
+    impact_stats = empty_impact_stats()
     ctx = torch.enable_grad() if train else torch.no_grad()
     with ctx:
         for batch_i, (idx, x, y, valid) in enumerate(dl):
@@ -199,6 +205,11 @@ def run_epoch(model, dl, device, ep, train, opt=None, max_batches=None, clip=5.0
                 corr_sq_sum += s
                 corr_max_abs = max(corr_max_abs, m)
                 corr_count += n_corr
+
+            bridge = getattr(model, 'backbone', None)
+            base = getattr(bridge, 'last_prediction', None)
+            if base is not None:
+                accumulate_impact(impact_stats, pred, base, y, valid)
 
             if train:
                 loss.backward()
@@ -228,24 +239,71 @@ def run_epoch(model, dl, device, ep, train, opt=None, max_batches=None, clip=5.0
             'correction_max_abs': None,
             'correction_count': 0,
         })
+    result['impact'] = finalize_impact(impact_stats)
     return result
 
 
-def predict(model, dl, device, mean, std, ep):
+def prewarm_patchstg_retrieval(model, train_loader, device, logical_epoch: int) -> dict:
+    """Populate RAST retrieval memory before the first optimizer update.
+
+    Official RAST only populates the store when ``train=True`` and
+    ``epoch % update_interval == 0``.  With a strong frozen PatchSTG backbone,
+    optimizing for nine empty-retrieval epochs drives the residual correction
+    toward zero before retrieval becomes available.  This warm-up performs one
+    train-data forward under no_grad, preserving the official store update code
+    while making the first optimizer step retrieval-aware.
+    """
+    before = retrieval_store_status(model)
+    model.train(True)
+    idx, x, _y, _valid = next(iter(train_loader))
+    x = x.float().to(device)
+    with torch.no_grad():
+        out = model(x, None, int(idx[0]) if len(idx) else 0, logical_epoch, True)
+        pred = out['prediction'].squeeze(-1)
+        if not torch.isfinite(pred).all():
+            raise FloatingPointError('RAST-PatchSTG retrieval prewarm produced non-finite prediction')
+    after = retrieval_store_status(model)
+    if not after['ready']:
+        raise RuntimeError(
+            'RAST-PatchSTG retrieval-first warm-up failed to populate retrieval memory: '
+            + json.dumps({'before': before, 'after': after}, sort_keys=True)
+        )
+    print(
+        'RAST-PATCHSTG RETRIEVAL PREWARM PASS '
+        + json.dumps({'logical_epoch': int(logical_epoch), 'before': before, 'after': after}, sort_keys=True),
+        flush=True,
+    )
+    return after
+
+
+def predict(model, dl, device, mean, std, ep, collect_impact=False):
     out = []
+    impact_stats = empty_impact_stats()
     model.eval()
     with torch.no_grad():
-        for idx, x, _y, _valid in dl:
+        for idx, x, y, valid in dl:
+            x = x.float().to(device)
+            y = y.float().to(device)
+            valid = valid.bool().to(device)
             pred = model(
-                x.float().to(device), None,
+                x, None,
                 int(idx[0]) if len(idx) else 0,
                 ep, False,
             )['prediction'].squeeze(-1)
             if not torch.isfinite(pred).all():
                 raise FloatingPointError('RAST produced non-finite validation prediction')
+            if collect_impact:
+                bridge = getattr(model, 'backbone', None)
+                base = getattr(bridge, 'last_prediction', None)
+                if base is None:
+                    raise RuntimeError(
+                        'RAST-PatchSTG diagnostics requested but frozen PatchSTG base prediction is unavailable'
+                    )
+                accumulate_impact(impact_stats, pred, base, y, valid)
             out.append(pred.cpu().numpy())
-    return np.concatenate(out, 0).astype(np.float32) * np.float32(std) + np.float32(mean)
-
+    raw = np.concatenate(out, 0).astype(np.float32) * np.float32(std) + np.float32(mean)
+    impact = finalize_impact(impact_stats) if collect_impact else None
+    return raw, impact
 
 def main():
     ap = argparse.ArgumentParser()
@@ -287,11 +345,16 @@ def main():
     )
     clip = float(c.get('gradient_clip', 5.0))
 
-    # Production follows native RAST epoch/update order. For smoke only, a
-    # single batch is probed at the official update interval so retrieval wiring
-    # can be validated without creating or saving a benchmark result.
+    retrieval_first = bool(c.get('patchstg_retrieval_first', True))
+    prewarm_epoch = int(c['update_interval'])
+    prewarm_status = None
+    if args.variant == 'patchstg' and retrieval_first:
+        prewarm_status = prewarm_patchstg_retrieval(
+            model, train_loader, device, prewarm_epoch,
+        )
+
     if args.smoke:
-        logical_epoch = int(c['update_interval']) if args.variant == 'patchstg' else 1
+        logical_epoch = prewarm_epoch if args.variant == 'patchstg' else 1
         smoke = run_epoch(
             model, train_loader, device, logical_epoch, True, opt,
             max_batches=1, clip=clip,
@@ -327,13 +390,22 @@ def main():
     store = None
     best_logical_epoch = 0
     best_train_epoch = 0
+    best_val_impact = None
     stale = 0
     t0 = time.time()
     first_eligible_epoch = None
-    min_delta = float(c.get('min_delta', 1.0e-8))
+    min_delta = (
+        float(c.get('patchstg_min_delta', 1.0e-4))
+        if args.variant == 'patchstg'
+        else float(c.get('min_delta', 1.0e-8))
+    )
 
     for train_epoch in range(1, int(c['max_epochs']) + 1):
-        logical_epoch = train_epoch
+        logical_epoch = (
+            prewarm_epoch + train_epoch - 1
+            if args.variant == 'patchstg' and retrieval_first
+            else train_epoch
+        )
         train_result = run_epoch(
             model, train_loader, device, logical_epoch, True, opt, clip=clip,
         )
@@ -355,7 +427,10 @@ def main():
             f'tt={store_status["temporal_tensors"]} st={store_status["spatial_tensors"]} '
             f'train_corr_abs_mean={train_result["correction_abs_mean"]} '
             f'val_corr_abs_mean={val_result["correction_abs_mean"]} '
-            f'val_corr_rms={val_result["correction_rms"]}',
+            f'val_corr_rms={val_result["correction_rms"]} '
+            f'val_helpful={None if val_result["impact"] is None else val_result["impact"]["helpful_fraction"]} '
+            f'val_harmful={None if val_result["impact"] is None else val_result["impact"]["harmful_fraction"]} '
+            f'val_neutral={None if val_result["impact"] is None else val_result["impact"]["neutral_fraction"]}',
             flush=True,
         )
 
@@ -368,6 +443,7 @@ def main():
             stale = 0
             state = copy.deepcopy({k: v.detach().cpu() for k, v in model.state_dict().items()})
             store = snapshot_store(model)
+            best_val_impact = copy.deepcopy(val_result.get('impact'))
         else:
             stale += 1
             if stale >= int(c['patience']):
@@ -400,7 +476,10 @@ def main():
     )
 
     mean, std = scale_stats(cache)
-    raw = predict(model, val_loader, device, mean, std, best_logical_epoch)
+    raw, final_impact = predict(
+        model, val_loader, device, mean, std, best_logical_epoch,
+        collect_impact=(args.variant == 'patchstg'),
+    )
     run_dir = make_run_dir(cfg, label, args.stage, args.seed)
     method_key = 'RAST' if args.variant == 'native' else 'RAST-PatchSTG'
     torch.save(
@@ -410,6 +489,9 @@ def main():
             'best_train_epoch': best_train_epoch,
             'best_val_mae_norm': best,
             'variant': args.variant,
+            'method_implementation_revision': cfg.get('method_implementation_revisions', {}).get(method_key),
+            'best_epoch_val_impact': best_val_impact if args.variant == 'patchstg' else None,
+            'final_val_impact_vs_frozen_patchstg': final_impact if args.variant == 'patchstg' else None,
         },
         run_dir / 'best.pt',
     )
@@ -434,16 +516,32 @@ def main():
             'selection_min_delta': min_delta,
             'first_checkpoint_eligible_epoch': first_eligible_epoch,
             'retrieval_store_best': restored_status,
-            'epoch_policy': 'native_rast_epoch_order_no_production_prewarm',
+            'retrieval_first_warmup': bool(args.variant == 'patchstg' and retrieval_first),
+            'retrieval_prewarm_epoch': prewarm_epoch if args.variant == 'patchstg' else None,
+            'retrieval_prewarm_store': prewarm_status,
             'correction_diagnostics': 'final_prediction_minus_frozen_patchstg_on_valid_targets',
+            'best_epoch_val_impact': best_val_impact if args.variant == 'patchstg' else None,
+            'final_val_impact_vs_frozen_patchstg': final_impact if args.variant == 'patchstg' else None,
+            'impact_diagnostic_contract': 'matched_patchstg_helpful_harmful_v1',
             'test_access': False,
             'patchstg_reference_seed': getattr(model, '_patchstg_reference_seed', None),
             'patchstg_checkpoint': getattr(model, '_patchstg_checkpoint', None),
         },
     )
+    if args.variant == 'patchstg':
+        with open(run_dir / 'rast_patchstg_impact.json', 'w') as f:
+            json.dump(final_impact, f, indent=2, sort_keys=True)
+            f.write('\n')
     print(
         'RAST COMPLETE',
-        json.dumps({'run_dir': str(run_dir), 'val': summary['val']}, default=str),
+        json.dumps(
+            {
+                'run_dir': str(run_dir),
+                'val': summary['val'],
+                'impact': final_impact if args.variant == 'patchstg' else None,
+            },
+            default=str,
+        ),
         flush=True,
     )
 

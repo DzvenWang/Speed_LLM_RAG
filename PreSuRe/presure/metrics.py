@@ -1,24 +1,39 @@
 from __future__ import annotations
-from pathlib import Path
-import sys, numpy as np
+import numpy as np
+import torch
 
-def metric_bundle(cfg,pred,y,valid,direct,support):
-    c=Path(cfg['project']['common_root'])
-    if str(c) not in sys.path: sys.path.insert(0,str(c))
-    from experiment_common.metrics import metric_bundle as f
-    return f(pred,y,valid,direct,support)
 
-def per_query_mae_torch(pred,y,valid):
-    import torch
-    m=valid.bool() & torch.isfinite(pred) & torch.isfinite(y); e=torch.abs(pred-y)*m
-    return e.flatten(1).sum(1)/m.flatten(1).sum(1).clamp_min(1)
+def _masked_mean_np(x,mask):
+    m=np.asarray(mask,bool)&np.isfinite(x)
+    return float(np.asarray(x,np.float64)[m].mean()) if np.any(m) else float('nan')
 
-def weighted_mae_loss(pred,y,valid,direct,support,weights):
-    import torch
-    def ma(mask):
-        m=valid.bool() & mask & torch.isfinite(pred) & torch.isfinite(y)
-        if not torch.any(m): return pred.sum()*0
-        return torch.abs(pred[m]-y[m]).mean()
-    overall=ma(torch.ones_like(valid,dtype=torch.bool))
-    dm=direct.bool()[:,None,:].expand_as(valid); sm=support.bool()[:,None,:].expand_as(valid)
-    return float(weights['overall_weight'])*overall+float(weights['masked_weight'])*ma(dm)+float(weights['support_weight'])*ma(sm)
+
+def metric_dict_np(pred,y,valid,direct,support):
+    pred=np.asarray(pred,np.float32); y=np.asarray(y,np.float32); valid=np.asarray(valid,bool)
+    direct=np.asarray(direct,bool)[:,None,:]; support=np.asarray(support,bool)[:,None,:]
+    err=np.abs(pred-y); sq=(pred-y)**2; out={}
+    for name,m in {'overall':valid,'masked':valid&direct,'support':valid&support}.items():
+        out[f'{name}_mae']=_masked_mean_np(err,m); mse=_masked_mean_np(sq,m); out[f'{name}_rmse']=float(np.sqrt(mse)) if np.isfinite(mse) else float('nan'); out[f'{name}_count']=int(m.sum())
+    return out
+
+
+def horizon_masked_mae(pred,y,valid,direct):
+    p=np.asarray(pred,np.float32); yy=np.asarray(y,np.float32); vv=np.asarray(valid,bool); dd=np.asarray(direct,bool)[:,None,:]
+    out=[]
+    for h in range(p.shape[1]): out.append(_masked_mean_np(np.abs(p[:,h]-yy[:,h]),vv[:,h]&dd[:,0]))
+    return out
+
+
+def weighted_forecast_loss(pred,y,valid,direct,support,weights):
+    valid=valid.bool(); direct=direct.bool()[:,None,:].expand_as(valid); support=support.bool()[:,None,:].expand_as(valid); finite=torch.isfinite(pred)&torch.isfinite(y)
+    def mae(mask):
+        m=valid&mask&finite
+        return torch.abs(pred[m]-y[m]).mean() if torch.any(m) else pred.sum()*0.0
+    overall=mae(torch.ones_like(valid,dtype=torch.bool)); masked=mae(direct); supp=mae(support)
+    total=float(weights['overall_weight'])*overall+float(weights['masked_weight'])*masked+float(weights['support_weight'])*supp
+    return total,{'overall':overall.detach(),'masked':masked.detach(),'support':supp.detach()}
+
+
+def improvement_pct(base,model):
+    if not (np.isfinite(base) and np.isfinite(model)) or base==0: return float('nan')
+    return float((base-model)/base*100.0)

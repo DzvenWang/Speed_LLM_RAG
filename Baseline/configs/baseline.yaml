@@ -51,6 +51,8 @@ protocol:
   - LRTC-TMCP
   - SPRINT
   - RAST-PatchSTG
+  - RAFT-PatchSTG
+  - SARAF-PatchSTG
 baseline_story:
   main_table:
   - ImputeFormer
@@ -82,6 +84,8 @@ baseline_story:
   - LEAF
   - LEAF-Qwen1.5B
   - RAST-PatchSTG
+  - RAFT-PatchSTG
+  - SARAF-PatchSTG
 methods:
   ImputeFormer:
     enabled: true
@@ -152,9 +156,11 @@ methods:
     table_group: secondary
     priority: 11
     formal_track: traffic_rag_matched_frozen_patchstg_controlled_adaptation
-    stage_now: formal_runner_native_epoch_order_pending_rerun
+    stage_now: formal_seed10_ready
     requires_frozen_backbone_for_final_forecast: true
     primary_experiment: false
+    formal_seeds:
+    - 10
   SPRINT:
     enabled: true
     table_group: secondary
@@ -190,6 +196,26 @@ methods:
     formal_seeds:
     - 10
     primary_experiment: true
+  RAFT-PatchSTG:
+    enabled: true
+    table_group: secondary
+    priority: 12
+    formal_track: raft_retrieval_matched_frozen_patchstg_control
+    stage_now: formal_seed10_ready
+    requires_frozen_backbone_for_final_forecast: true
+    primary_experiment: false
+    formal_seeds:
+    - 10
+  SARAF-PatchSTG:
+    enabled: true
+    table_group: secondary
+    priority: 13
+    formal_track: saraf_retrieval_matched_frozen_patchstg_control
+    stage_now: formal_seed10_ready
+    requires_frozen_backbone_for_final_forecast: true
+    primary_experiment: false
+    formal_seeds:
+    - 10
 runners:
   RAFT:
     batch_size: 32
@@ -433,5 +459,10 @@ secondary_methods:
 - LEAF
 - LEAF-Qwen1.5B
 - RAST-PatchSTG
+- RAFT-PatchSTG
+- SARAF-PatchSTG
 method_implementation_revisions:
   ReMFT: remft_phi12_checkpointdepth_amp_batch8_updatebudget_r3
+  RAFT-PatchSTG: raft_native_retrieval_fusion_frozen_patchstg_directpath_r1
+  SARAF-PatchSTG: saraf_native_retrieval_fusion_frozen_patchstg_directpath_r1
+  RAST-PatchSTG: rast_native_retrieval_fusion_frozen_patchstg_backbone_r1

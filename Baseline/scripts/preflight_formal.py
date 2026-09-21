@@ -12,7 +12,7 @@ from baseline.backbones.frozen_registry import load_frozen_patchstg_registry
 from baseline.compat.imputeformer_tsl_shim import install_imputeformer_tsl_shim
 
 ap = argparse.ArgumentParser()
-ap.add_argument('--method', required=True, choices=['GinAR','ImputeFormer','LRTC-TMCP','SPRINT','RAFT','RAST','SARAF','MoGERNN','ReMFT','RAST-PatchSTG'])
+ap.add_argument('--method', required=True, choices=['GinAR','ImputeFormer','LRTC-TMCP','SPRINT','RAFT','RAST','SARAF','MoGERNN','ReMFT','RAFT-PatchSTG','SARAF-PatchSTG','RAST-PatchSTG'])
 ap.add_argument('--seed', type=int, required=True)
 ap.add_argument('--stage', choices=['formal','evaluation'], default='formal')
 a = ap.parse_args()
@@ -22,7 +22,7 @@ if a.seed not in method_seeds:
     raise SystemExit(f'Invalid formal seed {a.seed} for {a.method}; allowed={method_seeds}')
 subprocess.check_call([cfg['project']['python'], str(ROOT / 'scripts/validate_cache.py'), '--stage', a.stage])
 
-need_patch = a.method in ('ImputeFormer', 'LRTC-TMCP', 'SPRINT', 'RAST-PatchSTG')
+need_patch = a.method in ('ImputeFormer', 'LRTC-TMCP', 'SPRINT', 'RAFT-PatchSTG', 'SARAF-PatchSTG', 'RAST-PatchSTG')
 if need_patch:
     formal_manifest = cache_path(cfg, 'formal') / 'cache_manifest.json'
     if not formal_manifest.exists():
@@ -80,6 +80,7 @@ for dep in ({'RAST':['faiss'], 'RAST-PatchSTG':['faiss'], 'SPRINT':['termcolor']
 runner = {
     'GinAR':'ginar_runner.py', 'ImputeFormer':'imputeformer_runner.py', 'LRTC-TMCP':'lrtc_tmcp_runner.py', 'RAFT':'raft_runner.py',
     'RAST':'rast_runner.py', 'RAST-PatchSTG':'rast_runner.py', 'SARAF':'saraf_runner.py',
+    'RAFT-PatchSTG':'retrieval_patchstg_control_runner.py', 'SARAF-PatchSTG':'retrieval_patchstg_control_runner.py',
     'SPRINT':'sprint_runner.py', 'MoGERNN':'mogernn_runner.py', 'ReMFT':'remft_runner.py',
 }[a.method]
 if a.method == 'ReMFT':

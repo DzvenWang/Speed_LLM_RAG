@@ -1,0 +1,33 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12,ngpus=1,mem=32GB,walltime=02:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs/out/
+#PBS -N RASTPatchImpact
+set -euo pipefail
+
+ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
+PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+: "${RUN_DIR:?RUN_DIR must point to a completed RAST-PatchSTG run directory}"
+SEED=${SEED:-10}
+
+source "$ROOT/scripts/pbs_live_log.sh"
+baseline_live_log_start "RASTPatchImpact" "RAST-PatchSTG" "seed${SEED}" "formal"
+baseline_install_exit_trap
+export PYTHONPATH="$ROOT:/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon:/scratch/mh20/zw1165/Speed_LLM_RAG/Protocol:/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench:${PYTHONPATH:-}"
+cd "$ROOT"
+
+echo "START RAST-PatchSTG impact diagnostics run_dir=$RUN_DIR seed=$SEED"
+"$PY" scripts/validate_cache.py --stage formal
+"$PY" scripts/validate_frozen_patchstg.py
+"$PY" scripts/preflight.py --stage formal --method RAST-PatchSTG
+"$PY" scripts/preflight_formal.py --method RAST-PatchSTG --seed "$SEED" --stage formal
+"$PY" scripts/check_rast_runtime.py
+"$PY" -u scripts/evaluate_rast_patchstg_impact.py \
+  --run-dir "$RUN_DIR" \
+  --seed "$SEED" \
+  --update-summary
+
+echo "RAST-PATCHSTG IMPACT DIAGNOSTICS PASS run_dir=$RUN_DIR seed=$SEED"

@@ -1,1 +1,1 @@
-__version__ = "0.9.4"
+__version__ = '1.2.1-dual-query-conditional-forecasting-attention-chunk-fix'
