@@ -9,7 +9,9 @@ class LRTCTMCPAdapter(OfficialAdapter):
         return {
             'official_source_unmodified': True,
             'official_equations_externalized': True,
-            'strict_h12_only': True,
+            'strict_h12_only': False,
+            'causal_multiday_context': True,
+            'historical_days': 28,
             'cross_query_information': False,
             'future_information': False,
             'observed_value_protection': True,

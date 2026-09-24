@@ -1,0 +1,89 @@
+version: 1.1.0
+implementation_revision: 20260922_observation_aware_patchstg_v1
+
+project:
+  root: /scratch/mh20/zw1165/Speed_LLM_RAG
+  oracle_root: /scratch/mh20/zw1165/Speed_LLM_RAG/PatchSTG_Oracle
+  exp_root: /scratch/mh20/zw1165/Speed_LLM_RAG/PatchSTG_Oracle_exps
+  log_root: /scratch/mh20/zw1165/Speed_LLM_RAG/PatchSTG_Oracle_logs
+  cache_root: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCache
+  backbone_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone
+  backbone_exp_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_exps
+  common_root: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon
+  supportbench_root: /scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench
+  benchmark_root: /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench
+
+experiment:
+  subgraph: TraffiDent_Net_06
+  history: 12
+  horizon: 12
+  seed: 10
+  reference_backbone: PatchSTG
+  reference_seed: 10
+  stage: development
+  dev_queries: 1000
+  final_val_queries: 2000
+
+shared_contract:
+  config: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon/configs/experiment_contract.yaml
+
+canonical_history:
+  speed_file: core/traffic_2024.npy
+  valid_file: core/raw_valid_mask.npy
+  speed_channel: 2
+  valid_channel: 0
+  manifest_start_column: window_start
+  history_offset: 0
+  observed_match_mae_tol: 1.0e-5
+  observed_match_max_tol: 1.0e-4
+  audit_queries: 256
+
+runtime:
+  batch_size: 32
+  num_workers: 2
+  prefetch_factor: 2
+  persistent_workers: true
+  pin_memory: true
+  deterministic: true
+  save_predictions: false
+
+oracle:
+  input_restore_fractions: [0.25, 0.50, 0.75, 1.00]
+  capture_layers: [2, 4]
+  missing_groups:
+    none: [0.0, 0.0]
+    mild: [0.0, 0.10]
+    moderate: [0.10, 0.30]
+    severe: [0.30, 1.01]
+
+# True cell coverage restores this fraction of the genuinely hidden,
+# finite historical cells.  The selected sets are deterministic and nested.
+coverage_curve:
+  fractions: [0.00, 0.25, 0.50, 0.75, 1.00]
+  seed: 20260922
+
+# Both learned variants start from the same frozen PatchSTG seed-10 checkpoint.
+# The mask branch is zero-initialized, so epoch zero exactly reproduces it.
+observation_aware:
+  mask_hidden: 64
+  freeze_backbone: true
+  train_regression_head: false
+  batch_size: 16
+  eval_batch_size: 32
+  num_workers: 2
+  learning_rate: 8.0e-4
+  weight_decay: 1.0e-4
+  max_epochs: 30
+  patience: 6
+  min_delta: 1.0e-5
+  grad_clip: 5.0
+  variants:
+    mask_aware:
+      state_loss_weight: 0.0
+    state_aux:
+      state_loss_weight: 0.20
+
+headroom_gate:
+  strong_gain_pct: 5.0
+  meaningful_gain_pct: 2.0
+  limited_gain_pct: 1.0

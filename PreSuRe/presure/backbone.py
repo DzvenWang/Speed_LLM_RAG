@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
-import json, sys
+import json, sys, os
 import numpy as np, torch
 from torch.utils.data import DataLoader
 from .contract import cache_dir, load_cache_identity, compare_checkpoint_identity
@@ -23,7 +23,23 @@ def _resolve_dev_checkpoint(cfg):
         raise RuntimeError(msg)
     return max(cand,key=lambda x:x[0])[1], 'screening_seed10_current_contract'
 
+def _remap_workspace_path(cfg, value):
+    """Map a stale Gadi absolute path into the current local Speed_LLM_RAG tree."""
+    p = Path(value)
+    if p.exists():
+        return p
+    raw = str(value).replace('\\', '/')
+    marker = '/Speed_LLM_RAG/'
+    if marker in raw:
+        suffix = raw.split(marker, 1)[1]
+        candidate = Path(cfg['project']['root']) / Path(*suffix.split('/'))
+        if candidate.exists():
+            return candidate
+    return p
+
+
 def resolve_checkpoint(cfg,stage,override=None):
+    override = override or os.environ.get('PRESURE_PATCHSTG_CHECKPOINT')
     if override:
         p=Path(override); source='explicit_override'
     elif stage=='development':
@@ -33,7 +49,7 @@ def resolve_checkpoint(cfg,stage,override=None):
         if not f.exists(): raise RuntimeError('Formal PreSuRe requires Backbone_exps/FROZEN_BACKBONE.json')
         j=json.loads(f.read_text())
         if j.get('selected_model')!='PatchSTG' or int(j.get('reference_seed',-1))!=int(cfg['experiment']['reference_seed']): raise RuntimeError('Frozen backbone is not configured PatchSTG reference seed10')
-        p=Path(j['reference_checkpoint']); source='FROZEN_BACKBONE.json'
+        p=_remap_workspace_path(cfg,j['reference_checkpoint']); source='FROZEN_BACKBONE.json'
         if sha256_file(p)!=str(j.get('reference_checkpoint_sha256','')): raise RuntimeError('Frozen checkpoint SHA256 mismatch')
     else: raise ValueError(stage)
     if not p.exists(): raise FileNotFoundError(p)
@@ -73,10 +89,93 @@ def load_patchstg_adapter(cfg,stage,device,override=None):
     return adapter,path,ck,source
 
 @torch.no_grad()
-def infer_split(adapter,cache,split,batch_size,device):
-    ds=CachedTorch(cache,split); dl=DataLoader(ds,batch_size=batch_size,shuffle=False,num_workers=0,pin_memory=torch.cuda.is_available())
+def infer_split(adapter,cache,split,batch_size,device,runtime=None):
+    ds=CachedTorch(cache,split); runtime=runtime or {}; nw=int(runtime.get('num_workers',0)); pin=bool(runtime.get('pin_memory',True)) and torch.cuda.is_available()
+    kw={'num_workers':nw,'pin_memory':pin}
+    if nw>0: kw.update(prefetch_factor=int(runtime.get('prefetch_factor',2)), persistent_workers=bool(runtime.get('persistent_workers',True)))
+    dl=DataLoader(ds,batch_size=batch_size,shuffle=False,drop_last=False,**kw)
     out=[]
     for bi,b in enumerate(dl,1):
         pn=adapter.eval_forward(b); pr=adapter.raw(pn).detach().cpu().numpy().astype(np.float32); out.append(pr)
         if bi%100==0: log(f'PatchSTG inference {split} batches={bi}/{len(dl)}')
     return np.concatenate(out,axis=0)
+
+
+
+def _hook_tensor(x):
+    if torch.is_tensor(x):
+        return x
+    if isinstance(x,(list,tuple)):
+        for z in x:
+            t=_hook_tensor(z)
+            if t is not None: return t
+    if isinstance(x,dict):
+        for z in x.values():
+            t=_hook_tensor(z)
+            if t is not None: return t
+    return None
+
+
+def _node_align_hidden(h, n_nodes):
+    t=_hook_tensor(h)
+    if t is None: raise RuntimeError('Hidden hook returned no tensor')
+    if t.ndim==4 and t.shape[-1]==1:
+        t=t.squeeze(-1)
+    if t.ndim==2:
+        raise RuntimeError(f'Hidden output {tuple(t.shape)} has no node axis')
+    if t.ndim==3:
+        if t.shape[1]==n_nodes: return t
+        if t.shape[2]==n_nodes: return t.permute(0,2,1).contiguous()
+    # Conservative fallback for [B,C,N,T] or [B,N,C,T]: average only auxiliary axes.
+    if t.ndim>=4:
+        dims=list(t.shape)
+        candidates=[i for i in range(1,t.ndim) if dims[i]==n_nodes]
+        if len(candidates)==1:
+            ni=candidates[0]
+            perm=[0,ni]+[i for i in range(1,t.ndim) if i!=ni]
+            u=t.permute(*perm).contiguous()
+            return u.flatten(2).mean(-1,keepdim=True) if u.flatten(2).shape[-1]==1 else u.flatten(2)
+    raise RuntimeError(f'Cannot node-align hidden output shape {tuple(t.shape)} with N={n_nodes}')
+
+
+@torch.no_grad()
+def infer_split_with_explicit_hidden(adapter, cache, split, batch_size, device, module_name='input_st_fc', runtime=None):
+    """Run PatchSTG and capture one explicitly named module only.
+
+    This is intentionally not an automatic layer sweep. If the requested module does not
+    exist or cannot be node-aligned, the caller can mark the hidden view unavailable.
+    """
+    ds=CachedTorch(cache,split); runtime=runtime or {}; nw=int(runtime.get('num_workers',0)); pin=bool(runtime.get('pin_memory',True)) and torch.cuda.is_available()
+    kw={'num_workers':nw,'pin_memory':pin}
+    if nw>0: kw.update(prefetch_factor=int(runtime.get('prefetch_factor',2)), persistent_workers=bool(runtime.get('persistent_workers',True)))
+    dl=DataLoader(ds,batch_size=batch_size,shuffle=False,drop_last=False,**kw)
+    modules=dict(adapter.model.named_modules())
+    if module_name not in modules:
+        return infer_split(adapter,cache,split,batch_size,device,runtime), None, f'module_not_found:{module_name}'
+    captured=[]
+    def hook(_m,_i,o): captured.append(o)
+    handle=modules[module_name].register_forward_hook(hook)
+    preds=[]; hiddens=[]; reason='ok'
+    try:
+        for bi,b in enumerate(dl,1):
+            captured.clear()
+            pn=adapter.eval_forward(b)
+            pr=adapter.raw(pn).detach().cpu().numpy().astype(np.float32)
+            preds.append(pr)
+            if not captured:
+                raise RuntimeError(f'Explicit hidden module {module_name} was not executed')
+            h=_node_align_hidden(captured[-1], pr.shape[-1]).detach().cpu().numpy().astype(np.float32)
+            if h.ndim!=3 or h.shape[1]!=pr.shape[-1]:
+                raise RuntimeError(f'Node-aligned hidden has unexpected shape {h.shape}')
+            hiddens.append(h)
+            if bi%100==0: log(f'PatchSTG inference+hidden {split} batches={bi}/{len(dl)} hidden={h.shape}')
+    except Exception as e:
+        reason=f'hidden_capture_failed:{type(e).__name__}:{e}'
+        log(f'WARN explicit hidden unavailable: {reason}')
+        # Predictions collected before a hook failure are discarded and recomputed cleanly.
+        handle.remove()
+        return infer_split(adapter,cache,split,batch_size,device,runtime), None, reason
+    finally:
+        try: handle.remove()
+        except Exception: pass
+    return np.concatenate(preds,axis=0), np.concatenate(hiddens,axis=0), reason

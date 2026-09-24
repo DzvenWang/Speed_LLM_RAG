@@ -9,9 +9,12 @@
 set -euo pipefail
 ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
 PY=/scratch/mh20/zw1165/envs/TFP/bin/python
-: "${METHOD:?METHOD required: SPRINT or RAST-PatchSTG}"
+: "${METHOD:?METHOD required: SPRINT, RAFT-PatchSTG, SARAF-PatchSTG, or RAST-PatchSTG}"
 : "${SEED:?SEED required}"
-case "$METHOD" in SPRINT|RAST-PatchSTG) ;; *) echo "Invalid secondary METHOD=$METHOD"; exit 2;; esac
+case "$METHOD" in
+  SPRINT|RAFT-PatchSTG|SARAF-PatchSTG|RAST-PatchSTG) ;;
+  *) echo "Invalid secondary METHOD=$METHOD"; exit 2;;
+esac
 source "$ROOT/scripts/pbs_live_log.sh"
 baseline_live_log_start "SecondaryPatchFormal" "$METHOD" "seed${SEED}" "formal"
 baseline_install_exit_trap
@@ -23,11 +26,20 @@ echo "START Secondary PatchSTG Formal v1.0.0 method=$METHOD seed=$SEED"
 "$PY" scripts/validate_frozen_patchstg.py
 "$PY" scripts/preflight.py --stage formal --method "$METHOD"
 "$PY" scripts/preflight_formal.py --method "$METHOD" --seed "$SEED" --stage formal
-if [[ "$METHOD" == "SPRINT" ]]; then
-  "$PY" scripts/check_sprint_runtime.py --stage formal
-  "$PY" -u baseline/runners/sprint_runner.py --stage formal --seed "$SEED"
-else
-  "$PY" scripts/check_rast_runtime.py
-  "$PY" -u baseline/runners/rast_runner.py --stage formal --seed "$SEED" --variant patchstg
-fi
+
+case "$METHOD" in
+  SPRINT)
+    "$PY" scripts/check_sprint_runtime.py --stage formal
+    "$PY" -u baseline/runners/sprint_runner.py --stage formal --seed "$SEED"
+    ;;
+  RAST-PatchSTG)
+    "$PY" scripts/check_rast_runtime.py
+    "$PY" -u baseline/runners/rast_runner.py --stage formal --seed "$SEED" --variant patchstg
+    ;;
+  RAFT-PatchSTG|SARAF-PatchSTG)
+    "$PY" -u baseline/runners/retrieval_patchstg_control_runner.py \
+      --method "$METHOD" --stage formal --seed "$SEED"
+    ;;
+esac
+
 echo "SECONDARY PATCH FORMAL PASS method=$METHOD seed=$SEED"

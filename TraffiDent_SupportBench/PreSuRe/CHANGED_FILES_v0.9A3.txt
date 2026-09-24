@@ -1,0 +1,14 @@
+VERSION
+README.md
+MIGRATION_v0.9.2_to_v0.9.3.md
+CHANGED_FILES_v0.9A3.txt
+configs/presure.yaml
+presure/__init__.py
+presure/models.py
+presure/selective_acceptance.py
+scripts/run_predictive_utility_selective_acceptance_probe.py
+scripts/predictive_utility_selective_acceptance_preflight.py
+scripts/submit_predictive_utility_selective_acceptance_probe.sh
+pbs/predictive_utility_selective_acceptance_probe.pbs
+tests/smoke_predictive_utility_selective_acceptance.py
+plus legacy version-compatibility guards in existing v0.9.x smoke/preflight/runner files

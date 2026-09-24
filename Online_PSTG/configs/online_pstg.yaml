@@ -1,0 +1,64 @@
+version: 0.1.0
+implementation_revision: 20260923_causal_online_patchstg_v1
+
+experiment:
+  subgraph: TraffiDent_Net_06
+  history: 12
+  horizon: 12
+  seed: 10
+  reference_backbone: PatchSTG
+  reference_seed: 10
+  manifest_start_column: window_start
+  stream_split: val
+
+# Project paths are resolved relative to the parent of Online_PSTG.
+# Override with --project-root or SPEED_LLM_RAG_ROOT.
+paths:
+  cache_dirname: ExperimentCache
+  backbone_dirname: Backbone
+  backbone_exp_dirname: Backbone_exps
+  common_dirname: ExperimentCommon
+  supportbench_dirname: TraffiDent_SupportBench
+  benchmark_relpath: data/processed/traffident/supportbench
+  exp_dirname: Online_PSTG_exps
+  log_dirname: Online_PSTG_logs
+  contract_relpath: ExperimentCommon/configs/experiment_contract.yaml
+
+online:
+  update_before_predict: true
+  min_mature_cases: 16
+  replay_size: 256
+  batch_size: 8
+  steps_per_update: 2
+  update_every_queries: 1
+  replay_sampling: recent_uniform
+  max_stream_queries: null
+  grad_clip: 1.0
+  save_final_checkpoint: true
+  save_query_predictions: false
+
+variants:
+  frozen:
+    trainable: frozen
+    learning_rate: 0.0
+    weight_decay: 0.0
+    anchor_lambda: 0.0
+  head:
+    trainable: head
+    learning_rate: 2.0e-5
+    weight_decay: 1.0e-4
+    anchor_lambda: 0.0
+  last_block_head:
+    trainable: last_block_head
+    learning_rate: 8.0e-6
+    weight_decay: 1.0e-4
+    anchor_lambda: 1.0e-5
+  full:
+    trainable: full
+    learning_rate: 2.0e-6
+    weight_decay: 1.0e-4
+    anchor_lambda: 1.0e-5
+
+runtime:
+  device: auto
+  deterministic: true

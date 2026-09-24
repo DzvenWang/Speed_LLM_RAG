@@ -1,0 +1,437 @@
+version: 1.0.0
+project:
+  root: /scratch/mh20/zw1165/Speed_LLM_RAG
+  baseline_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
+  log_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs
+  exp_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_exps
+  supportbench_project: /scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench
+  benchmark_root: /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench
+  support_artifact_root: /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench
+  backbone_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone
+  backbone_exp_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_exps
+  frozen_backbone_json: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_exps/FROZEN_BACKBONE.json
+  python: /scratch/mh20/zw1165/envs/TFP/bin/python
+  leaf_python: /scratch/mh20/zw1165/envs/TFP/bin/python
+  protocol_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol
+  protocol_artifact_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_artifacts
+  common_root: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon
+experiment:
+  subgraph: TraffiDent_Net_06
+  history: 12
+  horizon: 12
+  severity: 0.4
+  seed: 10
+  formal_seeds:
+  - 10
+  - 20
+  - 30
+  families:
+  - temporal_outage
+  - regional_outage
+  - directional_outage
+  - predictive_regional_outage
+  - predictive_directional_outage
+protocol:
+  official_source_policy: exact_commit_or_first_run_resolved_commit_then_tree_sha256_lock
+  test_selection_policy: physically_isolated_until_evaluation_stage
+  prediction_contract: raw_speed_Mx12xN
+  retrieval_memory: train_only
+  retrieval_memory_signal: full_train_history
+  retrieval_query_signal: incomplete_query_history
+  current_query_future_allowed_at_inference: false
+  same_frozen_backbone_for_imputation_and_matched_rag: true
+  cache_fingerprint_required: true
+  retrieval_audit_required: true
+  shared_protocol_name: protocol_v1
+  shared_protocol_version: 1.0.0
+  consumer_policy: frozen_shared_protocol_only
+  no_local_sampling: true
+  frozen_backbone_required_for:
+  - ImputeFormer
+  - LRTC-TMCP
+  - SPRINT
+  - RAST-PatchSTG
+baseline_story:
+  main_table:
+  - ImputeFormer
+  - LRTC-TMCP
+  - GinAR
+  - RAFT
+  - RAST
+  - SARAF
+  - ReMFT
+  llm_specific: []
+  specialized_reconstruction_subtrack:
+  - SPRINT
+  partial_sensing_subtrack:
+  - SLPF
+  - MoGERNN
+  claim_chain:
+  - reconstruction_first_deep
+  - reconstruction_first_recent_trc_tensor_completion
+  - missing_aware_end_to_end
+  - generic_similarity_retrieval
+  - traffic_spatiotemporal_retrieval
+  - retrieval_reliability_control
+  - llm_direct_traffic_forecasting_reference
+  - predictive_support_reasoning_and_control
+  secondary_experiments:
+  - SPRINT
+  - SLPF
+  - MoGERNN
+  - LEAF
+  - LEAF-Qwen1.5B
+  - RAST-PatchSTG
+methods:
+  ImputeFormer:
+    enabled: true
+    table_group: main
+    priority: 1
+    formal_track: reconstruction_then_same_frozen_backbone
+    stage_now: development_then_formal_from_clean_slate
+    requires_frozen_backbone_for_final_forecast: true
+    primary_experiment: true
+  GinAR:
+    enabled: true
+    table_group: main
+    priority: 3
+    formal_track: end_to_end_variable_missing_forecasting
+    stage_now: formal_stability_probe_then_development_then_formal
+    requires_frozen_backbone_for_final_forecast: false
+    primary_experiment: true
+  RAFT:
+    enabled: true
+    table_group: main
+    priority: 4
+    formal_track: generic_retrieval_external_val_only_runner_train_memory_only
+    stage_now: development_then_formal_from_clean_slate
+    requires_frozen_backbone_for_final_forecast: false
+    primary_experiment: true
+  RAST:
+    enabled: true
+    table_group: main
+    priority: 5
+    formal_track: traffic_rag_native_external_val_only_runner
+    stage_now: development_then_formal_from_clean_slate
+    requires_frozen_backbone_for_final_forecast: false
+    primary_experiment: true
+  SARAF:
+    enabled: true
+    table_group: main
+    priority: 6
+    formal_track: stationarity_aware_retrieval_external_val_only_runner_train_memory_only
+    stage_now: development_then_formal_from_clean_slate
+    requires_frozen_backbone_for_final_forecast: false
+    primary_experiment: true
+  LEAF:
+    enabled: true
+    table_group: secondary
+    priority: 7
+    formal_track: llm_framework_reference
+    stage_now: qwen15_predict_select_supervise_ready
+    requires_frozen_backbone_for_final_forecast: false
+    primary_experiment: false
+  LEAF-Qwen1.5B:
+    enabled: true
+    table_group: secondary
+    priority: 7
+    formal_track: leaf_qwen15_predict_select_supervise_adaptation
+    stage_now: development_ready_after_leaf_branches
+    requires_frozen_backbone_for_final_forecast: false
+    primary_experiment: false
+  SLPF:
+    enabled: true
+    table_group: secondary
+    priority: 9
+    formal_track: matched_fixed_partial_sensing_subtrack
+    stage_now: official_native_subtrack_bridge_and_smoke
+    requires_frozen_backbone_for_final_forecast: false
+    primary_experiment: false
+  RAST-PatchSTG:
+    enabled: true
+    table_group: secondary
+    priority: 11
+    formal_track: traffic_rag_matched_frozen_patchstg_controlled_adaptation
+    stage_now: formal_runner_native_epoch_order_pending_rerun
+    requires_frozen_backbone_for_final_forecast: true
+    primary_experiment: false
+  SPRINT:
+    enabled: true
+    table_group: secondary
+    priority: 2
+    formal_track: causal_historical_day_sprint_imputation_then_same_frozen_backbone
+    stage_now: development_runner_causal_history_vendor_native_pending_smoke
+    requires_frozen_backbone_for_final_forecast: true
+    primary_experiment: false
+  MoGERNN:
+    enabled: true
+    table_group: secondary
+    priority: 10
+    formal_track: official_mogernn_dynamic_view_batch1_adaptation
+    stage_now: development_pending_inference_contract_check
+    requires_frozen_backbone_for_final_forecast: false
+    primary_experiment: false
+  ReMFT:
+    enabled: true
+    table_group: main
+    priority: 7
+    formal_track: official_remft_architecture_12step_external_val_only_adaptation
+    stage_now: runtime_contract_then_development_then_formal
+    requires_frozen_backbone_for_final_forecast: false
+    primary_experiment: true
+  LRTC-TMCP:
+    enabled: true
+    table_group: main
+    priority: 2
+    formal_track: causal_multiday_lrtc_tmcp_imputation_then_same_frozen_backbone
+    stage_now: causal_multiday_contract_smoke_then_rerun_development_and_formal_seed10
+    requires_frozen_backbone_for_final_forecast: true
+    deterministic: true
+    formal_seeds:
+    - 10
+    primary_experiment: true
+runners:
+  RAFT:
+    batch_size: 32
+    max_epochs: 10
+    learning_rate: 0.0001
+    patience: 10
+    n_period: 3
+    topm: 20
+  GinAR:
+    model_variant: model1
+    batch_size: 16
+    max_epochs: 100
+    learning_rate: 0.006
+    formal_learning_rate: 0.0005
+    formal_lr_milestones:
+    - 40
+    - 70
+    - 90
+    formal_max_optimizer_updates: 75000
+    divergence_guard_enabled: true
+    divergence_guard_min_epoch: 2
+    divergence_guard_ratio: 5.0
+    divergence_guard_abs: 5.0
+    dropout: 0.15
+    emb_size: 16
+    graph_size: 8
+    layers: 2
+    gradient_clip: 1.0
+    lr_milestones:
+    - 1
+    - 15
+    - 40
+    - 70
+    - 90
+    lr_gamma: 0.5
+    patience: 20
+    input_features:
+    - speed
+    - tod
+    - dow
+    stability_probe_epochs: 8
+    formal_validity_requires_no_divergence: true
+  SARAF:
+    batch_size: 32
+    max_epochs: 20
+    learning_rate: 0.001
+    patience: 5
+    n_period: 1
+    topm: 20
+    time_aware_weight: 0.3
+    freq: 5min
+    fusion_method: weighted
+    features: M
+    retrieval_precompute_batch_size: 1024
+    train_only_memory: true
+  ImputeFormer:
+    batch_size: 32
+    max_epochs: 120
+    learning_rate: 0.001
+    weight_decay: 0.0
+    patience: 20
+    gradient_clip: 5.0
+    input_embedding_dim: 32
+    learnable_embedding_dim: 96
+    feed_forward_dim: 256
+    num_temporal_heads: 4
+    num_layers: 3
+    dim_proj: 8
+    dropout: 0.1
+  RAST:
+    batch_size: 32
+    max_epochs: 100
+    learning_rate: 0.002
+    weight_decay: 0.0001
+    patience: 20
+    gradient_clip: 5.0
+    dropout: 0.1
+    query_dim: 256
+    retrieval_dim: 128
+    temporal_dim: 64
+    spatial_dim: 64
+    update_interval: 10
+    encoder_layers: 3
+    top_k: 3
+    use_amp: false
+    min_delta: 1.0e-08
+  LEAF:
+    batch_size: 16
+    max_epochs: 80
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    patience: 12
+    gradient_clip: 5.0
+    hidden_dim: 64
+    dropout: 0.0
+    stgcn_num_layers: 7
+    hgnn_num_backbone_layers: 6
+    hgnn_num_head_layers: 1
+    hgnn_num_hyper_edge: 32
+    qwen_selector:
+      model_name: Qwen2.5-1.5B-Instruct
+      model_cache_root: /scratch/mh20/zw1165/cache/huggingface/models--Qwen--Qwen2.5-1.5B-Instruct
+      snapshot: 989aa7980e4cf806f80c7fef2b1adb7bc71aa306
+      local_files_only: true
+      dtype: float16
+      selector_batch_size: 32
+      max_input_tokens: 2048
+      max_new_tokens: 4
+      fallback_choice: 1
+      rounds: 2
+      update_iters: 5
+      test_learning_rate: 0.001
+      test_weight_decay: 0.0
+      checkpoint_every_queries: 25
+      log_every_queries: 10
+  SPRINT:
+    device: CPU
+    use_vendor_native_defaults: true
+    zero_as_missing: false
+    protect_observed_values: true
+    historical_days: 28
+    day_steps: 288
+    canonical_speed_match_mae_max: 0.05
+    canonical_valid_agreement_min: 0.9999
+    patchstg_batch_size: 32
+  MoGERNN:
+    batch_size: 1
+    max_epochs: 50
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    patience: 3
+    scheduler: plateau
+    scheduler_patience: 1
+    scheduler_factor: 0.5
+    min_learning_rate: 1.0e-05
+    gradient_clip: 5.0
+    require_eval_target_independence: true
+    d_model: 64
+    e_layers: 2
+    k_hop: 1
+    num_used_experts: 3
+    expert_list:
+    - Mean
+    - WMean
+    - Max
+    - Min
+    - Diffusion
+    dropout: 0.0
+    epsilon_for_observed_zero: 1.0e-06
+    eval_target_independence_atol: 1.0e-06
+  ReMFT:
+    batch_size: 1
+    max_epochs: 20
+    learning_rate: 0.0001
+    weight_decay: 0.0
+    patience: 5
+    gradient_accumulation_steps: 24
+    gradient_clip: 5.0
+    patch_len: 4
+    stride: 2
+    phi_layers: 5
+    down_sampling_window: 2
+    down_sampling_layers: 2
+    llm: BERT
+    local_model_env: REMFT_BERT_PATH
+    checkpoint_consistent_llm_depth: true
+    require_exact_llm_checkpoint_architecture: true
+    effective_batch_size: 24
+    development_use_amp: false
+    formal_batch_size: 8
+    formal_eval_batch_size: 8
+    formal_use_amp: true
+    formal_reference_development_best_epoch: 18
+    formal_reference_development_train_rows: 12000
+    formal_max_optimizer_updates: 9000
+    data_loader_workers: 2
+    formal_gradient_accumulation_steps: 3
+  LRTC-TMCP:
+    batch_size: 64
+    rho: 1.0e-05
+    theta0: 0.2
+    beta: 2.5
+    gamma: 20.0
+    factor: 1.05
+    tol: 0.0001
+    max_iter: 200
+    smoke_max_iter: 3
+    protect_observed_values: true
+    tensor_layout: nodes_x_causal_days_x_query_slots
+    strict_h12_only: false
+    use_raw_speed_space: true
+    historical_days: 28
+    day_steps: 288
+    canonical_speed_match_mae_max: 0.05
+    canonical_valid_agreement_min: 0.9999
+    extra_causal_context: true
+protocol_assertions:
+  development:
+    train_rows: 12000
+    val_rows: 5000
+  formal:
+    val_rows: 5000
+    train_policy: all_eligible_unique_groups
+  evaluation:
+    test_rows: 5000
+evaluation:
+  require_formal_selection: true
+  require_frozen_protocol: true
+  save_predictions: true
+frozen_backbone_contract:
+  owner: Backbone
+  minimum_schema_version: 3
+  required_project_version: 0.5.0
+  required_selected_model: PatchSTG
+  use_reference_checkpoint_for_all_baseline_seeds: true
+  require_checkpoint_sha256: true
+  require_protocol_hash_match: true
+  require_time_feature_fingerprint_match: true
+  required_data_contract_revision: traffident_experiment_cache_v1
+  required_shared_contract_version: 1.0.0
+  require_shared_cache_identity_match: true
+shared_contract:
+  required_version: 1.0.0
+  config: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon/configs/experiment_contract.yaml
+  data_contract_revision: traffident_experiment_cache_v1
+  time_feature_revision: traffident_time_features_v1
+  metrics_revision: traffident_metrics_v1
+  prediction_contract_revision: traffident_prediction_v1
+formal_selection_methods:
+- ImputeFormer
+- LRTC-TMCP
+- GinAR
+- RAFT
+- RAST
+- SARAF
+- ReMFT
+secondary_methods:
+- SPRINT
+- SLPF
+- MoGERNN
+- LEAF
+- LEAF-Qwen1.5B
+- RAST-PatchSTG
+method_implementation_revisions:
+  ReMFT: remft_phi12_checkpointdepth_amp_batch8_updatebudget_r3

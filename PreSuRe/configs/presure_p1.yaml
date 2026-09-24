@@ -1,0 +1,75 @@
+version: p1.0.0
+implementation_revision: 20260922_patchstg_raftlite_episode_sidecar
+
+project: {}
+
+experiment:
+  subgraph: TraffiDent_Net_06
+  history: 12
+  horizon: 12
+  seed: 10
+  reference_backbone: PatchSTG
+  reference_seed: 10
+
+shared_contract: {}
+
+runtime:
+  amp: false
+  num_workers: 0
+  prefetch_factor: 2
+  persistent_workers: false
+  pin_memory: true
+  deterministic: true
+
+artifacts:
+  backbone_batch_size: 32
+  latent_pca_dim: 8
+  pca_fit_vectors: 120000
+  projection_chunk: 128
+  equivalence_atol: 1.0e-5
+  cleanup_raw_prehead: true
+
+retrieval:
+  # P1 deliberately keeps retrieval simple. Mask-aware scoring is P2.
+  top_k: 16
+  temperature: 0.15
+  query_chunk: 256
+  key: frozen_patchstg_prehead_pca_global_mean
+  memory_split: train_only
+  strict_causal_episode_end_before_query: true
+  use_historical_subsequent_trajectory: true
+
+training:
+  train_queries: 12000
+  dev_queries: 1000
+  batch_size: 32
+  eval_batch_size: 64
+  epochs: 20
+  patience: 4
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  adapter_hidden: 128
+  dropout: 0.10
+
+loss:
+  overall_weight: 1.0
+  masked_weight: 4.0
+  support_weight: 0.25
+
+variants:
+  adapter_only: Same zero-init residual adapter with all support channels set to zero.
+  shuffled_support: Same adapter with causality-preserving random historical supports.
+  history_only: Real Top-K supports; only incomplete historical-state summaries are exposed.
+  history_future: Real Top-K supports; historical state plus already-observed subsequent evolution and coverage.
+
+scientific_scope:
+  frozen_patchstg: true
+  input_filling: false
+  utility_teacher: false
+  need_module: false
+  gate: false
+  qwen: false
+  mask_aware_retrieval_score: false
+  historical_future_must_be_causal: true
+  historical_future_observability_masked: true
+  final_locked: true
