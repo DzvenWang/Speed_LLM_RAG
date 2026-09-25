@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import yaml
 
+ROOT_ENV = 'SPEED_LLM_RAG_ROOT'
+ROOT_TOKEN = '${SPEED_LLM_RAG_ROOT}'
 
 ESSENTIAL_COLUMNS = [
     'protocol_view_id', 'view_id', 'view_group_id', 'split', 'window_start',
@@ -15,9 +18,28 @@ ESSENTIAL_COLUMNS = [
 ]
 
 
+def repository_root() -> Path:
+    env = os.environ.get(ROOT_ENV, '').strip()
+    if env:
+        return Path(os.path.expanduser(os.path.expandvars(env))).resolve()
+    return Path(__file__).resolve().parents[2]
+
+
+def _expand(v):
+    if isinstance(v, str):
+        root = str(repository_root())
+        v = v.replace(ROOT_TOKEN, root).replace('$SPEED_LLM_RAG_ROOT', root)
+        return os.path.expandvars(os.path.expanduser(v))
+    if isinstance(v, dict):
+        return {k: _expand(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_expand(x) for x in v]
+    return v
+
+
 def load_yaml(path: str | Path) -> dict[str, Any]:
     with open(path, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f)
+        return _expand(yaml.safe_load(f))
 
 
 def write_json(path: str | Path, obj: Any) -> None:

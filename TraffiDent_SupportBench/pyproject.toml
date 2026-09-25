@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "traffident-supportbench"
-version = "1.2.3"
+version = "1.2.6"
 description = "Predictive spatiotemporal support benchmark under incomplete sensing"
 requires-python = ">=3.10"
 dependencies = [

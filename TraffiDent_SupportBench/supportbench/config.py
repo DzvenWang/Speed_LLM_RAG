@@ -7,6 +7,22 @@ from typing import Any
 
 import yaml
 
+ROOT_ENV = 'SPEED_LLM_RAG_ROOT'
+ROOT_TOKEN = '${SPEED_LLM_RAG_ROOT}'
+
+
+def repository_root() -> Path:
+    """Resolve the Speed_LLM_RAG repository root without hard-coded paths.
+
+    Priority:
+      1. SPEED_LLM_RAG_ROOT environment variable.
+      2. Parent directory of this TraffiDent_SupportBench project.
+    """
+    env = os.environ.get(ROOT_ENV, '').strip()
+    if env:
+        return Path(os.path.expanduser(os.path.expandvars(env))).resolve()
+    return Path(__file__).resolve().parents[2]
+
 
 def _deep_set(d: dict, keys: list[str], value: Any) -> None:
     cur = d
@@ -17,6 +33,8 @@ def _deep_set(d: dict, keys: list[str], value: Any) -> None:
 
 def _expand(v):
     if isinstance(v, str):
+        root = str(repository_root())
+        v = v.replace(ROOT_TOKEN, root).replace('$SPEED_LLM_RAG_ROOT', root)
         return os.path.expandvars(os.path.expanduser(v))
     if isinstance(v, dict):
         return {k: _expand(x) for k, x in v.items()}
@@ -37,6 +55,7 @@ def load_config(path: str | Path | None = None, overrides: dict[str, Any] | None
         for key, value in overrides.items():
             _deep_set(cfg, key.split('.'), value)
     cfg['_config_path'] = str(path.resolve())
+    cfg['_repository_root'] = str(repository_root())
     return cfg
 
 

@@ -269,7 +269,7 @@ class PatchSTGAdapter(BaseAdapter):
     adapter_revision = 'patchstg_official_kdtree_traffident_v1'
 
     @classmethod
-    def build(cls, vendor, num_nodes, device, mean, std, cfg, adj, nodes):
+    def build(cls, vendor, num_nodes, device, mean, std, cfg, adj, nodes, layout_override=None):
         try:
             import timm  # noqa: F401
         except Exception as e:
@@ -277,7 +277,11 @@ class PatchSTGAdapter(BaseAdapter):
                 'PatchSTG requires timm==1.0.12. Install requirements_extra.txt in the TFP environment.'
             ) from e
         mod = load_module('vendor_patchstg_model', Path(vendor)/'models'/'model.py', Path(vendor))
-        ori, reo, all_idx, fp = _patchstg_layout(vendor, nodes, adj, num_nodes, cfg)
+        if layout_override is None:
+            ori, reo, all_idx, fp = _patchstg_layout(vendor, nodes, adj, num_nodes, cfg)
+        else:
+            from .patchstg import normalize_layout_override
+            ori, reo, all_idx, fp = normalize_layout_override(layout_override, num_nodes, cfg)
         m = mod.PatchSTG(
             tem_patchsize=int(cfg['tem_patchsize']),
             tem_patchnum=int(cfg['tem_patchnum']),
@@ -398,9 +402,9 @@ class STLAformerAdapter(BaseAdapter):
 
 ADAPTERS={'STAEformer':STAEformerAdapter,'HimNet':HimNetAdapter,'BigST':BigSTAdapter,'STDN':STDNAdapter,'PatchSTG':PatchSTGAdapter,'STLAformer':STLAformerAdapter}
 
-def build_adapter(name,vendor_root,num_nodes,device,mean,std,cfg,adj,nodes=None):
+def build_adapter(name,vendor_root,num_nodes,device,mean,std,cfg,adj,nodes=None,layout_override=None):
     if name not in ADAPTERS: raise KeyError(name)
     vendor = Path(vendor_root) / name
     if name == 'PatchSTG':
-        return ADAPTERS[name].build(vendor,num_nodes,device,mean,std,cfg,adj,nodes)
+        return ADAPTERS[name].build(vendor,num_nodes,device,mean,std,cfg,adj,nodes,layout_override=layout_override)
     return ADAPTERS[name].build(vendor,num_nodes,device,mean,std,cfg,adj)

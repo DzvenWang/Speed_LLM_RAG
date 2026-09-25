@@ -1,0 +1,40 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q normal
+#PBS -l ncpus=4
+#PBS -l mem=16GB
+#PBS -l walltime=01:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -N PatchSTGLayoutRecover
+#PBS -j oe
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_logs/
+set -euo pipefail
+
+ROOT="${SPEED_LLM_RAG_ROOT:-/scratch/mh20/zw1165/Speed_LLM_RAG}"
+PROJ="$ROOT/Backbone"
+LOGROOT="$ROOT/Backbone_logs"
+ENVROOT="/scratch/mh20/zw1165/envs/TFP"
+PYTHON="$ENVROOT/bin/python"
+: "${CHECKPOINT:?Set CHECKPOINT to historical PatchSTG best.pt}"
+if [[ "$CHECKPOINT" != /* ]]; then CHECKPOINT="$ROOT/$CHECKPOINT"; fi
+
+mkdir -p "$LOGROOT"
+STAMP=$(date +%Y%m%d_%H%M%S)
+LOG="$LOGROOT/PatchSTG.layout_recovery.${PBS_JOBID}.${STAMP}.live.log"
+export SPEED_LLM_RAG_ROOT="$ROOT"
+export PATH="$ENVROOT/bin:$PATH"
+export PYTHONPATH="$PROJ:$ROOT/ExperimentCommon:$ROOT/Protocol:$ROOT/TraffiDent_SupportBench:${PYTHONPATH:-}"
+export PYTHONUNBUFFERED=1
+export PYTHONDONTWRITEBYTECODE=1
+exec > >("$PYTHON" -u "$PROJ/timestamp_stream.py" | tee -a "$LOG") 2>&1
+trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"' EXIT
+
+cd "$PROJ"
+echo "START PatchSTG legacy spatial-layout recovery job=${PBS_JOBID} host=$(hostname)"
+echo "CHECKPOINT=$CHECKPOINT"
+echo "LOG_FILE=$LOG"
+ARGS=(--checkpoint "$CHECKPOINT" --config "$PROJ/configs/backbone.yaml")
+if [[ -n "${BENCHMARK_ROOT:-}" ]]; then ARGS+=(--benchmark-root "$BENCHMARK_ROOT"); fi
+if [[ -n "${SEARCH_ROOT:-}" ]]; then ARGS+=(--search-root "$SEARCH_ROOT"); fi
+"$PYTHON" -u scripts/recover_patchstg_layout.py "${ARGS[@]}"
+echo "FINISHED PatchSTG legacy spatial-layout recovery"

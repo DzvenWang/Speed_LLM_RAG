@@ -153,6 +153,7 @@ def build_one(src: Path, cfg: dict) -> None:
         regional_min_ood_layouts_per_severity=int(cfg['sensing'].get('regional_min_ood_layouts_per_severity', 8)),
         directional_min_id_layouts_per_severity=int(cfg['sensing'].get('directional_min_id_layouts_per_severity', 16)),
         directional_min_ood_layouts_per_severity=int(cfg['sensing'].get('directional_min_ood_layouts_per_severity', 8)),
+        min_layout_overrides=cfg['sensing'].get('layout_min_overrides', {}),
     )
 
     dep_npz=np.load(graph/'predictive_dependency.npz')
@@ -162,6 +163,14 @@ def build_one(src: Path, cfg: dict) -> None:
         list(map(float,ps.get('predictive_severities',[ps['main_severity']]))), int(ps['global_seed']),
         center_pool_fraction=float(ps.get('predictive_center_pool_fraction',0.35)),
         exploration_temperature=float(ps.get('predictive_layout_exploration_temperature',0.12)),
+        directional_exploration_temperature=float(ps.get('predictive_directional_exploration_temperature',ps.get('predictive_layout_exploration_temperature',0.12))),
+        directional_candidate_multiplier=int(ps.get('predictive_directional_candidate_multiplier',64)),
+        directional_anchor_pool_fraction=float(ps.get('predictive_directional_anchor_pool_fraction',0.25)),
+        directional_restart_penalty=float(ps.get('predictive_directional_restart_penalty',0.05)),
+        directional_continuity_bonus=float(ps.get('predictive_directional_continuity_bonus',0.02)),
+        directional_min_segment_nodes=int(ps.get('predictive_directional_min_segment_nodes',3)),
+        directional_max_segments=int(ps.get('predictive_directional_max_segments',24)),
+        directional_target_ratio=float(dep_cfg.get('predictive_context_min_ratio',1.10)),
         regional_id_count=int(ps.get('predictive_regional_id_layouts_per_severity',24)),
         regional_ood_count=int(ps.get('predictive_regional_ood_layouts_per_severity',12)),
         regional_min_id=int(ps.get('predictive_regional_min_id_layouts_per_severity',8)),
@@ -170,10 +179,12 @@ def build_one(src: Path, cfg: dict) -> None:
         directional_ood_count=int(ps.get('predictive_directional_ood_layouts_per_severity',12)),
         directional_min_id=int(ps.get('predictive_directional_min_id_layouts_per_severity',8)),
         directional_min_ood=int(ps.get('predictive_directional_min_ood_layouts_per_severity',4)),
+        ood_severities=list(map(float,ps.get('ood_severities',[ps['main_severity']]))),
+        min_layout_overrides=ps.get('layout_min_overrides', {}),
     )
 
     manifest={
-        'benchmark':'TraffiDent-SupportBench','version':'1.2.3','subgraph':src.name,'source_dir':str(src.resolve()),
+        'benchmark':'TraffiDent-SupportBench','version':'1.2.6','subgraph':src.name,'source_dir':str(src.resolve()),
         'shape':[int(T),int(N),int(C)],'channels':channels,'primary_channel':primary,'primary_channel_index':speed_idx,
         'history_len':int(cfg['forecast']['history_len']),'horizon':int(cfg['forecast']['horizon']),'freq_minutes':int(cfg['forecast']['freq_minutes']),
         'controlled_complete_min_fraction':float(cfg['forecast']['controlled_complete_min_fraction']),
@@ -191,7 +202,7 @@ def main():
     log(f'source_root={source}')
     for p in items: build_one(p,cfg)
     write_json(Path(cfg['project']['benchmark_root'])/'benchmark_manifest.json', {
-        'benchmark':'TraffiDent-SupportBench','version':'1.2.3','subgraphs':[p.name for p in items],
+        'benchmark':'TraffiDent-SupportBench','version':'1.2.6','subgraphs':[p.name for p in items],
         'history_len':int(cfg['forecast']['history_len']),'horizon':int(cfg['forecast']['horizon']),
         'split':'70/10/20 chronological','primary_channel':cfg['source']['primary_channel'],
         'canonical_data_rule':'facts/protocols only; learned retrieval and LLM artifacts are external derived data',

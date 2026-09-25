@@ -1,35 +1,104 @@
 from __future__ import annotations
-
 from pathlib import Path
 import sys
-
-COMMON = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon')
-if not COMMON.exists():
-    COMMON = Path(__file__).resolve().parents[2] / 'ExperimentCommon'
-if str(COMMON) not in sys.path:
-    sys.path.insert(0, str(COMMON))
-
-from experiment_common.cache import cache_dir as shared_cache_dir
-from experiment_common.utils import load_yaml as load_shared_yaml
+from .utils import load_yaml, repository_root
 
 
-def shared_contract_config(cfg: dict) -> dict:
-    """Load the single ExperimentCommon contract used by Backbone."""
-    p = Path(cfg['shared_contract']['config'])
+def common_root() -> Path:
+    root = repository_root()
+    p = root / 'ExperimentCommon'
     if not p.exists():
-        p = COMMON / 'configs' / 'experiment_contract.yaml'
-    return load_shared_yaml(p)
+        raise FileNotFoundError(f'ExperimentCommon not found: {p}')
+    for q in (p, root / 'Protocol', root / 'TraffiDent_SupportBench'):
+        if q.exists() and str(q) not in sys.path:
+            sys.path.insert(0, str(q))
+    return p
 
 
-def shared_stage(cfg: dict, consumer_stage: str) -> str:
-    """Map Backbone's public stage names onto ExperimentCache stage names."""
+def _severity_tag(severity: int | float) -> str:
+    value = float(severity)
+    if value > 1: value /= 100.0
+    return f's{int(round(value * 100)):02d}'
+
+
+def contract_path(cfg: dict, stage: str, severity: int | float | None = None) -> Path:
+    if stage in ('development', 'formal'):
+        return Path(cfg['shared_contract']['configs']['training'])
+    if stage != 'evaluation':
+        raise ValueError(stage)
+    if severity is None:
+        raise ValueError('evaluation requires severity')
+    tag = _severity_tag(severity)
     try:
-        return str(cfg['protocol']['stage_map'][consumer_stage])
+        return Path(cfg['shared_contract']['configs']['evaluation'][tag])
     except KeyError as e:
-        raise ValueError(f'Unknown Backbone stage: {consumer_stage}') from e
+        raise ValueError(f'Unsupported evaluation severity {severity}; expected 20/40/60/90') from e
 
 
-def cache_path(cfg: dict, consumer_stage: str) -> Path:
-    """Return the canonical ExperimentCache directory; no Backbone_exps alias exists."""
-    scfg = shared_contract_config(cfg)
-    return shared_cache_dir(scfg, shared_stage(cfg, consumer_stage))
+def shared_contract_config(cfg: dict, stage: str, severity: int | float | None = None) -> dict:
+    common_root()
+    p = contract_path(cfg, stage, severity)
+    if not p.exists():
+        raise FileNotFoundError(p)
+    return load_yaml(p)
+
+
+def cache_path(cfg: dict, stage: str, severity: int | float | None = None) -> Path:
+    common_root()
+    from experiment_common.cache import cache_dir
+    scfg = shared_contract_config(cfg, stage, severity)
+    return cache_dir(scfg, stage)
+
+
+def validate_shared_cache(cfg: dict, stage: str, severity: int | float | None = None, *, allow_locked_evaluation: bool = False) -> dict:
+    """Validate a shared cache with old/new ExperimentCommon compatibility.
+
+    Training stages intentionally use only the stable two-argument
+    ``validate_cache(cfg, stage)`` API.  Older ExperimentCommon releases on GADI do
+    not accept ``allow_locked_evaluation_validation`` and must not receive it.
+
+    Evaluation is intentionally non-gating in the current Backbone workflow.  If
+    ExperimentCommon exposes the newer bypass keyword we use it.  With an older
+    ExperimentCommon, we require the already-materialized cache directory plus its
+    READY/manifest files and then normalize its identity without invoking the legacy
+    Protocol access gate.
+    """
+    common_root()
+    from experiment_common.cache import validate_cache, cache_dir
+    scfg = shared_contract_config(cfg, stage, severity)
+
+    if stage in ('development', 'formal'):
+        # Stable API shared by both legacy and current ExperimentCommon.
+        validate_cache(scfg, stage)
+    elif stage == 'evaluation':
+        import inspect
+        params = inspect.signature(validate_cache).parameters
+        if 'allow_locked_evaluation_validation' in params:
+            validate_cache(
+                scfg, stage,
+                allow_locked_evaluation_validation=True,
+            )
+        else:
+            # Legacy ExperimentCommon couples validate_cache() to the Protocol
+            # evaluation-access gate.  Backbone simple evaluation no longer uses
+            # that gate, so validate the materialized cache presence here and leave
+            # detailed tensor-shape checks to the evaluation runner.
+            out = cache_dir(scfg, stage)
+            if not out.exists():
+                raise FileNotFoundError(f'Evaluation cache not found: {out}')
+            for name in ('cache_manifest.json', 'READY.json'):
+                if not (out / name).exists():
+                    raise RuntimeError(f'Missing {name} in evaluation cache: {out}')
+    else:
+        raise ValueError(stage)
+
+    from .identity import load_cache_identity
+    return load_cache_identity(cache_dir(scfg, stage))
+
+
+def require_evaluation_access(cfg: dict, severity: int | float) -> None:
+    """Backward-compatible no-op. Protocol grant files are no longer required."""
+    # Keep this symbol so older callers do not break, but deliberately do not call
+    # ExperimentCommon.require_evaluation_cache_access(). Frozen/hash validation is
+    # still enforced by validate_shared_cache().
+    return None

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scientific audit for predictive structured sensing in SupportBench v1.2.3.
+"""Scientific audit for predictive structured sensing in SupportBench v1.2.4.
 
 The authoritative Chapter-3 metric is the network mean of per-target
 predictive-context loss:
@@ -416,7 +416,7 @@ def main() -> None:
     cross = feature_crosscheck(d, feature_path, args.distribution, args.severity, out_dir)
     report = {
         "schema": "predictive_structured_mask_audit_v2",
-        "supportbench_version": "1.2.3",
+        "supportbench_version": "1.2.4",
         "future_free": True,
         "canonical_metric": "predictive_context_loss = network_mean_context_loss = mean(per_target_context_loss)",
         "legacy_metric": "aggregate_context_loss is the v1.2.2 configured target quantile and is diagnostic only",
@@ -442,7 +442,7 @@ def main() -> None:
     }
     write_json(out_dir / "audit_summary.json", report)
 
-    print("\n=== Predictive Structured Mask Audit v1.2.3 ===")
+    print("\n=== Predictive Structured Mask Audit v1.2.4 ===")
     print(f"subgraph={args.subgraph} split={args.split} budget={args.budget}")
     print(f"distribution={args.distribution} severity={args.severity:.2f} max_groups={args.max_groups}")
     print("metric=network_mean_context_loss = mean(per_target_context_loss)")

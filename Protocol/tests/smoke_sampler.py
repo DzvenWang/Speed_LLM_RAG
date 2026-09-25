@@ -9,18 +9,18 @@ sys.path.insert(0, str(ROOT))
 from shared_protocol.sampler import all_unique_group_pick, balanced_unique_group_pick
 
 fams = [
+    'entry_random',
+    'sensor_outage',
     'temporal_outage',
     'regional_outage',
     'directional_outage',
-    'predictive_regional_outage',
-    'predictive_directional_outage',
 ]
 
 # Development-style exact balanced selection.
 rows = []
 for i in range(200):
     for f in fams:
-        if not (i % 11 == 0 and f == 'predictive_directional_outage'):
+        if not (i % 11 == 0 and f == 'sensor_outage'):
             rows.append({
                 'view_id': f'v{i}_{f}',
                 'view_group_id': f'g{i}',
@@ -37,10 +37,11 @@ assert set(out.family.value_counts()) == {20}
 rows = []
 for i in range(50):
     available = (
-        ['temporal_outage'] if i < 20 else
-        ['regional_outage'] if i < 30 else
-        ['directional_outage', 'predictive_regional_outage'] if i < 40 else
-        ['predictive_regional_outage', 'predictive_directional_outage']
+        ['entry_random'] if i < 10 else
+        ['sensor_outage'] if i < 20 else
+        ['temporal_outage'] if i < 30 else
+        ['regional_outage', 'directional_outage'] if i < 40 else
+        ['directional_outage', 'entry_random']
     )
     for f in available:
         rows.append({

@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import argparse
 import json
+import os
 import sys
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-GADI_ROOT = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone')
-ROOT = GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[1]
-for p in [ROOT, ROOT.parent / 'TraffiDent_SupportBench']:
+ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(os.environ.get('SPEED_LLM_RAG_ROOT', ROOT.parent)).expanduser().resolve()
+for p in [ROOT, REPO_ROOT / 'TraffiDent_SupportBench']:
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
 from backbone.adapters import build_adapter
+from backbone.patchstg import checkpoint_layout_or_sidecar, require_checkpoint_layout_match
 from backbone.data import CachedSplit
 from backbone.runner import evaluate
 from backbone.utils import load_yaml, write_json, log, sha256_file
@@ -46,7 +49,11 @@ def _validate_frozen_manifest(cfg: dict, frozen: dict, checkpoint: Path) -> None
 
 
 def main() -> None:
-    cfg = load_yaml(ROOT / 'configs/backbone_selection.yaml')
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--config', default=str(ROOT / 'configs/backbone_selection.yaml'))
+    ap.add_argument('--eval-tag', default=None, help='Output suffix, e.g. s20/s40/s60/s90. Default preserves frozen_test/.')
+    a = ap.parse_args()
+    cfg = load_yaml(a.config)
     exp = Path(cfg['project']['exp_root'])
     frozen_path = exp / 'FROZEN_BACKBONE.json'
     if not frozen_path.exists():
@@ -83,10 +90,19 @@ def main() -> None:
         raise RuntimeError('Checkpoint seed conflicts with frozen reference_seed.')
 
     b = SupportBench(cfg['experiment']['subgraph'], root=cfg['project']['benchmark_root'])
+    layout_override = None
+    if model_name == 'PatchSTG':
+        layout_override, layout_source = checkpoint_layout_or_sidecar(ck, checkpoint)
+    else:
+        layout_source = 'not_applicable'
     adapter = build_adapter(
         model_name, ROOT / 'vendor', b.N, device,
         float(ck['mean']), float(ck['std']), ck['model_config'], b.adj, b.nodes,
+        layout_override=layout_override,
     )
+    if model_name == 'PatchSTG':
+        require_checkpoint_layout_match(ck, adapter, context='Frozen PatchSTG evaluation')
+        print(f'PATCHSTG_LAYOUT_SOURCE={layout_source}', flush=True)
     adapter.model.load_state_dict(ck['state_dict'])
     test = CachedSplit(cache, 'test')
     loader = DataLoader(
@@ -97,7 +113,7 @@ def main() -> None:
         pin_memory=torch.cuda.is_available(),
     )
     pred, df, summary = evaluate(adapter, loader, test.meta, device)
-    out = exp / 'frozen_test'
+    out = exp / ('frozen_test' if not a.eval_tag else f'frozen_test_{a.eval_tag}')
     out.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         out / 'test_predictions.npz',
@@ -112,6 +128,9 @@ def main() -> None:
         'reference_checkpoint_sha256': frozen['reference_checkpoint_sha256'],
         'reference_seed': frozen['reference_seed'],
         'selection_was_frozen_before_test': True,
+        'evaluation_tag': a.eval_tag or 'main',
+        'evaluation_protocol': cfg['protocol']['name'],
+        'configured_severity': float(cfg['experiment']['severity']),
         'formal_run_identity': formal_identity,
         'evaluation_run_identity': eval_identity,
         'test': summary,

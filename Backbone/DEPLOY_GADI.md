@@ -1,41 +1,44 @@
-# Deploy Backbone v0.6.0 on Gadi
+# Gadi deployment
 
-Place these sibling directories under the same project root:
+The Gadi PBS entry point has a safe default root and does **not** require
+`SPEED_LLM_RAG_ROOT` to be exported before `qsub`.
 
-```text
-/scratch/mh20/zw1165/Speed_LLM_RAG/
-  ExperimentCommon/
-  Backbone/
-  Baseline/
-```
+Default locations:
 
-Keep the existing `Backbone/vendor/` pinned source trees if already installed. Then:
+- project root: `/scratch/mh20/zw1165/Speed_LLM_RAG`
+- TFP environment: `/scratch/mh20/zw1165/envs/TFP`
+- live logs: `/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_logs`
+
+The normal formal seed-10 job can therefore be submitted directly:
 
 ```bash
 cd /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone
-conda activate TFP
-bash scripts/setup_official_models.sh
-python scripts/source_lock.py verify --root . --sources configs/backbone_selection.yaml
-python scripts/preflight.py --stage screening
-python scripts/prepare_data.py --stage screening --force
-python scripts/validate_cache.py --stage screening
+mkdir -p /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_logs
+qsub pbs/run_patchstg.pbs
 ```
 
-`--force` rebuilds the shared cache stage. Do not use it while another training job is reading the same shared stage.
-
-Formal reference workflow:
+The PBS defaults are `STAGE=formal` and `SEED=10`. Override them when needed:
 
 ```bash
-python scripts/prepare_data.py --stage formal
-python scripts/validate_cache.py --stage formal
-bash scripts/submit_reference_formal.sh
-python scripts/summarize_formal.py   # only after all seeds finish
+qsub -v STAGE=formal,SEED=20 pbs/run_patchstg.pbs
+qsub -v STAGE=formal,SEED=30 pbs/run_patchstg.pbs
+qsub -v STAGE=development,SEED=10 pbs/run_patchstg.pbs
 ```
 
+Each job creates a live log like:
 
-STLAformer source is pinned by `scripts/setup_official_models.sh`. A lightweight contract check is available before GPU submission:
+```text
+Backbone_logs/PatchSTG.formal.seed10.<PBS_JOBID>.<timestamp>.live.log
+```
+
+Every complete stdout/stderr line in that live log is timestamped. The PBS job
+uses `/scratch/mh20/zw1165/envs/TFP/bin/python` directly instead of relying on
+`conda activate` inside a non-interactive batch shell.
+
+For local/portable execution, the project root is still inferred automatically,
+or can be overridden explicitly:
 
 ```bash
-python scripts/smoke_recent_model_contracts.py
-python scripts/preflight.py --model STLAformer --stage screening
+export SPEED_LLM_RAG_ROOT=/path/to/Speed_LLM_RAG
+python scripts/run_experiment.py --stage formal --seed 10
 ```

@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import json, sys
+import argparse, json, sys
 import pandas as pd
-ROOT = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone')
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from backbone.utils import load_yaml, write_json
 from backbone.selection import MODELS, screening_shortlist
 from backbone.identity import load_cache_identity, require_identity, require_cache_version_compatibility
 from backbone.shared_cache import cache_path
 
-cfg = load_yaml(ROOT / 'configs/backbone_selection.yaml')
+ap=argparse.ArgumentParser(); ap.add_argument('--config',default=str(ROOT/'configs'/'backbone_selection.yaml')); a=ap.parse_args()
+cfg = load_yaml(a.config)
 exp = Path(cfg['project']['exp_root']); sg = cfg['experiment']['subgraph']
 expected = load_cache_identity(cache_path(cfg, 'screening'))
 require_cache_version_compatibility(cfg, expected, 'screening')

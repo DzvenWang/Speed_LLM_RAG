@@ -82,6 +82,7 @@ Protocol_artifacts/
 Protocol_logs/
 
 ExperimentCache/
+ExperimentCommon_logs/
 
 PreSuRe_logs/
 PreSuRe_exps/

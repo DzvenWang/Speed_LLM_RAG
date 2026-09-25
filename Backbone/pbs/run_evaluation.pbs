@@ -1,0 +1,45 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=04:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -N PatchSTGEvaluation
+#PBS -j oe
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_logs/
+set -euo pipefail
+
+ROOT="${SPEED_LLM_RAG_ROOT:-/scratch/mh20/zw1165/Speed_LLM_RAG}"
+PROJ="$ROOT/Backbone"
+LOGROOT="$ROOT/Backbone_logs"
+ENVROOT="/scratch/mh20/zw1165/envs/TFP"
+PYTHON="$ENVROOT/bin/python"
+
+: "${SEVERITY:?Set SEVERITY=20|40|60|90}"
+: "${SEED:?Set SEED=10|20|30}"
+case "$SEVERITY" in 20|40|60|90) ;; *) echo "SEVERITY must be 20/40/60/90" >&2; exit 2;; esac
+
+mkdir -p "$LOGROOT"
+STAMP=$(date +%Y%m%d_%H%M%S)
+LOG="$LOGROOT/PatchSTG.evaluation.s${SEVERITY}.seed${SEED}.${PBS_JOBID}.${STAMP}.live.log"
+
+export SPEED_LLM_RAG_ROOT="$ROOT"
+export PATH="$ENVROOT/bin:$PATH"
+unset TRANSFORMERS_CACHE || true
+export PYTHONPATH="$PROJ:$ROOT/ExperimentCommon:$ROOT/Protocol:$ROOT/TraffiDent_SupportBench:${PYTHONPATH:-}"
+export PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 BACKBONE_PBS_LIVE_LOG=1
+
+exec > >("$PYTHON" -u "$PROJ/timestamp_stream.py" | tee -a "$LOG") 2>&1
+trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"' EXIT
+
+cd "$PROJ"
+echo "START PatchSTG frozen evaluation severity=${SEVERITY} seed=${SEED} job=${PBS_JOBID} host=$(hostname)"
+echo "LOG_FILE=$LOG"
+echo "EVALUATION_ACCESS_POLICY=unlocked"
+"$PYTHON" -V
+nvidia-smi || true
+"$PYTHON" -u scripts/verify_official_sources.py
+"$PYTHON" -u scripts/run_evaluation.py --severity "$SEVERITY" --seed "$SEED" --run-stamp "$STAMP" --config "$PROJ/configs/backbone.yaml"
+echo "FINISHED PatchSTG frozen evaluation severity=${SEVERITY} seed=${SEED}"

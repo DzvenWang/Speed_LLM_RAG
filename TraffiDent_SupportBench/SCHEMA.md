@@ -1,4 +1,4 @@
-# TraffiDent-SupportBench 1.2.3 schema
+# TraffiDent-SupportBench 1.2.4 schema
 
 Canonical data remain model-agnostic. The benchmark stores complete traffic facts, Train-only normalization/dependency statistics, deterministic sensing views, Train-only historical memory, and exact protocol IDs. Learned embeddings, backbone predictions/residuals, support utility, Qwen labels and explanations remain derived artifacts.
 

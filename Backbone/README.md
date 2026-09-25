@@ -1,113 +1,137 @@
-# Backbone v0.6.0
+# Backbone v1.0.1 — PatchSTG on Protocol v2.0.1
 
-Backbone v0.6.0 extends the TraffiDent numerical-backbone benchmark with **STLAformer (TRC 2026)** while preserving the shared ExperimentCommon v1.0.0 protocol and the existing PatchSTG downstream reference.
+This Backbone is the numerical reference for the current TraffiDent incomplete-sensing study. It intentionally removes the old multi-model screening workflow from the main execution path and uses **PatchSTG only**.
 
-## Active models
+## Frozen upstream contracts
 
-- STAEformer
-- HimNet
-- BigST
-- STDN
-- PatchSTG
-- STLAformer (TRC 2026)
+- TraffiDent-SupportBench benchmark: **v1.2.6**
+- Protocol: **v2.0.1**
+- ExperimentCommon shared contract: **v1.1.0**
+- ExperimentCommon implementation: **v1.1.1**
+- Cache schema: **2**
 
-Six-model screening is the comparison/verification experiment. `PatchSTG` is explicitly configured as the downstream numerical reference model and is trained on the formal stage with seeds 10/20/30. Seed 10 is the fixed downstream reference checkpoint after the three-seed formal run is summarized.
+Main training uses `protocol_core5_s40`:
 
-## Shared Experiment Contract
+- development train: 12,000 = 2,400 × 5 families
+- development val: 5,000 = 1,000 × 5 families
+- formal train: 50,000 = 10,000 × 5 families
+- formal val: 5,000 = 1,000 × 5 families
 
-Backbone no longer owns a private materialized data cache. `scripts/prepare_data.py`, training, summaries, and evaluation all read **directly** from the canonical ExperimentCache:
+Frozen paired evaluation caches are supported at 20/40/60/90%, each with 5,000 queries = 1,000 × 5 families.
 
-```text
-ExperimentCache/TraffiDent_Net_06/development  <- Backbone screening
-ExperimentCache/TraffiDent_Net_06/formal       <- Backbone formal
-ExperimentCache/TraffiDent_Net_06/evaluation   <- test after freeze
+## Portable project layout
+
+Place `Backbone/` beside `ExperimentCommon/`, `Protocol/`, `TraffiDent_SupportBench/`, `ExperimentCache/`, etc. The root is inferred automatically. To override it:
+
+```bash
+export SPEED_LLM_RAG_ROOT=/path/to/Speed_LLM_RAG
 ```
 
-`Backbone_exps/` contains model/run artifacts only. No `Backbone_exps/_cache` directory or symlink is created or required.
+PowerShell:
 
-The common contract fixes:
+```powershell
+$env:SPEED_LLM_RAG_ROOT = "C:\path\to\Speed_LLM_RAG"
+```
 
-- sample membership from frozen Shared Protocol;
-- one TOD/DOW resolver and one temporal fingerprint;
-- one cache/data identity;
-- one point-level micro MAE/RMSE implementation;
-- one prediction NPZ contract `[M, P, N]`.
+## Gadi PatchSTG PBS
 
-Per-query metrics are still written for diagnostics, but model selection and reported aggregate metrics use the common point-level evaluator.
-
-## Recommended rerun
+For the standard formal seed-10 run on Gadi:
 
 ```bash
 cd /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone
-conda activate TFP
-
-python scripts/preflight.py --stage screening
-python scripts/prepare_data.py --stage screening --force
-python scripts/validate_cache.py --stage screening
-bash scripts/submit_screening.sh
+mkdir -p /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_logs
+qsub pbs/run_patchstg.pbs
 ```
 
-After all six screening runs finish:
+The PBS script defaults to `STAGE=formal` and `SEED=10`, uses the TFP Python executable directly, and writes one timestamped live log to `Backbone_logs/PatchSTG.<stage>.seed<seed>.<jobid>.<timestamp>.live.log`. Override the seed with `qsub -v STAGE=formal,SEED=20 pbs/run_patchstg.pbs`.
 
-```bash
-python scripts/summarize_screening.py
+## 1. Check caches
+
+```powershell
+python scripts\preflight.py --stage development
+python scripts\preflight.py --stage formal
+python scripts\preflight.py --stage evaluation --severity 20
+python scripts\status.py
 ```
 
-Prepare and run the configured reference model formally:
+Evaluation is available as soon as the frozen evaluation cache passes hash/contract validation. No Protocol access-grant file is required.
 
-```bash
-python scripts/preflight.py --model PatchSTG --stage formal
-python scripts/prepare_data.py --stage formal
-python scripts/validate_cache.py --stage formal
-bash scripts/submit_reference_formal.sh
+## 2. Development
+
+```powershell
+python scripts\run_experiment.py --stage development --seed 10
 ```
 
-After PatchSTG seeds 10/20/30 finish:
+Logs are written to `Backbone_logs/PatchSTG.development.seed10.<timestamp>.log`.
 
-```bash
-python scripts/summarize_formal.py
+## 3. Formal training
+
+Run seeds sequentially on one GPU:
+
+```powershell
+python scripts\run_experiment.py --stage formal --seed 10
+python scripts\run_experiment.py --stage formal --seed 20
+python scripts\run_experiment.py --stage formal --seed 30
+python scripts\summarize_formal.py
 ```
 
-This creates the Backbone-owned `Backbone_exps/FROZEN_BACKBONE.json`. Baseline and future OwnModel projects are read-only consumers of that artifact.
+This creates:
 
-## Important
+- `Backbone_exps/backbone_formal_runs.csv`
+- `Backbone_exps/backbone_formal_summary.csv`
+- `Backbone_exps/FROZEN_BACKBONE.json`
 
-v0.6.0 adds STLAformer without changing the original five adapters, their recipes, or the Shared Protocol/cache identity. Screening summarization therefore explicitly permits current-contract v0.5.0 results for the original five models and requires v0.6.0 for STLAformer. PatchSTG remains the configured downstream reference; its compatible v0.5.0 formal/reference evidence remains reusable.
-## Remove legacy `_cache` aliases
+Seed 10 is the downstream reference checkpoint. All three formal checkpoints are retained for final mean/std evaluation.
 
-After deploying this direct-cache revision, old symlink trees can be removed safely with:
+## 4. Final evaluation
 
-```bash
-python scripts/cleanup_legacy_cache_aliases.py
+Evaluation caches may be consumed directly once frozen and valid. `run_evaluation.py` does not require a Protocol access-grant file.
+
+Reference checkpoint only:
+
+```powershell
+python scripts\run_all_evaluations.py --reference-only
 ```
 
-The cleanup refuses to delete real files or non-empty real data directories.
+All three formal seeds × four severities:
 
-
-
-## STLAformer integration
-
-STLAformer is pinned from the official TRC 2026 repository and integrated without changing its architecture. The adapter maps canonical TraffiDent history into the model's official input semantics:
-
-```text
-channel 0 = normalized traffic state
-channel 1 = (day_of_week * 288 + time_of_day_slot) / 2016
+```powershell
+python scripts\run_all_evaluations.py
 ```
 
-No future TOD/DOW or target value is used. The official class is `STLformer`; project-facing method name is `STLAformer`. PatchSTG remains `selection.reference_model`.
+Or individually:
 
-After deploying v0.6.0, install/pin the new source and refresh the source lock:
-
-```bash
-bash scripts/setup_official_models.sh
-python scripts/verify_official_sources.py
-python scripts/smoke_recent_model_contracts.py
+```powershell
+python scripts\run_evaluation.py --severity 20 --seed 10
+python scripts\run_evaluation.py --severity 40 --seed 10
+python scripts\run_evaluation.py --severity 60 --seed 10
+python scripts\run_evaluation.py --severity 90 --seed 10
 ```
 
-Run only STLAformer screening if the previous five screening models already have current-compatible results:
+The summary is written to `Backbone_exps/backbone_evaluation_summary.csv`.
 
-```bash
-qsub -v MODEL=STLAformer,STAGE=screening,SEED=10 pbs/backbone_select.pbs
-```
+## Important contract changes from Backbone v0.6.0
 
-The compatibility rule is explicit rather than silent: v0.5.0 screening evidence is reusable only for the unchanged original five models, while STLAformer must be produced by v0.6.0 under the same frozen Shared Protocol/cache identity.
+- public stage `screening` is replaced by `development`;
+- shared contract requirement is 1.2.0, cache schema is 2;
+- cache lookup is Protocol/severity/stage/hash aware;
+- formal train size is exactly 50,000, balanced 10,000 per family;
+- evaluation supports paired s20/s40/s60/s90 caches;
+- standard evaluation consumers require frozen/hash-valid evaluation caches but do not enforce a Protocol access gate;
+- old `ExperimentCache/TraffiDent_Net_06/development` and `/formal` paths are not used.
+
+The official PatchSTG source is pinned under `vendor/PatchSTG` and verified by `scripts/source_lock.py`.
+
+## Explicit evaluation of an existing PatchSTG checkpoint
+
+To evaluate a historical or ad-hoc `best.pt` without changing the official
+`FROZEN_BACKBONE.json`, use `scripts/evaluate_checkpoint.py` or the
+cross-platform `scripts/run_checkpoint_evaluations.py`. GADI submission is provided by
+`pbs/evaluate_checkpoint_severity.pbs` and `submit_checkpoint_evaluations.sh`.
+
+Local `run_checkpoint_evaluations.py` automatically writes a timestamped live log to `Speed_LLM_RAG/Backbone_logs/`. Every emitted line is timestamped. GADI PBS evaluation keeps one timestamped `.live.log` per severity in the same directory.
+See `OLD_CHECKPOINT_EVALUATION.md` for the exact local and GADI commands.
+
+## Historical PatchSTG spatial layout
+
+For checkpoints created before v1.0.5, do not bypass a `spatial layout mismatch`. Run `scripts/recover_patchstg_layout.py` to reconstruct the exact old KDTree/reorder layout from an archived SupportBench copy. See `LEGACY_LAYOUT_RECOVERY.md`. New v1.0.5 checkpoints embed and sidecar the complete layout automatically.

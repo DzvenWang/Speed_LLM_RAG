@@ -1,4 +1,4 @@
-# TraffiDent-SupportBench 1.2.3
+# TraffiDent-SupportBench 1.2.4
 
 Support-oriented benchmark for **historical RAG, LLM predictive-support reasoning and grounded explanation under incomplete traffic sensing**.
 

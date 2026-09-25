@@ -54,6 +54,30 @@ def select_fixed_layout(spec: dict[str, Any], sg_dir: str | Path) -> tuple[np.nd
     return np.asarray(item['nodes'], dtype=np.int64), item
 
 
+
+
+def _temporal_outage_shape(ratio: float, H: int, N: int, base_node_fraction: float = 0.75) -> tuple[int, int]:
+    """Return (masked_nodes, duration) for temporal outage.
+
+    Historical severities at or below ``base_node_fraction`` retain the exact
+    old construction: a fixed fraction of nodes is affected for a duration
+    chosen from the requested missing ratio.  For extreme severities above the
+    base node fraction (e.g. 90%), duration is already saturated at the full
+    history window, so spatial coverage is expanded instead.
+
+    This keeps 20/40/60 behaviour backward-compatible while making 90% a real
+    ~90% outage rather than silently clipping to ~75%.
+    """
+    ratio = float(np.clip(ratio, 0.0, 1.0))
+    base = float(np.clip(base_node_fraction, 1e-6, 1.0))
+    if ratio <= base + 1e-12:
+        node_frac = base
+        duration = max(1, min(H, int(round((ratio / base) * H))))
+    else:
+        node_frac = ratio
+        duration = H
+    return _target_count(N, node_frac), int(duration)
+
 def effective_missing_ratio(spec: dict[str, Any], H: int, N: int, sg_dir: str | Path | None = None) -> float:
     family = str(spec['family']); ratio = float(spec.get('severity',0.0))
     if family == 'complete' or ratio <= 0:
@@ -64,8 +88,7 @@ def effective_missing_ratio(spec: dict[str, Any], H: int, N: int, sg_dir: str | 
         return _target_count(N,ratio)/N
     if family == 'temporal_outage':
         node_frac = float(spec.get('temporal_node_fraction',0.75))
-        k_nodes = _target_count(N,node_frac)
-        duration = max(1,min(H,int(round((ratio/max(node_frac,1e-6))*H))))
+        k_nodes, duration = _temporal_outage_shape(ratio, H, N, node_frac)
         return (k_nodes*duration)/(H*N)
     if family in set(FIXED_LAYOUT_FILES):
         if sg_dir is None:
@@ -101,9 +124,9 @@ def materialize_mask(spec: dict[str, Any], H: int, N: int, sg_dir: str | Path, r
     elif family == 'sensor_outage':
         k=_target_count(N,ratio); nodes=np.sort(rng.choice(N,size=k,replace=False)); mask[:,nodes]=True
     elif family == 'temporal_outage':
-        node_frac=float(spec.get('temporal_node_fraction',0.75)); k_nodes=_target_count(N,node_frac)
+        node_frac=float(spec.get('temporal_node_fraction',0.75))
+        k_nodes,duration=_temporal_outage_shape(ratio,H,N,node_frac)
         nodes=np.sort(rng.choice(N,size=k_nodes,replace=False))
-        duration=max(1,min(H,int(round((ratio/max(node_frac,1e-6))*H))))
         start=int(rng.integers(0,max(1,H-duration+1))); mask[start:start+duration,nodes]=True
     elif family in set(FIXED_LAYOUT_FILES):
         nodes,item=select_fixed_layout(spec,sg_dir)

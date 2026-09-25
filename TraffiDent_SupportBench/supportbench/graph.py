@@ -7,7 +7,7 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 
-from .utils import canonicalize_nodes, ensure_dir, log, stable_seed, write_json
+from .utils import canonicalize_nodes, ensure_dir, log, read_json, stable_seed, write_json
 
 
 def undirected_neighbors(adj: np.ndarray, node: int) -> np.ndarray:
@@ -285,6 +285,18 @@ def _unique_layouts(
     return out, seen
 
 
+def _layout_min_for_severity(
+    token: str,
+    key: str,
+    default: int,
+    overrides: dict | None = None,
+) -> int:
+    """Resolve a minimum unique-layout count with optional severity-specific overrides."""
+    block = (overrides or {}).get(str(token), {})
+    value = block.get(str(key), default) if isinstance(block, dict) else default
+    return max(1, int(value))
+
+
 def build_layout_partitions(
     nodes: pd.DataFrame,
     adj: np.ndarray,
@@ -303,6 +315,7 @@ def build_layout_partitions(
     regional_min_ood_layouts_per_severity: int = 8,
     directional_min_id_layouts_per_severity: int = 16,
     directional_min_ood_layouts_per_severity: int = 8,
+    min_layout_overrides: dict | None = None,
 ) -> dict:
     """Build fixed ID/OOD sensing layout catalogues.
 
@@ -330,6 +343,10 @@ def build_layout_partitions(
 
     for sev in map(float, severities):
         token = f's{int(round(100*sev)):02d}'; target = max(1, min(n, int(round(n*sev))))
+        reg_min_id = _layout_min_for_severity(token, 'regional_id', regional_min_id_layouts_per_severity, min_layout_overrides)
+        reg_min_ood = _layout_min_for_severity(token, 'regional_ood', regional_min_ood_layouts_per_severity, min_layout_overrides)
+        dir_min_id = _layout_min_for_severity(token, 'directional_id', directional_min_id_layouts_per_severity, min_layout_overrides)
+        dir_min_ood = _layout_min_for_severity(token, 'directional_ood', directional_min_ood_layouts_per_severity, min_layout_overrides)
 
         def reg_gen(center_pool, split_name):
             def _g(rng_local):
@@ -342,13 +359,13 @@ def build_layout_partitions(
         reg_id, reg_seen = _unique_layouts(
             reg_gen(regional_seen, 'id'), regional_id_layouts_per_severity,
             f'{subgraph}|regional|{token}|id', seed,
-            min_count=regional_min_id_layouts_per_severity, allow_partial=True,
+            min_count=reg_min_id, allow_partial=True,
         )
         if round(sev, 8) in ood_set:
             reg_ood, _ = _unique_layouts(
                 reg_gen(regional_ood, 'ood'), regional_ood_layouts_per_severity,
                 f'{subgraph}|regional|{token}|ood', seed, forbidden=reg_seen,
-                min_count=regional_min_ood_layouts_per_severity, allow_partial=True,
+                min_count=reg_min_ood, allow_partial=True,
             )
         else:
             reg_ood = []
@@ -366,13 +383,13 @@ def build_layout_partitions(
         dir_id, dir_seen = _unique_layouts(
             dir_gen, directional_id_layouts_per_severity,
             f'{subgraph}|directional|{token}|id', seed,
-            min_count=directional_min_id_layouts_per_severity, allow_partial=True,
+            min_count=dir_min_id, allow_partial=True,
         )
         if round(sev, 8) in ood_set:
             dir_ood, _ = _unique_layouts(
                 dir_gen, directional_ood_layouts_per_severity,
                 f'{subgraph}|directional|{token}|ood', seed, forbidden=dir_seen,
-                min_count=directional_min_ood_layouts_per_severity, allow_partial=True,
+                min_count=dir_min_ood, allow_partial=True,
             )
         else:
             dir_ood = []
@@ -399,6 +416,15 @@ def build_layout_partitions(
             'regional_ood_layouts_per_severity': int(regional_min_ood_layouts_per_severity),
             'directional_id_layouts_per_severity': int(directional_min_id_layouts_per_severity),
             'directional_ood_layouts_per_severity': int(directional_min_ood_layouts_per_severity),
+        },
+        'minimum_by_severity': {
+            token: {
+                'regional_id': _layout_min_for_severity(token, 'regional_id', regional_min_id_layouts_per_severity, min_layout_overrides),
+                'regional_ood': _layout_min_for_severity(token, 'regional_ood', regional_min_ood_layouts_per_severity, min_layout_overrides),
+                'directional_id': _layout_min_for_severity(token, 'directional_id', directional_min_id_layouts_per_severity, min_layout_overrides),
+                'directional_ood': _layout_min_for_severity(token, 'directional_ood', directional_min_ood_layouts_per_severity, min_layout_overrides),
+            }
+            for token in regional_catalog['severities']
         },
         'actual_counts': {
             token: {
@@ -521,50 +547,270 @@ def _predictive_connected_layout(
     return arr,meta
 
 
+def _directional_neighbor_map(
+    nodes: pd.DataFrame,
+    adj: np.ndarray,
+) -> tuple[dict[int, np.ndarray], np.ndarray]:
+    """Build adjacency restricted to interpretable same-direction road nodes.
+
+    A predictive directional outage should remain a union of physically
+    directional road segments, not an arbitrary Top-K utility node set.  This
+    map therefore keeps only graph edges whose endpoints share the same known
+    ``road_direction`` label.
+    """
+    c = canonicalize_nodes(nodes)
+    labels = c['road_direction'].astype(str).to_numpy()
+    eligible = np.asarray(
+        [i for i, name in enumerate(labels) if 'unknown' not in str(name).lower()],
+        dtype=np.int64,
+    )
+    eligible_set = set(map(int, eligible))
+    out: dict[int, np.ndarray] = {}
+    for i in eligible:
+        ii = int(i)
+        vals = [
+            int(j) for j in undirected_neighbors(adj, ii)
+            if int(j) in eligible_set and str(labels[int(j)]) == str(labels[ii])
+        ]
+        out[ii] = np.asarray(sorted(set(vals)), dtype=np.int64)
+    return out, eligible
+
+
 def _predictive_directional_layout(
-    groups: dict[str,list[int]],
-    n_nodes: int,
+    nodes: pd.DataFrame,
+    adj: np.ndarray,
     target_size: int,
     contribution: np.ndarray,
     rng: np.random.Generator,
     *,
-    exploration_temperature: float=0.12,
-) -> tuple[np.ndarray,list[str],float]:
-    """Directional layout directly optimising Train-only context-loss utility."""
-    target_size=max(1,min(int(target_size),int(n_nodes)))
-    c=np.asarray(contribution,np.float64).reshape(-1)
-    eligible=sorted(set(int(x) for vals in groups.values() for x in vals))
-    if len(eligible)<target_size:
-        raise ValueError(f'Directional groups cover only {len(eligible)}/{n_nodes} nodes but target_size={target_size}')
-    scale=max(float(np.std(c)),1e-8)
-    scored=[]
-    for name,vals in groups.items():
-        arr=np.asarray(vals,np.int64)
-        if not len(arr): continue
-        # Utility density prevents a very large low-value direction group from
-        # dominating solely because it contains more nodes.
-        density=float(np.mean(c[arr])); total=float(np.sum(c[arr]))
-        noise=float(rng.gumbel(0.0,1.0))*float(exploration_temperature)*scale
-        scored.append((density+noise,total,name,arr))
-    scored.sort(key=lambda z:(-z[0],-z[1],z[2]))
-    chosen=[]; used=[]; chosen_set=set()
-    for _,_,name,arr in scored:
-        remain=target_size-len(chosen_set)
-        if remain<=0: break
-        available=np.asarray([int(x) for x in arr if int(x) not in chosen_set],np.int64)
-        if not len(available): continue
-        used.append(name)
-        noise=rng.gumbel(0.0,1.0,len(available))*float(exploration_temperature)*scale
-        order=np.argsort(-(c[available]+noise))
-        take=available[order[:remain]]
-        chosen_set.update(map(int,take))
-    if len(chosen_set)<target_size:
-        rest=np.asarray([i for i in eligible if i not in chosen_set],np.int64)
-        order=np.argsort(-c[rest]); chosen_set.update(map(int,rest[order[:target_size-len(chosen_set)]]))
-    ids=np.asarray(sorted(chosen_set),np.int64)
-    if len(ids)!=target_size:
+    directional_neighbors: dict[int, np.ndarray] | None = None,
+    eligible_nodes: np.ndarray | None = None,
+    exploration_temperature: float = 0.04,
+    anchor_pool_fraction: float = 0.25,
+    restart_penalty: float = 0.05,
+    continuity_bonus: float = 0.02,
+    min_segment_nodes: int = 3,
+    max_segments: int = 24,
+) -> tuple[np.ndarray, dict]:
+    """Dependency-first, direction-constrained predictive outage (v3).
+
+    v2 ranked whole road-direction groups before choosing nodes.  At 40%
+    missingness that forced low-utility members of a selected group into the
+    mask and produced a clear objective ceiling.  v3 reverses the priority:
+
+    1. choose a high Train-only predictive-contribution source as an anchor;
+    2. grow a locally connected segment through same-direction graph edges;
+    3. once a segment has a minimum interpretable length, compare continuing
+       the segment with restarting at another high-value directional anchor;
+    4. repeat until the exact severity-specific node count is reached.
+
+    The result is a union of a bounded number of directional graph segments.
+    It is therefore more utility-focused than v2 without degenerating into an
+    unconstrained global Top-K node mask.  No Validation/Test labels, forecast
+    errors, or proposed-model outputs are used.
+    """
+    n = int(adj.shape[0])
+    target_size = max(1, min(int(target_size), n))
+    c = np.asarray(contribution, np.float64).reshape(-1)
+    if len(c) != n:
+        raise ValueError(f'contribution length {len(c)} != nodes {n}')
+
+    if directional_neighbors is None or eligible_nodes is None:
+        nbrs, eligible = _directional_neighbor_map(nodes, adj)
+    else:
+        nbrs = directional_neighbors
+        eligible = np.asarray(eligible_nodes, dtype=np.int64)
+    if len(eligible) < target_size:
+        raise ValueError(
+            f'Directional graph covers only {len(eligible)}/{n} nodes but target_size={target_size}'
+        )
+
+    scale = max(float(np.std(c[eligible])), 1e-8)
+    min_segment_nodes = max(1, int(min_segment_nodes))
+    max_segments = max(1, min(int(max_segments), target_size))
+    anchor_pool_fraction = float(np.clip(anchor_pool_fraction, 1.0 / max(len(eligible), 1), 1.0))
+
+    selected_mask = np.zeros(n, dtype=bool)
+    segment_nodes: list[list[int]] = []
+    current: list[int] = []
+    current_set: set[int] = set()
+    frontier_set: set[int] = set()
+    utility_restart_count = 0
+    forced_restart_count = 0
+
+    def _remaining() -> np.ndarray:
+        return eligible[~selected_mask[eligible]]
+
+    def _pick_anchor() -> int:
+        remaining = _remaining()
+        if not len(remaining):
+            raise RuntimeError('No remaining directional anchor while target size is unmet')
+        order = remaining[np.argsort(-c[remaining])]
+        pool_n = max(1, min(len(order), int(round(len(order) * anchor_pool_fraction))))
+        pool = order[:pool_n]
+        # Strongly utility-biased but deterministic per candidate seed.
+        noise = rng.gumbel(0.0, 1.0, len(pool)) * float(exploration_temperature) * scale
+        score = c[pool] + noise
+        return int(pool[int(np.argmax(score))])
+
+    def _best_frontier(frontier: np.ndarray) -> tuple[int | None, float]:
+        if not len(frontier):
+            return None, float('-inf')
+        touch = np.asarray(
+            [sum(int(v) in current_set for v in nbrs.get(int(x), np.empty(0, np.int64))) for x in frontier],
+            dtype=np.float64,
+        )
+        noise = rng.gumbel(0.0, 1.0, len(frontier)) * float(exploration_temperature) * scale
+        score = c[frontier] + float(continuity_bonus) * scale * touch + noise
+        k = int(np.argmax(score))
+        return int(frontier[k]), float(score[k])
+
+    while int(selected_mask.sum()) < target_size:
+        if not current:
+            anchor = _pick_anchor()
+            selected_mask[anchor] = True
+            current = [anchor]
+            current_set = {anchor}
+            frontier_set = set(int(v) for v in nbrs.get(anchor, np.empty(0, np.int64)) if not selected_mask[int(v)])
+            segment_nodes.append(current)
+            continue
+
+        frontier_set = {x for x in frontier_set if not selected_mask[int(x)]}
+        frontier = np.asarray(sorted(frontier_set), dtype=np.int64)
+        best_cont, cont_score = _best_frontier(frontier)
+
+        # Before the current segment reaches its minimum length, continuation is
+        # mandatory whenever a same-direction graph neighbour exists.
+        can_restart = (
+            len(current) >= min_segment_nodes
+            and len(segment_nodes) < max_segments
+            and int(selected_mask.sum()) < target_size
+        )
+
+        choose_restart = False
+        if can_restart:
+            remaining = _remaining()
+            if len(remaining):
+                # Restart is intentionally penalised: a new high-utility anchor
+                # must justify fragmenting the directional outage.
+                top = remaining[np.argsort(-c[remaining])[:max(1, min(64, len(remaining)))]]
+                noise = rng.gumbel(0.0, 1.0, len(top)) * float(exploration_temperature) * scale
+                restart_scores = c[top] + noise - float(restart_penalty) * scale
+                restart_score = float(np.max(restart_scores))
+                choose_restart = best_cont is None or restart_score > cont_score
+
+        if best_cont is None or choose_restart:
+            # Freeze the previous list by creating a fresh list for the segment.
+            # A dead-end restart can exceed the preferred max-segment budget on
+            # disconnected directional subgraphs; utility-triggered restarts
+            # remain capped by ``max_segments``.
+            if choose_restart:
+                utility_restart_count += 1
+            else:
+                forced_restart_count += 1
+            current = []
+            current_set = set()
+            frontier_set = set()
+            continue
+
+        selected_mask[int(best_cont)] = True
+        current.append(int(best_cont))
+        current_set.add(int(best_cont))
+        frontier_set.discard(int(best_cont))
+        frontier_set.update(
+            int(v) for v in nbrs.get(int(best_cont), np.empty(0, np.int64))
+            if not selected_mask[int(v)]
+        )
+
+    ids = np.flatnonzero(selected_mask).astype(np.int64)
+    if len(ids) != target_size:
         raise RuntimeError(f'Failed to construct exact predictive directional layout: {len(ids)} != {target_size}')
-    return ids,used,_layout_context_loss(ids,c)
+
+    lengths = [len(x) for x in segment_nodes if x]
+    meta = {
+        'predictive_context_loss_objective': _layout_context_loss(ids, c),
+        'predictive_contribution_mean': float(np.mean(c[ids])) if len(ids) else 0.0,
+        'optimizer': 'dependency_first_directional_segments_v3',
+        'segment_count': int(len(lengths)),
+        'segment_min_nodes': int(min(lengths)) if lengths else 0,
+        'segment_mean_nodes': float(np.mean(lengths)) if lengths else 0.0,
+        'segment_max_nodes': int(max(lengths)) if lengths else 0,
+        'utility_restart_count': int(utility_restart_count),
+        'forced_restart_count': int(forced_restart_count),
+        'preferred_max_segments': int(max_segments),
+        'restart_penalty': float(restart_penalty),
+        'continuity_bonus': float(continuity_bonus),
+        'anchor_pool_fraction': float(anchor_pool_fraction),
+        'exploration_temperature': float(exploration_temperature),
+    }
+    return ids, meta
+
+
+def _ranked_predictive_directional_layouts(
+    generator,
+    count: int,
+    prefix: str,
+    seed_base: int,
+    *,
+    min_count: int,
+    candidate_multiplier: int=64,
+    forbidden: set[tuple[int,...]] | None=None,
+):
+    """Sample a deterministic candidate bank and keep the highest-utility layouts.
+
+    Previous versions accepted the first unique stochastic layouts.  For the
+    predictive family that diluted the distinction from the general directional
+    family.  This routine generates many *Train-only* candidates, removes exact
+    duplicates/forbidden layouts, ranks them by the same predictive-context-loss
+    objective used by the benchmark, and freezes the best unique layouts.
+    """
+    requested=max(1,int(count))
+    minimum=max(1,min(int(min_count),requested))
+    multiplier=max(1,int(candidate_multiplier))
+    attempts=max(requested,requested*multiplier)
+    forbidden=set() if forbidden is None else set(forbidden)
+    bank={}
+
+    for attempt in range(attempts):
+        rng=np.random.default_rng(stable_seed(prefix,'candidate',attempt,base=seed_base))
+        nodes,meta=generator(rng)
+        key=tuple(int(x) for x in np.asarray(nodes,dtype=np.int64))
+        if key in forbidden:
+            continue
+        obj=float(meta.get('predictive_context_loss_objective',float('-inf')))
+        prev=bank.get(key)
+        if prev is None or obj>float(prev[1].get('predictive_context_loss_objective',float('-inf'))):
+            bank[key]=(nodes,meta)
+
+    ranked=sorted(
+        bank.values(),
+        key=lambda item:(
+            -float(item[1].get('predictive_context_loss_objective',float('-inf'))),
+            tuple(int(x) for x in np.asarray(item[0],dtype=np.int64)),
+        ),
+    )
+    selected=ranked[:requested]
+    if len(selected)<minimum:
+        raise RuntimeError(
+            f'Could create only {len(selected)}/{requested} ranked predictive layouts for {prefix}; '
+            f'minimum required={minimum}, candidate_attempts={attempts}.'
+        )
+    if len(selected)<requested:
+        log(
+            f'predictive directional catalogue adapted for {prefix}: requested={requested}, '
+            f'feasible={len(selected)}, minimum={minimum}, candidate_attempts={attempts}'
+        )
+    objs=[float(meta.get('predictive_context_loss_objective',0.0)) for _,meta in selected]
+    if objs:
+        log(
+            f'predictive directional v3 {prefix}: selected={len(selected)}, '
+            f'candidate_unique={len(bank)}, attempts={attempts}, '
+            f'objective_mean={float(np.mean(objs)):.6f}, '
+            f'objective_min={float(np.min(objs)):.6f}, objective_max={float(np.max(objs)):.6f}'
+        )
+    seen=set(forbidden)
+    seen.update(tuple(int(x) for x in np.asarray(nodes,dtype=np.int64)) for nodes,_ in selected)
+    return selected,seen
 
 
 def build_predictive_layout_partitions(
@@ -579,6 +825,14 @@ def build_predictive_layout_partitions(
     *,
     center_pool_fraction: float=0.35,
     exploration_temperature: float=0.12,
+    directional_exploration_temperature: float | None=None,
+    directional_candidate_multiplier: int=64,
+    directional_anchor_pool_fraction: float=0.25,
+    directional_restart_penalty: float=0.05,
+    directional_continuity_bonus: float=0.02,
+    directional_min_segment_nodes: int=3,
+    directional_max_segments: int=24,
+    directional_target_ratio: float=1.10,
     regional_id_count: int=24,
     regional_ood_count: int=12,
     regional_min_id: int=8,
@@ -587,6 +841,8 @@ def build_predictive_layout_partitions(
     directional_ood_count: int=12,
     directional_min_id: int=8,
     directional_min_ood: int=4,
+    ood_severities: list[float] | None = None,
+    min_layout_overrides: dict | None = None,
 ) -> dict:
     """Build future-free predictive structured layouts by direct objective optimisation.
 
@@ -596,13 +852,20 @@ def build_predictive_layout_partitions(
     at the same missing severity.
     """
     out_dir=ensure_dir(out_dir); nodes=canonicalize_nodes(nodes); n=len(nodes)
+    ood_set={round(float(x),8) for x in (ood_severities or [])}
     contribution=predictive_source_contribution(dep_ids,dep_weights,n)
     groups=_direction_groups(nodes)
+    directional_neighbors, directional_eligible = _directional_neighbor_map(nodes, adj)
+    dir_temp=float(exploration_temperature if directional_exploration_temperature is None else directional_exploration_temperature)
     reg={'definition':'Train-only dependency-context-loss-optimised compact regional layouts','severities':{}}
-    direc={'definition':'Train-only dependency-context-loss-optimised directional layouts','groups':groups,'severities':{}}
+    direc={'definition':'Train-only dependency-first, direction-constrained multi-segment layouts','groups':groups,'severities':{}}
 
     for sev in map(float,severities):
         token=f's{int(round(100*sev)):02d}'; target=max(1,min(n,int(round(n*sev))))
+        reg_min_id_eff=_layout_min_for_severity(token,'predictive_regional_id',regional_min_id,min_layout_overrides)
+        reg_min_ood_eff=_layout_min_for_severity(token,'predictive_regional_ood',regional_min_ood,min_layout_overrides)
+        dir_min_id_eff=_layout_min_for_severity(token,'predictive_directional_id',directional_min_id,min_layout_overrides)
+        dir_min_ood_eff=_layout_min_for_severity(token,'predictive_directional_ood',directional_min_ood,min_layout_overrides)
         def reg_gen(dist):
             def _g(rng_local):
                 ids,meta=_predictive_connected_layout(
@@ -613,21 +876,75 @@ def build_predictive_layout_partitions(
                 meta.update({'layout_distribution':dist})
                 return ids,meta
             return _g
-        reg_id,seen=_unique_layouts(reg_gen('id'),regional_id_count,f'{subgraph}|predictive_regional|{token}|id',seed,min_count=regional_min_id,allow_partial=True)
-        reg_ood,_=_unique_layouts(reg_gen('ood'),regional_ood_count,f'{subgraph}|predictive_regional|{token}|ood',seed,forbidden=seen,min_count=regional_min_ood,allow_partial=True)
+        reg_id,seen=_unique_layouts(reg_gen('id'),regional_id_count,f'{subgraph}|predictive_regional|{token}|id',seed,min_count=reg_min_id_eff,allow_partial=True)
+        if round(sev,8) in ood_set:
+            reg_ood,_=_unique_layouts(reg_gen('ood'),regional_ood_count,f'{subgraph}|predictive_regional|{token}|ood',seed,forbidden=seen,min_count=reg_min_ood_eff,allow_partial=True)
+        else:
+            reg_ood=[]
         reg['severities'][token]={'id':[],'ood':[]}
         for dist,layouts in [('id',reg_id),('ood',reg_ood)]:
             for i,(ids,meta) in enumerate(layouts):
                 reg['severities'][token][dist].append({'layout_id':f'predictive_regional_{token}_{dist}_{i:03d}','nodes':ids.tolist(),**meta})
 
         def dir_gen(rng_local):
-            ids,used,obj=_predictive_directional_layout(
-                groups,n,target,contribution,rng_local,
-                exploration_temperature=exploration_temperature,
+            # Candidate diversity comes from a deterministic mixture of search
+            # temperatures and restart penalties.  All candidates obey the same
+            # exact severity and same-direction segment constraints.
+            temp_scale=float(rng_local.choice(np.asarray([0.25,0.50,1.00,2.00],np.float64)))
+            restart_scale=float(rng_local.choice(np.asarray([0.00,0.50,1.00,2.00],np.float64)))
+            used_temp=max(1e-6,dir_temp*temp_scale)
+            used_restart=max(0.0,float(directional_restart_penalty)*restart_scale)
+            ids,meta=_predictive_directional_layout(
+                nodes,adj,target,contribution,rng_local,
+                directional_neighbors=directional_neighbors,
+                eligible_nodes=directional_eligible,
+                exploration_temperature=used_temp,
+                anchor_pool_fraction=directional_anchor_pool_fraction,
+                restart_penalty=used_restart,
+                continuity_bonus=directional_continuity_bonus,
+                min_segment_nodes=directional_min_segment_nodes,
+                max_segments=directional_max_segments,
             )
-            return ids,{'direction_groups':used,'predictive_context_loss_objective':obj,'predictive_contribution_mean':float(np.mean(contribution[ids])) if len(ids) else 0.0,'optimizer':'direction_group_greedy_context_loss'}
-        dir_id,dseen=_unique_layouts(dir_gen,directional_id_count,f'{subgraph}|predictive_directional|{token}|id',seed,min_count=directional_min_id,allow_partial=True)
-        dir_ood,_=_unique_layouts(dir_gen,directional_ood_count,f'{subgraph}|predictive_directional|{token}|ood',seed,forbidden=dseen,min_count=directional_min_ood,allow_partial=True)
+            meta['restart_penalty_base']=float(directional_restart_penalty)
+            return ids,meta
+        dir_id,dseen=_ranked_predictive_directional_layouts(
+            dir_gen,directional_id_count,f'{subgraph}|predictive_directional|{token}|id',seed,
+            min_count=dir_min_id_eff,candidate_multiplier=directional_candidate_multiplier,
+        )
+        # Report how much of the available Train-only directional utility v3
+        # captures, and whether the configured predictive/general target is
+        # theoretically reachable under the current directional eligibility.
+        eligible_arr=np.asarray(directional_eligible,np.int64)
+        top_ids=eligible_arr[np.argsort(-contribution[eligible_arr])[:target]]
+        upper_obj=_layout_context_loss(top_ids,contribution)
+        general_mean=float('nan')
+        try:
+            general_catalog=read_json(out_dir/'directional_layouts.json')
+            general_items=general_catalog.get('severities',{}).get(token,{}).get('id',[])
+            general_objs=[_layout_context_loss(np.asarray(x['nodes'],np.int64),contribution) for x in general_items]
+            if general_objs:
+                general_mean=float(np.mean(general_objs))
+        except Exception:
+            general_mean=float('nan')
+        selected_objs=[float(meta.get('predictive_context_loss_objective',0.0)) for _,meta in dir_id]
+        selected_mean=float(np.mean(selected_objs)) if selected_objs else float('nan')
+        if np.isfinite(general_mean) and general_mean>0:
+            selected_ratio=selected_mean/general_mean
+            upper_ratio=upper_obj/general_mean
+            log(
+                f'predictive directional v3 diagnostic {subgraph}|{token}: '
+                f'general_mean={general_mean:.6f}, selected_mean={selected_mean:.6f}, '
+                f'selected_ratio={selected_ratio:.4f}, eligible_topk_upper={upper_obj:.6f}, '
+                f'upper_ratio={upper_ratio:.4f}, target_ratio={float(directional_target_ratio):.4f}'
+            )
+        if round(sev,8) in ood_set:
+            dir_ood,_=_ranked_predictive_directional_layouts(
+                dir_gen,directional_ood_count,f'{subgraph}|predictive_directional|{token}|ood',seed,
+                min_count=dir_min_ood_eff,candidate_multiplier=directional_candidate_multiplier,
+                forbidden=dseen,
+            )
+        else:
+            dir_ood=[]
         direc['severities'][token]={'id':[],'ood':[]}
         for dist,layouts in [('id',dir_id),('ood',dir_ood)]:
             for i,(ids,meta) in enumerate(layouts):
@@ -641,7 +958,26 @@ def build_predictive_layout_partitions(
         'future_free':True,
         'center_pool_fraction':float(center_pool_fraction),
         'exploration_temperature':float(exploration_temperature),
+        'directional_exploration_temperature':float(dir_temp),
+        'directional_candidate_multiplier':int(directional_candidate_multiplier),
+        'directional_anchor_pool_fraction':float(directional_anchor_pool_fraction),
+        'directional_restart_penalty':float(directional_restart_penalty),
+        'directional_continuity_bonus':float(directional_continuity_bonus),
+        'directional_min_segment_nodes':int(directional_min_segment_nodes),
+        'directional_max_segments':int(directional_max_segments),
+        'directional_target_ratio':float(directional_target_ratio),
+        'directional_optimizer':'dependency_first_directional_segments_v3',
         'severities':[float(x) for x in severities],
+        'ood_severities':sorted(float(x) for x in ood_set),
+        'minimum_by_severity': {
+            f's{int(round(100*float(sev))):02d}': {
+                'predictive_regional_id': _layout_min_for_severity(f's{int(round(100*float(sev))):02d}', 'predictive_regional_id', regional_min_id, min_layout_overrides),
+                'predictive_regional_ood': _layout_min_for_severity(f's{int(round(100*float(sev))):02d}', 'predictive_regional_ood', regional_min_ood, min_layout_overrides),
+                'predictive_directional_id': _layout_min_for_severity(f's{int(round(100*float(sev))):02d}', 'predictive_directional_id', directional_min_id, min_layout_overrides),
+                'predictive_directional_ood': _layout_min_for_severity(f's{int(round(100*float(sev))):02d}', 'predictive_directional_ood', directional_min_ood, min_layout_overrides),
+            }
+            for sev in severities
+        },
         'source_contribution_mean':float(np.mean(contribution)),
         'source_contribution_max':float(np.max(contribution)) if len(contribution) else 0.0,
     })

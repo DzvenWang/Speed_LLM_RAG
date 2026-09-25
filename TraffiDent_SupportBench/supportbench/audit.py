@@ -19,6 +19,13 @@ def _layout_sets(path: Path) -> tuple[set[tuple[int,...]], set[tuple[int,...]]]:
     return ids,oods
 
 
+
+def _layout_min_for_severity(token: str, key: str, default: int, overrides: dict | None = None) -> int:
+    block=(overrides or {}).get(str(token),{})
+    value=block.get(str(key),default) if isinstance(block,dict) else default
+    return max(1,int(value))
+
+
 def audit_subgraph(sg_dir: str | Path, config: str | Path | None = None, max_per_stratum: int = 3) -> dict:
     sg_dir=Path(sg_dir); bench=SupportBench(sg_dir.name,root=sg_dir.parent,config=config)
     report={'subgraph':sg_dir.name,'checks':{},'stratified_mask_audit':[],'errors':[],'warnings':[]}
@@ -114,16 +121,19 @@ def audit_subgraph(sg_dir: str | Path, config: str | Path | None = None, max_per
     # severities (main severity by default); high-severity OOD catalogues that
     # are not part of any protocol are deliberately not generated.
     ood_tokens={f"s{int(round(100*float(x))):02d}" for x in bench.cfg['sensing'].get('ood_severities',[bench.cfg['sensing']['main_severity']])}
+    min_overrides=bench.cfg['sensing'].get('layout_min_overrides',{})
     layout_specs=[
-        ('regional','regional_layouts.json',min(int(bench.cfg['sensing'].get('regional_min_id_layouts_per_severity',1)),int(bench.cfg['sensing'].get('regional_id_layouts_per_severity',1))),min(int(bench.cfg['sensing'].get('regional_min_ood_layouts_per_severity',1)),int(bench.cfg['sensing'].get('regional_ood_layouts_per_severity',1))),ood_tokens),
-        ('directional','directional_layouts.json',min(int(bench.cfg['sensing'].get('directional_min_id_layouts_per_severity',1)),int(bench.cfg['sensing'].get('directional_id_layouts_per_severity',1))),min(int(bench.cfg['sensing'].get('directional_min_ood_layouts_per_severity',1)),int(bench.cfg['sensing'].get('directional_ood_layouts_per_severity',1))),ood_tokens),
-        ('predictive_regional','predictive_regional_layouts.json',min(int(bench.cfg['sensing'].get('predictive_regional_min_id_layouts_per_severity',1)),int(bench.cfg['sensing'].get('predictive_regional_id_layouts_per_severity',1))),min(int(bench.cfg['sensing'].get('predictive_regional_min_ood_layouts_per_severity',1)),int(bench.cfg['sensing'].get('predictive_regional_ood_layouts_per_severity',1))),{f"s{int(round(100*float(x))):02d}" for x in bench.cfg['sensing'].get('predictive_severities',[bench.cfg['sensing']['main_severity']])}),
-        ('predictive_directional','predictive_directional_layouts.json',min(int(bench.cfg['sensing'].get('predictive_directional_min_id_layouts_per_severity',1)),int(bench.cfg['sensing'].get('predictive_directional_id_layouts_per_severity',1))),min(int(bench.cfg['sensing'].get('predictive_directional_min_ood_layouts_per_severity',1)),int(bench.cfg['sensing'].get('predictive_directional_ood_layouts_per_severity',1))),{f"s{int(round(100*float(x))):02d}" for x in bench.cfg['sensing'].get('predictive_severities',[bench.cfg['sensing']['main_severity']])}),
+        ('regional','regional_layouts.json','regional_id','regional_ood',min(int(bench.cfg['sensing'].get('regional_min_id_layouts_per_severity',1)),int(bench.cfg['sensing'].get('regional_id_layouts_per_severity',1))),min(int(bench.cfg['sensing'].get('regional_min_ood_layouts_per_severity',1)),int(bench.cfg['sensing'].get('regional_ood_layouts_per_severity',1))),ood_tokens),
+        ('directional','directional_layouts.json','directional_id','directional_ood',min(int(bench.cfg['sensing'].get('directional_min_id_layouts_per_severity',1)),int(bench.cfg['sensing'].get('directional_id_layouts_per_severity',1))),min(int(bench.cfg['sensing'].get('directional_min_ood_layouts_per_severity',1)),int(bench.cfg['sensing'].get('directional_ood_layouts_per_severity',1))),ood_tokens),
+        ('predictive_regional','predictive_regional_layouts.json','predictive_regional_id','predictive_regional_ood',min(int(bench.cfg['sensing'].get('predictive_regional_min_id_layouts_per_severity',1)),int(bench.cfg['sensing'].get('predictive_regional_id_layouts_per_severity',1))),min(int(bench.cfg['sensing'].get('predictive_regional_min_ood_layouts_per_severity',1)),int(bench.cfg['sensing'].get('predictive_regional_ood_layouts_per_severity',1))),ood_tokens),
+        ('predictive_directional','predictive_directional_layouts.json','predictive_directional_id','predictive_directional_ood',min(int(bench.cfg['sensing'].get('predictive_directional_min_id_layouts_per_severity',1)),int(bench.cfg['sensing'].get('predictive_directional_id_layouts_per_severity',1))),min(int(bench.cfg['sensing'].get('predictive_directional_min_ood_layouts_per_severity',1)),int(bench.cfg['sensing'].get('predictive_directional_ood_layouts_per_severity',1))),ood_tokens),
     ]
-    for fam,file_name,min_id,min_ood,required_ood_tokens in layout_specs:
+    for fam,file_name,min_id_key,min_ood_key,default_min_id,default_min_ood,required_ood_tokens in layout_specs:
         obj=read_json(bench.sg_dir/'graph'/'layouts'/file_name,{}) or {}
         all_ids=set(); all_oods=set(); fam_ok=True
         for token,part in sorted((obj.get('severities') or {}).items()):
+            min_id=_layout_min_for_severity(token,min_id_key,default_min_id,min_overrides)
+            min_ood=_layout_min_for_severity(token,min_ood_key,default_min_ood,min_overrides)
             ids={tuple(sorted(int(x) for x in item['nodes'])) for item in part.get('id',[])}
             oods={tuple(sorted(int(x) for x in item['nodes'])) for item in part.get('ood',[])}
             all_ids |= ids; all_oods |= oods

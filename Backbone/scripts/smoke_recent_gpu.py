@@ -3,7 +3,7 @@ from pathlib import Path
 import argparse, sys
 import torch
 from torch.utils.data import DataLoader
-ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone')
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT)); sys.path.insert(0,str(ROOT.parent/'TraffiDent_SupportBench'))
 from backbone.adapters import build_adapter
 from backbone.data import CachedSplit

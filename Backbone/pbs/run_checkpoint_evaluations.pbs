@@ -1,0 +1,48 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=04:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -N PatchSTGCheckpointEvalAll
+#PBS -j oe
+#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_logs/
+set -euo pipefail
+
+ROOT="${SPEED_LLM_RAG_ROOT:-/scratch/mh20/zw1165/Speed_LLM_RAG}"
+PROJ="$ROOT/Backbone"
+LOGROOT="$ROOT/Backbone_logs"
+ENVROOT="/scratch/mh20/zw1165/envs/TFP"
+PYTHON="$ENVROOT/bin/python"
+
+: "${CHECKPOINT:?Set CHECKPOINT to the PatchSTG best.pt to evaluate}"
+SEED="${SEED:-10}"
+if [[ "$CHECKPOINT" != /* ]]; then
+  CHECKPOINT="$ROOT/$CHECKPOINT"
+fi
+if [[ ! -f "$CHECKPOINT" ]]; then
+  echo "ERROR checkpoint not found: $CHECKPOINT" >&2
+  exit 3
+fi
+
+mkdir -p "$LOGROOT"
+STAMP=$(date +%Y%m%d_%H%M%S)
+LOG="$LOGROOT/PatchSTG.checkpoint_eval.all.seed${SEED}.${PBS_JOBID}.${STAMP}.live.log"
+
+export SPEED_LLM_RAG_ROOT="$ROOT"
+export PATH="$ENVROOT/bin:$PATH"
+unset TRANSFORMERS_CACHE || true
+export PYTHONPATH="$PROJ:$ROOT/ExperimentCommon:$ROOT/Protocol:$ROOT/TraffiDent_SupportBench:${PYTHONPATH:-}"
+export PYTHONUNBUFFERED=1
+export PYTHONDONTWRITEBYTECODE=1
+
+cd "$PROJ"
+echo "Primary live log: $LOG"
+"$PYTHON" -u scripts/run_checkpoint_evaluations.py \
+  --checkpoint "$CHECKPOINT" \
+  --expected-seed "$SEED" \
+  --run-stamp "$STAMP" \
+  --log-path "$LOG" \
+  --config "$PROJ/configs/backbone.yaml"

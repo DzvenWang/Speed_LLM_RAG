@@ -68,12 +68,19 @@ def link_or_copy(src: str | Path, dst: str | Path, mode: str = 'symlink') -> Non
         else:
             dst.unlink()
     mode = mode.lower()
+    if mode == 'auto':
+        # Windows commonly lacks symlink permission; POSIX/HPC systems benefit
+        # from symlinks. If a POSIX symlink still fails, fall back to a copy.
+        mode = 'copy' if os.name == 'nt' else 'symlink'
     if mode == 'copy':
         shutil.copy2(src, dst)
     elif mode == 'hardlink':
         os.link(src, dst)
     else:
-        dst.symlink_to(src.resolve())
+        try:
+            dst.symlink_to(src.resolve())
+        except OSError:
+            shutil.copy2(src, dst)
 
 
 def _norm(text: Any) -> str:

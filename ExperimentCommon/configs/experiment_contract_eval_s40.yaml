@@ -1,0 +1,46 @@
+# Frozen paired evaluation contract for 40% missingness.
+# Direct frozen evaluation contract for the Core-5 protocol.
+version: 1.2.0
+source:
+  supportbench_benchmark_version: 1.2.6
+project:
+  root: ${SPEED_LLM_RAG_ROOT}
+  cache_root: ${SPEED_LLM_RAG_ROOT}/ExperimentCache
+  log_root: ${SPEED_LLM_RAG_ROOT}/ExperimentCommon_logs
+  benchmark_root: ${SPEED_LLM_RAG_ROOT}/data/processed/traffident/supportbench
+  protocol_artifact_root: ${SPEED_LLM_RAG_ROOT}/Protocol_artifacts
+experiment:
+  subgraph: TraffiDent_Net_06
+  history: 12
+  horizon: 12
+  severity: 0.40
+  normalized_fill_value: 0.0
+  families:
+    - entry_random
+    - sensor_outage
+    - temporal_outage
+    - regional_outage
+    - directional_outage
+protocol:
+  name: protocol_core5_s40
+  version: 2.1.0
+  paired_group_id: TraffiDent_Net_06_core5_multiseverity_v1
+  allowed_stages: [evaluation]
+  no_local_sampling: true
+  stage_assertions:
+    evaluation:
+      test_rows: 5000
+      test_unique_groups: 5000
+      family_rows:
+        test: 1000
+contract:
+  cache_schema_version: 2
+  data_contract_revision: traffident_experiment_cache_v1
+  time_feature_revision: traffident_time_features_v1
+  metrics_revision: traffident_metrics_v1
+  prediction_contract_revision: traffident_prediction_v1
+time_features:
+  allow_index_modulo_fallback: true
+  index_origin_dow: 0
+  expected_freq_minutes: 5
+  expected_steps_per_day: 288

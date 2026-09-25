@@ -146,13 +146,28 @@ def balanced_unique_group_pick(df: pd.DataFrame, families: list[str], total: int
         if cursor != len(groups):
             raise AssertionError('Internal protocol sampler allocation mismatch.')
 
-    rows = []
-    for gid, fam in selected:
-        cand = d[(d.view_group_id == gid) & (d.family == fam)].sort_values(['window_start', 'view_id'])
-        if len(cand) == 0:
-            raise AssertionError((gid, fam))
-        rows.append(cand.iloc[0])
-    out = pd.DataFrame(rows).reset_index(drop=True)
+    # Resolve one deterministic concrete view per (group, family) in a single
+    # merge. This keeps exact-balanced Formal sampling efficient at 50k rows.
+    rep = (
+        d.sort_values(['view_group_id', 'family', 'window_start', 'view_id'])
+        .drop_duplicates(['view_group_id', 'family'], keep='first')
+        .reset_index(drop=True)
+    )
+    assignments = pd.DataFrame(selected, columns=['view_group_id', 'family'])
+    out = assignments.merge(
+        rep,
+        on=['view_group_id', 'family'],
+        how='left',
+        validate='one_to_one',
+        sort=False,
+    )
+    if out.view_id.isna().any():
+        missing = out[out.view_id.isna()][['view_group_id', 'family']].head(20)
+        raise AssertionError(
+            'Balanced protocol assignment could not resolve concrete views; '
+            f'first missing:\n{missing.to_string(index=False)}'
+        )
+    out = out.reset_index(drop=True)
     if len(out) != req:
         raise AssertionError(f'Expected {req} rows, got {len(out)}.')
     if out.view_group_id.astype(str).duplicated().any():

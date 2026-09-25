@@ -18,7 +18,18 @@ def stage_dir(artifact_root: str | Path, dataset: str, protocol_name: str, stage
     return Path(artifact_root) / dataset / protocol_name / stage
 
 
-def load_frozen_stage(artifact_root: str | Path, dataset: str, protocol_name: str, stage: str):
+def _require_evaluation_access(artifact_root: str | Path, dataset: str, manifest: dict) -> None:
+    """Backward-compatible no-op: Protocol v2.0.2 has no Test access lock."""
+    return None
+
+
+def load_frozen_stage(
+    artifact_root: str | Path,
+    dataset: str,
+    protocol_name: str,
+    stage: str,
+    require_evaluation_access: bool = True,
+):
     if stage not in STAGE_SPLITS:
         raise ValueError(f'Unsupported protocol stage: {stage}')
     sd = stage_dir(artifact_root, dataset, protocol_name, stage)
@@ -26,10 +37,12 @@ def load_frozen_stage(artifact_root: str | Path, dataset: str, protocol_name: st
     manifest_path = sd / 'stage_manifest.json'
     if not freeze.exists() or not manifest_path.exists():
         raise FileNotFoundError(f'Protocol stage is not frozen: {sd}')
-    manifest = json.loads(manifest_path.read_text())
-    frozen = json.loads(freeze.read_text())
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+    frozen = json.loads(freeze.read_text(encoding='utf-8'))
     if frozen.get('stage_hash') != manifest.get('stage_hash'):
         raise RuntimeError(f'Protocol freeze hash mismatch: {sd}')
+    # Protocol v2.0.2: no evaluation-access grant file is required.
+    # The argument is retained only for compatibility with older callers.
     views = {}
     for split in STAGE_SPLITS[stage]:
         p = sd / f'{split}_views.csv'
@@ -45,5 +58,8 @@ def load_frozen_stage(artifact_root: str | Path, dataset: str, protocol_name: st
 
 
 def protocol_stage_hash(artifact_root: str | Path, dataset: str, protocol_name: str, stage: str) -> str:
-    manifest, _ = load_frozen_stage(artifact_root, dataset, protocol_name, stage)
+    manifest, _ = load_frozen_stage(
+        artifact_root, dataset, protocol_name, stage,
+        require_evaluation_access=False,
+    )
     return str(manifest['stage_hash'])

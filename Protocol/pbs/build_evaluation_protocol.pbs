@@ -1,26 +1,17 @@
 #!/bin/bash
-#PBS -P mh20
-#PBS -q normal
+#PBS -P PROJECT_CODE
+#PBS -q gpuvolta
 #PBS -l ncpus=4
-#PBS -l mem=32GB
-#PBS -l walltime=04:00:00
-#PBS -l storage=scratch/mh20+gdata/mh20
-#PBS -N ProtocolTest
+#PBS -l mem=16GB
+#PBS -l walltime=02:00:00
+#PBS -l storage=scratch/PROJECT_CODE+gdata/PROJECT_CODE
 #PBS -j oe
-#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_logs/out/
+
 set -euo pipefail
-ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG
-PROJ="$ROOT/Protocol"
-LOGROOT="$ROOT/Protocol_logs"
-PY=/scratch/mh20/zw1165/envs/TFP/bin/python
-AUTH="$ROOT/Protocol_artifacts/TraffiDent_Net_06/protocol_v1/EVALUATION_AUTHORIZED.json"
-[ -f "$AUTH" ] || { echo "REFUSE: missing $AUTH"; exit 2; }
-mkdir -p "$LOGROOT"; STAMP=$(date +%Y%m%d_%H%M%S); LOG="$LOGROOT/ProtocolBuild.evaluation.${PBS_JOBID}.${STAMP}.live.log"; touch "$LOG"
-export PYTHONPATH="$PROJ:$ROOT/TraffiDent_SupportBench:${PYTHONPATH:-}" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
-exec > >("$PY" -u "$PROJ/timestamp_stream.py" | tee -a "$LOG") 2>&1
-trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"' EXIT
-cd "$PROJ"
-echo "START SharedProtocol evaluation job=$PBS_JOBID host=$(hostname)"
-"$PY" scripts/preflight.py
-"$PY" scripts/build_protocol.py --stage evaluation
-"$PY" scripts/validate_protocol.py --stage evaluation
+cd "${PBS_O_WORKDIR:-$(pwd)}"
+PROTOCOL_ROOT="$(pwd)"
+ROOT="${SPEED_LLM_RAG_ROOT:-$(cd "${PROTOCOL_ROOT}/.." && pwd)}"
+export SPEED_LLM_RAG_ROOT="$ROOT"
+PY="${PYTHON:-$(command -v python)}"
+
+"$PY" scripts/build_multiseverity_protocols.py --evaluation-only

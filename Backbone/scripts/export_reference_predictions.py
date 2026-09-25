@@ -8,19 +8,20 @@ must all match before inference starts.
 from pathlib import Path
 import argparse
 import json
+import os
 import sys
 import numpy as np
 import torch
 
-GADI_ROOT = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone')
-ROOT = GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[1]
-COMMON = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon')
-if not COMMON.exists(): COMMON = ROOT.parent / 'ExperimentCommon'
-for p in [ROOT, COMMON, ROOT.parent / 'TraffiDent_SupportBench']:
+ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(os.environ.get('SPEED_LLM_RAG_ROOT', ROOT.parent)).expanduser().resolve()
+COMMON = REPO_ROOT / 'ExperimentCommon'
+for p in [ROOT, COMMON, REPO_ROOT / 'TraffiDent_SupportBench']:
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
 from backbone.adapters import build_adapter
+from backbone.patchstg import checkpoint_layout_or_sidecar, require_checkpoint_layout_match
 from backbone.identity import require_checkpoint_identity
 from experiment_common.time_features import assert_resolved_time_features, resolve_time_features
 from experiment_common.predictions import save_prediction_npz
@@ -161,7 +162,15 @@ def main() -> None:
 
     mean = float(ck['mean'])
     std = float(ck['std'])
-    adapter = build_adapter(model, ROOT / 'vendor', b.N, device, mean, std, ck['model_config'], b.adj, b.nodes)
+    layout_override = None
+    if model == 'PatchSTG':
+        layout_override, layout_source = checkpoint_layout_or_sidecar(ck, checkpoint)
+    else:
+        layout_source = 'not_applicable'
+    adapter = build_adapter(model, ROOT / 'vendor', b.N, device, mean, std, ck['model_config'], b.adj, b.nodes, layout_override=layout_override)
+    if model == 'PatchSTG':
+        require_checkpoint_layout_match(ck, adapter, context='PatchSTG reference export')
+        print(f'PATCHSTG_LAYOUT_SOURCE={layout_source}', flush=True)
     adapter.model.load_state_dict(ck['state_dict'])
     tod, dow = tf_result.tod, tf_result.dow
     bs = int(ck.get('batch_size', ck['model_config'].get('batch_size', 16)))

@@ -17,5 +17,5 @@ with tempfile.TemporaryDirectory() as td:
     pred=np.zeros((2,12,3),np.float32); y=np.ones_like(pred); valid=np.ones_like(pred,np.uint8); node=np.ones((2,3),np.uint8)
     m=metric_bundle(pred,y,valid,node,node); assert m['overall_MAE']==1.0 and m['overall_RMSE']==1.0
     save_prediction_npz(p/'pred.npz',['a','b'],pred); vids,pp=load_prediction_npz(p/'pred.npz',expected_rows=2,expected_horizon=12,expected_nodes=3); assert list(vids)==['a','b'] and pp.shape==(2,12,3)
-assert CONTRACT_VERSION=='1.0.0'; assert DATA_CONTRACT_REVISION=='traffident_experiment_cache_v1'
+assert CONTRACT_VERSION=='1.1.0'; assert CACHE_SCHEMA_VERSION==2; assert DATA_CONTRACT_REVISION=='traffident_experiment_cache_v1'
 print('SHARED EXPERIMENT CONTRACT SMOKE PASS')

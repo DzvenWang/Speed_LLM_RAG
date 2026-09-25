@@ -2,8 +2,7 @@
 """Static/deterministic contract smoke for recent Backbone adapters."""
 from pathlib import Path
 import sys, numpy as np, pandas as pd, torch
-GADI_ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone')
-ROOT=GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from backbone.adapters import _node_coordinate_array, stlaformer_features
 from backbone.utils import load_yaml

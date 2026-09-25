@@ -1,17 +1,16 @@
-version: 1.0.0
-
+version: 2.1.0
 project:
-  root: /scratch/mh20/zw1165/Speed_LLM_RAG
-  protocol_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol
-  artifact_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_artifacts
-  log_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_logs
-  supportbench_project: /scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench
-  benchmark_root: /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench
-  support_artifact_root: /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench
-  python: /scratch/mh20/zw1165/envs/TFP/bin/python
+  root: ${SPEED_LLM_RAG_ROOT}
+  protocol_root: ${SPEED_LLM_RAG_ROOT}/Protocol
+  artifact_root: ${SPEED_LLM_RAG_ROOT}/Protocol_artifacts
+  log_root: ${SPEED_LLM_RAG_ROOT}/Protocol_logs
+  supportbench_project: ${SPEED_LLM_RAG_ROOT}/TraffiDent_SupportBench
+  benchmark_root: ${SPEED_LLM_RAG_ROOT}/data/processed/traffident/supportbench
+  support_artifact_root: ${SPEED_LLM_RAG_ROOT}/artifacts/supportbench
+  python: auto
 
 source:
-  supportbench_version: 1.2.3
+  supportbench_benchmark_version: 1.2.6
 
 experiment:
   dataset: TraffiDent_Net_06
@@ -21,29 +20,36 @@ experiment:
   distribution: id
   seed: 10
   families:
+    - entry_random
+    - sensor_outage
     - temporal_outage
     - regional_outage
     - directional_outage
-    - predictive_regional_outage
-    - predictive_directional_outage
 
 protocol:
-  name: protocol_v1
+  name: protocol_core5_s40
+  role: core5_training_and_evaluation
+  allowed_stages: [development, formal, evaluation]
+  paired_group_id: TraffiDent_Net_06_core5_multiseverity_v1
+  paired_reference_severity: 0.40
+  paired_evaluation_seed_offset: 20
   unique_view_group: true
   family_balanced: true
-  formal_train_policy: all_eligible_unique_groups_best_effort_family_balance
-  formal_train_exact_family_balance: false
+  formal_train_policy: exact_balanced_unique_groups
+  formal_train_exact_family_balance: true
   formal_reuses_development_val: true
   train_only_normalization: true
   normalized_missing_fill_value: 0.0
-  test_isolation: explicit_authorization_required
+  development_val_pool_policy: all_eligible
+  evaluation_pool_policy: all_eligible
+  evaluation_access_policy: frozen_manifest_direct_access
 
 stages:
   development:
     train_size: 12000
     val_size: 5000
   formal:
-    train_size: all
+    train_size: 50000
     val_size: 5000
   evaluation:
     test_size: 5000

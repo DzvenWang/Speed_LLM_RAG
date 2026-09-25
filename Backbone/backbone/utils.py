@@ -1,27 +1,44 @@
 from __future__ import annotations
-import json, os, random, subprocess
+import hashlib, json, os, random, sys
 from datetime import datetime
 from pathlib import Path
 import numpy as np
 import torch
 import yaml
 
+ROOT_ENV = 'SPEED_LLM_RAG_ROOT'
+ROOT_TOKEN = '${SPEED_LLM_RAG_ROOT}'
+
+
+def repository_root() -> Path:
+    env = os.environ.get(ROOT_ENV, '').strip()
+    if env:
+        return Path(os.path.expanduser(os.path.expandvars(env))).resolve()
+    return Path(__file__).resolve().parents[2]
+
+
+def _expand(v):
+    if isinstance(v, str):
+        root = str(repository_root())
+        return os.path.expandvars(os.path.expanduser(v.replace(ROOT_TOKEN, root).replace('$SPEED_LLM_RAG_ROOT', root)))
+    if isinstance(v, dict):
+        return {k: _expand(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_expand(x) for x in v]
+    return v
+
 
 def load_yaml(path):
     with open(path, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f)
+        return _expand(yaml.safe_load(f))
 
 
 def ensure_dir(path):
-    p=Path(path); p.mkdir(parents=True, exist_ok=True); return p
+    p = Path(path); p.mkdir(parents=True, exist_ok=True); return p
 
 
 def log(msg):
-    # PBS uses timestamp_stream.py; manual runs still get timestamps.
-    if os.environ.get('BACKBONE_TIMESTAMP_STREAM') == '1':
-        print(msg, flush=True)
-    else:
-        print(f"[{datetime.now().strftime('%F %T')}] {msg}", flush=True)
+    print(f"[{datetime.now().strftime('%F %T')}] {msg}", flush=True)
 
 
 def seed_all(seed):
@@ -32,44 +49,9 @@ def seed_all(seed):
 
 
 def write_json(path, obj):
-    p=Path(path); p.parent.mkdir(parents=True, exist_ok=True)
-    with open(p,'w',encoding='utf-8') as f: json.dump(obj,f,indent=2,sort_keys=True)
-
-
-def _ignorable_python_cache_status(line: str) -> bool:
-    """Return True only for untracked/generated Python bytecode artifacts.
-
-    Official repositories remain strict for tracked modifications and arbitrary
-    untracked files.  We ignore __pycache__, *.pyc and *.pyo because importing
-    an untouched official module can create these files on Gadi.
-    """
-    if not line:
-        return True
-    path = line[3:].strip() if len(line) >= 4 else line.strip()
-    # git may quote unusual paths; these repositories use ordinary paths, but
-    # stripping quotes keeps the check harmlessly robust.
-    path = path.strip('"')
-    parts = Path(path).parts
-    return ('__pycache__' in parts) or path.endswith('.pyc') or path.endswith('.pyo')
-
-
-def git_info(repo):
-    repo=Path(repo)
-    def run(*args):
-        return subprocess.check_output(['git','-C',str(repo),*args],text=True).strip()
-
-    raw_status = run('status','--porcelain=v1','--untracked-files=all')
-    status_lines = [ln for ln in raw_status.splitlines() if ln.strip()]
-    meaningful_dirty = [ln for ln in status_lines if not _ignorable_python_cache_status(ln)]
-    ignored_cache = [ln for ln in status_lines if _ignorable_python_cache_status(ln)]
-    return {
-        'commit': run('rev-parse','HEAD'),
-        'branch': run('rev-parse','--abbrev-ref','HEAD'),
-        'remote': run('remote','get-url','origin'),
-        'dirty': bool(meaningful_dirty),
-        'dirty_paths': meaningful_dirty,
-        'ignored_python_cache': ignored_cache,
-    }
+    p = Path(path); p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, 'w', encoding='utf-8') as f:
+        json.dump(obj, f, indent=2, sort_keys=True)
 
 
 def count_parameters(model):
@@ -77,9 +59,26 @@ def count_parameters(model):
 
 
 def sha256_file(path):
-    import hashlib
     h = hashlib.sha256()
     with open(path, 'rb') as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b''):
             h.update(chunk)
     return h.hexdigest()
+
+
+class Tee:
+    def __init__(self, *streams): self.streams = streams
+    def write(self, data):
+        for s in self.streams:
+            s.write(data); s.flush()
+        return len(data)
+    def flush(self):
+        for s in self.streams: s.flush()
+
+
+def install_tee(log_path: str | Path):
+    p = Path(log_path); p.parent.mkdir(parents=True, exist_ok=True)
+    fh = open(p, 'a', encoding='utf-8', buffering=1)
+    sys.stdout = Tee(sys.__stdout__, fh)
+    sys.stderr = Tee(sys.__stderr__, fh)
+    return fh

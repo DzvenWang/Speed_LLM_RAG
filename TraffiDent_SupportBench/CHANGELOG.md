@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.4
+- Expanded ID evaluation severities to 20%, 40%, 60%, and 90%.
+- Expanded predictive structured severities to the same four levels.
+- Preserved the previous Train severity catalogue via `train_severities` and `predictive_train_severities`, so the 40%-trained Backbone protocol remains reusable.
+- Fixed `temporal_outage` so 90% no longer clips at the 75% node-fraction ceiling.
+- Limited predictive OOD layout generation to `ood_severities` (40% by default).
+
 ## 1.2.3
 - Corrected Chapter-3 predictive-context metric semantics: formal `C_q^loss` is now `network_mean_context_loss = mean(per_target_context_loss)`.
 - Retained v1.2.2 `aggregate_context_loss` as a backward-compatible q-quantile diagnostic only.

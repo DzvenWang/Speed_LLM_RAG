@@ -1,39 +1,35 @@
 from __future__ import annotations
 from pathlib import Path
 import json, sys
-COMMON=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon')
-if not COMMON.exists(): COMMON=Path(__file__).resolve().parents[2]/'ExperimentCommon'
-if str(COMMON) not in sys.path: sys.path.insert(0,str(COMMON))
-from experiment_common.cache import load_cache_identity as load_shared_cache_identity, require_contract, identity_key as shared_identity_key
-from experiment_common.utils import load_yaml
+from .utils import repository_root
 
-IDENTITY_SCHEMA_VERSION = 3
+IDENTITY_SCHEMA_VERSION = 4
 
 
-def _shared_cfg(cfg: dict) -> dict:
-    p=Path(cfg['shared_contract']['config'])
-    if not p.exists(): p=COMMON/'configs/experiment_contract.yaml'
-    return load_yaml(p)
-
-
-def _shared_stage(consumer_stage: str) -> str:
-    return {'screening':'development','formal':'formal','evaluation':'evaluation'}[consumer_stage]
+def _common_imports():
+    common = repository_root() / 'ExperimentCommon'
+    if str(common) not in sys.path: sys.path.insert(0, str(common))
+    from experiment_common.cache import load_cache_identity as _load
+    return _load
 
 
 def load_cache_identity(cache_dir: str | Path) -> dict:
-    shared=load_shared_cache_identity(cache_dir)
-    # Project version is intentionally absent from shared cache identity.
+    shared = _common_imports()(cache_dir)
     return {
         'identity_schema_version': IDENTITY_SCHEMA_VERSION,
         'project': 'Backbone',
-        'consumer_stage': {'development':'screening','formal':'formal','evaluation':'evaluation'}[shared['stage']],
+        'consumer_stage': shared['stage'],
         'shared_cache_stage': shared['stage'],
         'dataset': shared['dataset'],
-        'protocol_stage': shared['stage'],
+        'protocol_name': shared['protocol_name'],
+        'protocol_version': shared['protocol_version'],
+        'severity': float(shared['severity']),
+        'paired_group_id': shared.get('paired_group_id', ''),
         'protocol_stage_hash': shared['protocol_stage_hash'],
         'split_view_hashes': shared['split_view_hashes'],
         'cache_fingerprint': shared['cache_fingerprint'],
         'shared_contract_version': shared['contract_version'],
+        'cache_schema_version': int(shared['cache_schema_version']),
         'data_contract_revision': shared['data_contract_revision'],
         'time_feature_revision': shared['time_feature_revision'],
         'metrics_revision': shared['metrics_revision'],
@@ -48,38 +44,54 @@ def load_cache_identity(cache_dir: str | Path) -> dict:
 def identity_key(x: dict) -> tuple:
     return (
         x.get('identity_schema_version'), x.get('consumer_stage'), x.get('shared_cache_stage'), x.get('dataset'),
-        x.get('protocol_stage_hash'), json.dumps(x.get('split_view_hashes',{}),sort_keys=True), x.get('cache_fingerprint'),
-        x.get('shared_contract_version'), x.get('data_contract_revision'), x.get('time_feature_revision'),
-        x.get('metrics_revision'), x.get('prediction_contract_revision'), x.get('time_feature_fingerprint'),
-        x.get('time_feature_source'), x.get('time_feature_parser'), x.get('contract_fingerprint'),
+        x.get('protocol_name'), x.get('protocol_version'), float(x.get('severity', -1)), x.get('paired_group_id'),
+        x.get('protocol_stage_hash'), json.dumps(x.get('split_view_hashes', {}), sort_keys=True),
+        x.get('cache_fingerprint'), x.get('shared_contract_version'), x.get('cache_schema_version'),
+        x.get('data_contract_revision'), x.get('time_feature_revision'), x.get('metrics_revision'),
+        x.get('prediction_contract_revision'), x.get('time_feature_fingerprint'), x.get('time_feature_source'),
+        x.get('time_feature_parser'), x.get('contract_fingerprint'),
     )
 
 
-def require_identity(summary: dict, expected: dict, label: str='run') -> None:
-    got=summary.get('run_identity')
-    if not isinstance(got,dict): raise RuntimeError(f'{label}: missing run_identity')
-    if identity_key(got)!=identity_key(expected):
-        raise RuntimeError(f'{label}: run identity mismatch.\nexpected={json.dumps(expected,sort_keys=True)}\ngot={json.dumps(got,sort_keys=True)}')
+def require_identity(summary: dict, expected: dict, label: str = 'run') -> None:
+    got = summary.get('run_identity')
+    if not isinstance(got, dict): raise RuntimeError(f'{label}: missing run_identity')
+    if identity_key(got) != identity_key(expected):
+        raise RuntimeError(f'{label}: run identity mismatch')
 
 
-def require_checkpoint_identity(checkpoint: dict, expected: dict, label: str='checkpoint') -> None:
-    got=checkpoint.get('run_identity')
-    if not isinstance(got,dict): raise RuntimeError(f'{label}: missing run_identity')
-    if identity_key(got)!=identity_key(expected):
+def require_checkpoint_identity(checkpoint: dict, expected: dict, label: str = 'checkpoint') -> None:
+    got = checkpoint.get('run_identity')
+    if not isinstance(got, dict): raise RuntimeError(f'{label}: missing run_identity')
+    if identity_key(got) != identity_key(expected):
         raise RuntimeError(f'{label}: checkpoint identity mismatch')
 
 
-def require_cache_version_compatibility(cfg: dict, identity: dict, consumer_stage: str) -> None:
-    if identity.get('consumer_stage') != consumer_stage:
-        raise RuntimeError(f'Cache consumer stage={identity.get("consumer_stage")} != {consumer_stage}')
-    req=cfg.get('shared_contract', {})
-    checks={
-        'shared_contract_version': req.get('required_version'),
-        'data_contract_revision': req.get('data_contract_revision'),
-        'time_feature_revision': req.get('time_feature_revision'),
-        'metrics_revision': req.get('metrics_revision'),
-        'prediction_contract_revision': req.get('prediction_contract_revision'),
+def require_cache_version_compatibility(cfg: dict, identity: dict, stage: str) -> None:
+    if identity.get('consumer_stage') != stage:
+        raise RuntimeError(f'Cache stage={identity.get("consumer_stage")} != {stage}')
+    req = cfg['shared_contract']
+    checks = {
+        'shared_contract_version': req['required_version'],
+        'cache_schema_version': req['required_cache_schema_version'],
+        'data_contract_revision': req['data_contract_revision'],
+        'time_feature_revision': req['time_feature_revision'],
+        'metrics_revision': req['metrics_revision'],
+        'prediction_contract_revision': req['prediction_contract_revision'],
+        'protocol_version': req['protocol_version'],
+        'paired_group_id': req['paired_group_id'],
     }
-    for key,val in checks.items():
-        if val is not None and str(identity.get(key)) != str(val):
-            raise RuntimeError(f'{consumer_stage} shared contract {key}={identity.get(key)} != required {val}')
+    for key, val in checks.items():
+        if str(identity.get(key)) != str(val):
+            raise RuntimeError(f'{stage} cache {key}={identity.get(key)} != required {val}')
+
+
+def require_formal_eval_compatibility(formal: dict, evaluation: dict) -> None:
+    keys = [
+        'dataset','shared_contract_version','cache_schema_version','data_contract_revision',
+        'time_feature_revision','metrics_revision','prediction_contract_revision',
+        'time_feature_fingerprint','time_feature_source','time_feature_parser','paired_group_id',
+    ]
+    for key in keys:
+        if str(formal.get(key)) != str(evaluation.get(key)):
+            raise RuntimeError(f'Formal/evaluation contract mismatch in {key}: {formal.get(key)} != {evaluation.get(key)}')

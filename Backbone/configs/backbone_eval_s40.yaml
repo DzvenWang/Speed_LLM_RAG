@@ -1,0 +1,288 @@
+# Frozen-Backbone evaluation config for paired 40% missingness.
+# Training/selection remains the original backbone_selection.yaml @ 40%.
+version: 0.6.0
+project:
+  root: ${SPEED_LLM_RAG_ROOT}
+  supportbench_project: ${SPEED_LLM_RAG_ROOT}/TraffiDent_SupportBench
+  benchmark_root: ${SPEED_LLM_RAG_ROOT}/data/processed/traffident/supportbench
+  support_artifact_root: ${SPEED_LLM_RAG_ROOT}/artifacts/supportbench
+  log_root: ${SPEED_LLM_RAG_ROOT}/Backbone_logs
+  exp_root: ${SPEED_LLM_RAG_ROOT}/Backbone_exps
+  protocol_root: ${SPEED_LLM_RAG_ROOT}/Protocol
+  protocol_artifact_root: ${SPEED_LLM_RAG_ROOT}/Protocol_artifacts
+  common_root: ${SPEED_LLM_RAG_ROOT}/ExperimentCommon
+official_sources:
+  STAEformer:
+    remote: https://github.com/XDZhelheim/STAEformer.git
+    commit: fc49d39b2f1a8e3cf37b6289d7240680e1690f3f
+  HimNet:
+    remote: https://github.com/XDZhelheim/HimNet.git
+    commit: 2a9aa44d1864f6fb60bdf9d14bafd6c1681e81a5
+  BigST:
+    remote: https://github.com/usail-hkust/BigST.git
+    commit: 830cb529354c0cda75c1660d1a0af2ffc7e66abb
+  STDN:
+    remote: https://github.com/roarer008/STDN.git
+    commit: e24a60fa9485fb9805df9c171d67ab60840d757d
+  PatchSTG:
+    remote: https://github.com/LMissher/PatchSTG.git
+    commit: 8b298b230227a304a082e05241c69dca3740a73d
+  STLAformer:
+    remote: https://github.com/laibajiu/STLAformer.git
+    commit: f3eba25e2c63023a4834fd87d88da1c3347f16a9
+experiment:
+  subgraph: TraffiDent_Net_06
+  history: 12
+  horizon: 12
+  severity: 0.4
+  families:
+  - entry_random
+  - sensor_outage
+  - temporal_outage
+  - regional_outage
+  - directional_outage
+  normalized_fill_value: 0.0
+  screening:
+    seed: 10
+  formal:
+    seeds:
+    - 10
+    - 20
+    - 30
+    reference_seed: 10
+selection:
+  shortlist_k: 2
+  overall_tolerance: 0.02
+  support_tie_tolerance_rel: 0.005
+  formal_primary: mean_val_MAE
+  formal_secondary: mean_val_support_dependent_MAE
+  stability_metric: std_val_MAE
+  freeze_before_test: true
+  reference_model: PatchSTG
+  formal_strategy: fixed_reference_model_three_seed
+runtime:
+  num_workers: 0
+  amp: false
+  print_every_batches: 100
+  deterministic: true
+models:
+  STAEformer:
+    recipe_source: STAEformer/model/STAEformer.yaml:PEMS04
+    batch_size: 16
+    optimizer: adam
+    learning_rate: 0.001
+    adam_eps: 1.0e-08
+    weight_decay: 0.0005
+    scheduler: multistep
+    milestones:
+    - 15
+    - 30
+    - 50
+    lr_gamma: 0.1
+    max_epochs: 300
+    patience: 20
+    grad_clip: 0.0
+    train_loss: huber
+    input_dim: 3
+    input_embedding_dim: 24
+    tod_embedding_dim: 24
+    dow_embedding_dim: 24
+    spatial_embedding_dim: 0
+    adaptive_embedding_dim: 80
+    feed_forward_dim: 256
+    num_heads: 4
+    num_layers: 3
+    dropout: 0.1
+    use_mixed_proj: true
+  HimNet:
+    recipe_source: HimNet/model/HimNet.yaml:PEMS03
+    batch_size: 16
+    optimizer: adam
+    learning_rate: 0.001
+    adam_eps: 0.001
+    weight_decay: 0.0003
+    scheduler: multistep
+    milestones:
+    - 30
+    - 50
+    lr_gamma: 0.1
+    max_epochs: 200
+    patience: 20
+    grad_clip: 5.0
+    train_loss: huber
+    hidden_dim: 64
+    num_layers: 1
+    cheb_k: 2
+    tod_embedding_dim: 8
+    dow_embedding_dim: 8
+    node_embedding_dim: 16
+    st_embedding_dim: 16
+    tf_decay_steps: 4000
+    use_teacher_forcing: true
+  BigST:
+    recipe_source: BigST/run.py defaults
+    batch_size: 16
+    optimizer: adam
+    learning_rate: 0.001
+    adam_eps: 1.0e-08
+    weight_decay: 0.0001
+    scheduler: multistep
+    milestones:
+    - 80
+    - 100
+    lr_gamma: 0.1
+    max_epochs: 100
+    patience: 30
+    grad_clip: 5.0
+    train_loss: mae
+    hid_dim: 32
+    num_layers: 3
+    tau: 0.25
+    random_feature_dim: 64
+    node_dim: 32
+    time_dim: 32
+    dropout: 0.3
+    use_residual: true
+    use_bn: true
+    use_spatial: false
+    use_long: false
+  STDN:
+    recipe_source: STDN/conf/PEMSD4_1dim_12.conf
+    batch_size: 64
+    fallback_batch_sizes:
+    - 32
+    - 16
+    optimizer: adam
+    learning_rate: 0.001
+    adam_eps: 1.0e-08
+    weight_decay: 0.0
+    scheduler: step
+    step_size: 10
+    lr_gamma: 0.9
+    max_epochs: 200
+    patience: 10
+    grad_clip: 0.0
+    train_loss: mae
+    L: 2
+    K: 16
+    d: 8
+    reference: 3
+    order: 3
+    node_miss_rate: 0.1
+    T_miss_len: 12
+    bn_decay: 0.1
+  PatchSTG:
+    recipe_source: PatchSTG/config/SD.conf + main.py (TraffiDent N/time adapted at
+      adapter boundary)
+    batch_size: 16
+    fallback_batch_sizes:
+    - 8
+    - 4
+    optimizer: adamw
+    learning_rate: 0.002
+    adam_eps: 1.0e-08
+    weight_decay: 0.0001
+    scheduler: multistep
+    milestones:
+    - 1
+    - 35
+    - 40
+    lr_gamma: 0.5
+    scheduler_step_interval: 1
+    max_epochs: 50
+    patience: 50
+    grad_clip: 0.0
+    train_loss: mae
+    tem_patchsize: 12
+    tem_patchnum: 1
+    spatial_recur: 8
+    spa_patchsize: 2
+    spa_patchnum: 256
+    factors: 16
+    layers: 5
+    input_dims: 64
+    node_dims: 64
+    tod_dims: 32
+    dow_dims: 32
+    tod_slots: 288
+    dow_slots: 7
+    spatial_layout: official_kdtree_on_traffident_nodes_plus_official_adjacency_padding
+  STLAformer:
+    recipe_source: STLAformer paper Sec. 5.3 + pinned model/STLformer.py defaults
+    batch_size: 16
+    fallback_batch_sizes:
+    - 8
+    - 4
+    optimizer: adam
+    learning_rate: 0.001
+    adam_eps: 1.0e-08
+    weight_decay: 0.0
+    scheduler: plateau
+    lr_gamma: 0.1
+    max_epochs: 200
+    patience: 200
+    grad_clip: 0.0
+    train_loss: huber
+    input_dim: 2
+    input_embedding_dim: 32
+    tow_embedding_dim: 32
+    feed_forward_dim: 256
+    num_heads: 4
+    num_layers: 6
+    dropout: 0.3
+    steps_per_week: 2016
+    tod_slots: 288
+    dow_slots: 7
+    input_contract: normalized_speed_plus_fractional_time_of_week
+    scheduler_patience: 20
+    scheduler_threshold: 1.0e-08
+protocol:
+  name: protocol_core5_s40
+  version: 2.1.0
+  stage_map:
+    screening: development
+    formal: formal
+    evaluation: evaluation
+  consumer_policy: frozen_shared_protocol_only
+  no_local_sampling: true
+protocol_assertions:
+  screening:
+    train_rows: 12000
+    val_rows: 5000
+  formal:
+    val_rows: 5000
+    train_policy: all_eligible_unique_groups
+  evaluation:
+    test_rows: 5000
+shared_contract:
+  required_version: 1.2.0
+  config: ${SPEED_LLM_RAG_ROOT}/ExperimentCommon/configs/experiment_contract_eval_s40.yaml
+  data_contract_revision: traffident_experiment_cache_v1
+  time_feature_revision: traffident_time_features_v1
+  metrics_revision: traffident_metrics_v1
+  prediction_contract_revision: traffident_prediction_v1
+compatibility:
+  screening_project_versions_by_model:
+    STAEformer:
+    - 0.5.0
+    - 0.6.0
+    HimNet:
+    - 0.5.0
+    - 0.6.0
+    BigST:
+    - 0.5.0
+    - 0.6.0
+    STDN:
+    - 0.5.0
+    - 0.6.0
+    PatchSTG:
+    - 0.5.0
+    - 0.6.0
+    STLAformer:
+    - 0.6.0
+  formal_reference_project_versions:
+    PatchSTG:
+    - 0.5.0
+    - 0.6.0
+  rationale: v0.6.0 adds STLAformer only; existing v0.5.0 model adapters/recipes and
+    Shared Protocol identity for the original five remain unchanged.

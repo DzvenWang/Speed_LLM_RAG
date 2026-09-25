@@ -5,11 +5,12 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-ROOT = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone')
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT.parent / 'TraffiDent_SupportBench'))
 
 from backbone.adapters import build_adapter
+from backbone.patchstg import checkpoint_layout_or_sidecar, require_checkpoint_layout_match
 from backbone.data import CachedSplit
 from backbone.identity import load_cache_identity, require_identity
 from backbone.metrics import METRICS_REVISION
@@ -65,10 +66,19 @@ def main():
         f, s = max(candidates, key=lambda x: x[0].stat().st_mtime)
         run_dir = f.parent
         ck = torch.load(run_dir / 'best.pt', map_location=device, weights_only=False)
+        layout_override = None
+        if model_name == 'PatchSTG':
+            layout_override, layout_source = checkpoint_layout_or_sidecar(ck, run_dir / 'best.pt')
+        else:
+            layout_source = 'not_applicable'
         adapter = build_adapter(
             model_name, ROOT / 'vendor', bench.N, device,
-            float(ck['mean']), float(ck['std']), ck['model_config'], bench.adj, bench.nodes
+            float(ck['mean']), float(ck['std']), ck['model_config'], bench.adj, bench.nodes,
+            layout_override=layout_override,
         )
+        if model_name == 'PatchSTG':
+            require_checkpoint_layout_match(ck, adapter, context='PatchSTG screening refresh')
+            print(f'PATCHSTG_LAYOUT_SOURCE={layout_source}', flush=True)
         adapter.model.load_state_dict(ck['state_dict'])
         loader = DataLoader(
             val,

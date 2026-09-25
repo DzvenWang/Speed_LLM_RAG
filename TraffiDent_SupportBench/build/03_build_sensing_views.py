@@ -9,6 +9,15 @@ from supportbench.sensing import enrich_view_spec, make_view_spec
 from supportbench.utils import ensure_dir, log, read_json
 
 
+
+def progress(label: str, i: int, total: int, rows_count: int) -> None:
+    if total <= 0:
+        return
+    step=max(1,total//10)
+    done=i+1
+    if done==1 or done==total or done % step==0:
+        log(f'{label}: windows={done:,}/{total:,} ({100.0*done/total:.1f}%); accumulated_views={rows_count:,}')
+
 def add_spec(rows, sg_dir: Path, split: str, start: int, family: str, severity: float, instance: int, cfg: dict, H: int, N: int, distribution: str='id'):
     spec=make_view_spec(sg_dir.name,split,int(start),family,float(severity),int(instance),cfg,distribution)
     rows.append(enrich_view_spec(spec,H,N,sg_dir))
@@ -18,25 +27,31 @@ def build_one(sg_dir: Path, cfg: dict):
     man=read_json(sg_dir/'manifest.json'); H=int(man['history_len']); N=int(man['shape'][1])
     scfg=cfg['sensing']
     general=list(scfg['general_families']); predictive=list(scfg.get('predictive_families',[]))
-    severities=list(map(float,scfg['severities'])); pred_sev=list(map(float,scfg.get('predictive_severities',[scfg['main_severity']])))
+    severities=list(map(float,scfg['severities']))
+    pred_sev=list(map(float,scfg.get('predictive_severities',[scfg['main_severity']])))
+    # Train severities are intentionally separable from the full evaluation grid.
+    # This preserves the historical 40%-training protocol/checkpoint while allowing
+    # new 90% robustness views in Validation/Test.
+    train_sev=list(map(float,scfg.get('train_severities',severities)))
+    pred_train_sev=list(map(float,scfg.get('predictive_train_severities',scfg.get('predictive_severities',[scfg['main_severity']]))))
     main=float(scfg['main_severity']); rows=[]
 
-    # Train: deterministic balanced pool across general + support-oriented families.
-    # Predictive families are generated only at their configured support severities.
+    # Train: deterministic balanced pool across the explicitly configured Train grid.
     tr=np.load(sg_dir/'windows'/'train_full.npy')
-    train_choices=[(f,s) for f in general for s in severities] + [(f,s) for f in predictive for s in pred_sev]
+    train_choices=[(f,s) for f in general for s in train_sev] + [(f,s) for f in predictive for s in pred_train_sev]
     vper=int(scfg['train_views_per_window'])
     for idx,s in enumerate(tr):
         add_spec(rows,sg_dir,'train',s,'complete',0.0,0,cfg,H,N)
         for v in range(vper):
             fam,sev=train_choices[(idx*vper+v)%len(train_choices)]
             add_spec(rows,sg_dir,'train',s,fam,sev,v,cfg,H,N,'id')
+        progress(f'{sg_dir.name} train views',idx,len(tr),len(rows))
 
     # Validation/Test: full General track + support-oriented predictive families.
     for split in ['val','test']:
         starts=np.load(sg_dir/'windows'/f'{split}_full.npy')
         inst_base=int(scfg[f'{split}_instances_per_family_severity'])
-        for s in starts:
+        for split_idx,s in enumerate(starts):
             add_spec(rows,sg_dir,split,s,'complete',0.0,0,cfg,H,N)
             for fam in general:
                 for sev in severities:
@@ -51,7 +66,9 @@ def build_one(sg_dir: Path, cfg: dict):
             for fam in ['regional_outage','directional_outage'] + predictive:
                 if main in (pred_sev if fam in predictive else [main]):
                     add_spec(rows,sg_dir,split,s,fam,main,0,cfg,H,N,'ood')
+            progress(f'{sg_dir.name} {split} views',split_idx,len(starts),len(rows))
 
+    log(f'{sg_dir.name}: converting {len(rows):,} view records to DataFrame')
     df=pd.DataFrame(rows)
     out=ensure_dir(sg_dir/'views'); df.to_csv(out/'view_manifest.csv',index=False)
     log(f'{sg_dir.name}: {len(df):,} deterministic sensing views written')

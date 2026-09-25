@@ -1,12 +1,14 @@
-# Official numerical backbone sources — v0.6.0
+# Official source lock
 
-The active benchmark uses the pinned source commits in `configs/backbone_selection.yaml` and `vendor/SOURCE_LOCK.json`:
+The active numerical backbone source is the official PatchSTG repository:
 
-- STAEformer — `fc49d39b2f1a8e3cf37b6289d7240680e1690f3f`
-- HimNet — `2a9aa44d1864f6fb60bdf9d14bafd6c1681e81a5`
-- BigST — `830cb529354c0cda75c1660d1a0af2ffc7e66abb`
-- STDN — `e24a60fa9485fb9805df9c171d67ab60840d757d`
-- PatchSTG — `8b298b230227a304a082e05241c69dca3740a73d`
-- STLAformer — `f3eba25e2c63023a4834fd87d88da1c3347f16a9`
+- repository: `https://github.com/LMissher/PatchSTG.git`
+- commit: `8b298b230227a304a082e05241c69dca3740a73d`
 
-The release does not modify those model architectures. TraffiDent adaptation occurs at the adapter/data boundary and all models consume the same ExperimentCommon temporal/data contract. STLAformer receives the official two-channel input semantics: normalized traffic plus fractional time-of-week, derived only from canonical history timestamps.
+`vendor/SOURCE_LOCK.json` additionally locks the vendored source tree SHA256. Run:
+
+```bash
+python scripts/source_lock.py verify
+```
+
+before training.

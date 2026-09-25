@@ -1,11 +1,37 @@
 from __future__ import annotations
+
 from pathlib import Path
-import hashlib, json, yaml
+import hashlib
+import json
+import os
+import yaml
+
+ROOT_ENV = 'SPEED_LLM_RAG_ROOT'
+ROOT_TOKEN = '${SPEED_LLM_RAG_ROOT}'
+
+
+def repository_root() -> Path:
+    env = os.environ.get(ROOT_ENV, '').strip()
+    if env:
+        return Path(os.path.expanduser(os.path.expandvars(env))).resolve()
+    return Path(__file__).resolve().parents[2]
+
+
+def _expand(v):
+    if isinstance(v, str):
+        root = str(repository_root())
+        v = v.replace(ROOT_TOKEN, root).replace('$SPEED_LLM_RAG_ROOT', root)
+        return os.path.expandvars(os.path.expanduser(v))
+    if isinstance(v, dict):
+        return {k: _expand(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_expand(x) for x in v]
+    return v
 
 
 def load_yaml(path):
     with open(path, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f)
+        return _expand(yaml.safe_load(f))
 
 
 def write_json(path, obj):

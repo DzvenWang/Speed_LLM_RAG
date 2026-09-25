@@ -1,0 +1,36 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q normal
+#PBS -l ncpus=4
+#PBS -l mem=32GB
+#PBS -l walltime=06:00:00
+#PBS -l storage=scratch/mh20
+#PBS -j oe
+
+set -uo pipefail
+ROOT="${SPEED_LLM_RAG_ROOT:-/scratch/mh20/zw1165/Speed_LLM_RAG}"
+PROJ="$ROOT/ExperimentCommon"
+PY="${PYTHON:-/scratch/mh20/zw1165/envs/TFP/bin/python}"
+STAMP="$(date +%Y%m%d_%H%M%S)"
+JOB="${PBS_JOBID:-manual}"
+LOG_DIR="$ROOT/ExperimentCommon_logs"
+LIVE_LOG="$LOG_DIR/ExperimentCommonCore5Build.${JOB}.${STAMP}.live.log"
+mkdir -p "$LOG_DIR"
+cd "$PROJ"
+export SPEED_LLM_RAG_ROOT="$ROOT"
+export PYTHONUNBUFFERED=1
+ARGS=()
+if [[ "${FORCE:-0}" == "1" ]]; then ARGS+=(--force); fi
+
+echo "[$(date '+%F %T')] START ExperimentCommon Core5 cache build job=$JOB" | tee -a "$LIVE_LOG"
+echo "[$(date '+%F %T')] ROOT=$ROOT" | tee -a "$LIVE_LOG"
+echo "[$(date '+%F %T')] PYTHON=$PY" | tee -a "$LIVE_LOG"
+echo "[$(date '+%F %T')] LIVE_LOG=$LIVE_LOG" | tee -a "$LIVE_LOG"
+set +e
+"$PY" -u scripts/build_caches.py "${ARGS[@]}" 2>&1 \
+  | "$PY" -u "$ROOT/Protocol/timestamp_stream.py" \
+  | tee -a "$LIVE_LOG"
+RC=${PIPESTATUS[0]}
+set -e
+echo "[$(date '+%F %T')] SCRIPT_EXIT_STATUS=$RC" | tee -a "$LIVE_LOG"
+exit "$RC"
