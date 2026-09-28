@@ -6,10 +6,10 @@ from .utils import load_yaml, repository_root
 
 def common_root() -> Path:
     root = repository_root()
-    p = root / 'ExperimentCommon'
+    p = root / 'Base_SupportBench'
     if not p.exists():
-        raise FileNotFoundError(f'ExperimentCommon not found: {p}')
-    for q in (p, root / 'Protocol', root / 'TraffiDent_SupportBench'):
+        raise FileNotFoundError(f'Base_SupportBench not found: {p}')
+    for q in (p,):
         if q.exists() and str(q) not in sys.path:
             sys.path.insert(0, str(q))
     return p
@@ -23,7 +23,8 @@ def _severity_tag(severity: int | float) -> str:
 
 def contract_path(cfg: dict, stage: str, severity: int | float | None = None) -> Path:
     if stage in ('development', 'formal'):
-        return Path(cfg['shared_contract']['configs']['training'])
+        raw = cfg['shared_contract']['configs'].get(stage) or cfg['shared_contract']['configs'].get('training')
+        return Path(raw)
     if stage != 'evaluation':
         raise ValueError(stage)
     if severity is None:
@@ -51,15 +52,15 @@ def cache_path(cfg: dict, stage: str, severity: int | float | None = None) -> Pa
 
 
 def validate_shared_cache(cfg: dict, stage: str, severity: int | float | None = None, *, allow_locked_evaluation: bool = False) -> dict:
-    """Validate a shared cache with old/new ExperimentCommon compatibility.
+    """Validate a shared cache with old/new Base_SupportBench cache layer compatibility.
 
     Training stages intentionally use only the stable two-argument
-    ``validate_cache(cfg, stage)`` API.  Older ExperimentCommon releases on GADI do
+    ``validate_cache(cfg, stage)`` API.  Older Base_SupportBench cache layer releases on GADI do
     not accept ``allow_locked_evaluation_validation`` and must not receive it.
 
     Evaluation is intentionally non-gating in the current Backbone workflow.  If
-    ExperimentCommon exposes the newer bypass keyword we use it.  With an older
-    ExperimentCommon, we require the already-materialized cache directory plus its
+    Base_SupportBench cache layer exposes the newer bypass keyword we use it.  With an older
+    Base_SupportBench cache layer, we require the already-materialized cache directory plus its
     READY/manifest files and then normalize its identity without invoking the legacy
     Protocol access gate.
     """
@@ -68,7 +69,7 @@ def validate_shared_cache(cfg: dict, stage: str, severity: int | float | None = 
     scfg = shared_contract_config(cfg, stage, severity)
 
     if stage in ('development', 'formal'):
-        # Stable API shared by both legacy and current ExperimentCommon.
+        # Stable API shared by both legacy and current Base_SupportBench cache layer.
         validate_cache(scfg, stage)
     elif stage == 'evaluation':
         import inspect
@@ -79,7 +80,7 @@ def validate_shared_cache(cfg: dict, stage: str, severity: int | float | None = 
                 allow_locked_evaluation_validation=True,
             )
         else:
-            # Legacy ExperimentCommon couples validate_cache() to the Protocol
+            # Legacy Base_SupportBench cache layer couples validate_cache() to the Protocol
             # evaluation-access gate.  Backbone simple evaluation no longer uses
             # that gate, so validate the materialized cache presence here and leave
             # detailed tensor-shape checks to the evaluation runner.
@@ -99,6 +100,6 @@ def validate_shared_cache(cfg: dict, stage: str, severity: int | float | None = 
 def require_evaluation_access(cfg: dict, severity: int | float) -> None:
     """Backward-compatible no-op. Protocol grant files are no longer required."""
     # Keep this symbol so older callers do not break, but deliberately do not call
-    # ExperimentCommon.require_evaluation_cache_access(). Frozen/hash validation is
+    # Base_SupportBench cache layer.require_evaluation_cache_access(). Frozen/hash validation is
     # still enforced by validate_shared_cache().
     return None

@@ -44,11 +44,11 @@ class SprintCanonicalHistory:
     specialized comparator track rather than the strict H12 input-matched main table.
     """
 
-    speed_array: np.ndarray
-    speed_channel: int | None
+    target_array: np.ndarray
+    target_channel: int | None
     valid_array: np.ndarray
     valid_channel: int | None
-    speed_path: Path
+    target_path: Path
     valid_path: Path
     history: int
     nodes: int
@@ -59,9 +59,9 @@ class SprintCanonicalHistory:
     def context_days(self) -> int:
         return self.historical_days + 1
 
-    def _speed_slice(self, start: int) -> np.ndarray:
+    def _target_slice(self, start: int) -> np.ndarray:
         return np.asarray(
-            _array_channel(self.speed_array, self.speed_channel)[start:start + self.history],
+            _array_channel(self.target_array, self.target_channel)[start:start + self.history],
             dtype=np.float32,
         )
 
@@ -101,11 +101,11 @@ class SprintCanonicalHistory:
 
         context = np.full((self.context_days, self.history, self.nodes), np.nan, np.float32)
         for d, hs in enumerate(starts):
-            speed = self._speed_slice(hs)
+            target = self._target_slice(hs)
             valid = self._valid_slice(hs)
-            if speed.shape != (self.history, self.nodes) or valid.shape != speed.shape:
+            if target.shape != (self.history, self.nodes) or valid.shape != target.shape:
                 raise RuntimeError(f'SPRINT canonical context truncated at historical start={hs}')
-            context[d] = np.where(valid & np.isfinite(speed), speed, np.nan)
+            context[d] = np.where(valid & np.isfinite(target), target, np.nan)
 
         # Current day: only benchmark-observed H12 cells are visible. Artificially
         # hidden current-history cells and every P12 future value remain unavailable.
@@ -135,12 +135,12 @@ def resolve_canonical_history_source(
     mean: float,
     std: float,
 ) -> SprintCanonicalHistory:
-    """Resolve canonical raw speed + raw-valid mask using the frozen split as audit.
+    """Resolve canonical raw target + raw-valid mask using the frozen split as audit.
 
-    Candidate speed arrays are scored only on *currently observed* cells, so hidden
+    Candidate target arrays are scored only on *currently observed* cells, so hidden
     current-query values cannot select the source. Raw-valid candidates are scored
     against frozen `history_observed OR artificial_missing`, which is mask identity
-    only and contains no hidden speed values.
+    only and contains no hidden target values.
     """
     c = cfg['runners']['SPRINT']
     H = int(cfg['experiment']['history'])
@@ -169,7 +169,7 @@ def resolve_canonical_history_source(
         raise FileNotFoundError(f'SPRINT canonical SupportBench core directory not found: {core_dir}')
 
     probes = _probe_indices(M)
-    speed_scores: list[tuple[float, Path, np.ndarray, int | None]] = []
+    target_scores: list[tuple[float, Path, np.ndarray, int | None]] = []
     valid_scores: list[tuple[float, Path, np.ndarray, int | None]] = []
     for path, arr, ch in _iter_core_channels(core_dir, nodes=N, min_time=max_time):
         view = _array_channel(arr, ch)
@@ -187,7 +187,7 @@ def resolve_canonical_history_source(
                 if np.any(m):
                     errs.append(float(np.mean(np.abs(cand[m] - qraw[m]))))
             if errs:
-                speed_scores.append((float(np.mean(errs)), path, arr, ch))
+                target_scores.append((float(np.mean(errs)), path, arr, ch))
 
         if _sample_is_binary(sample):
             agreements = []
@@ -203,15 +203,15 @@ def resolve_canonical_history_source(
             if agreements:
                 valid_scores.append((float(np.mean(agreements)), path, arr, ch))
 
-    if not speed_scores:
-        raise RuntimeError(f'SPRINT could not find a canonical speed candidate under {core_dir}')
-    speed_scores.sort(key=lambda z: z[0])
-    speed_mae, speed_path, speed_arr, speed_ch = speed_scores[0]
-    speed_tol = float(c.get('canonical_speed_match_mae_max', 0.05))
-    if speed_mae > speed_tol:
+    if not target_scores:
+        raise RuntimeError(f'SPRINT could not find a canonical target candidate under {core_dir}')
+    target_scores.sort(key=lambda z: z[0])
+    target_mae, target_path, target_arr, target_ch = target_scores[0]
+    target_tol = float(c.get('canonical_target_match_mae_max', 0.05))
+    if target_mae > target_tol:
         raise RuntimeError(
-            f'SPRINT canonical speed source audit failed: best={speed_path} channel={speed_ch} '
-            f'observed-cell MAE={speed_mae:.6f} > {speed_tol}'
+            f'SPRINT canonical target source audit failed: best={target_path} channel={target_ch} '
+            f'observed-cell MAE={target_mae:.6f} > {target_tol}'
         )
 
     if not valid_scores:
@@ -226,9 +226,9 @@ def resolve_canonical_history_source(
         )
 
     source = SprintCanonicalHistory(
-        speed_array=speed_arr, speed_channel=speed_ch,
+        target_array=target_arr, target_channel=target_ch,
         valid_array=valid_arr, valid_channel=valid_ch,
-        speed_path=speed_path, valid_path=valid_path,
+        target_path=target_path, valid_path=valid_path,
         history=H, nodes=N, historical_days=historical_days, day_steps=day_steps,
     )
     min_start = int(meta.window_start.min())
@@ -239,7 +239,7 @@ def resolve_canonical_history_source(
         )
 
     print('SPRINT CANONICAL HISTORY SOURCE', {
-        'speed_path': str(speed_path), 'speed_channel': speed_ch, 'observed_match_mae': speed_mae,
+        'target_path': str(target_path), 'target_channel': target_ch, 'observed_match_mae': target_mae,
         'valid_path': str(valid_path), 'valid_channel': valid_ch, 'raw_valid_agreement': valid_agree,
         'historical_days': historical_days, 'context_days': source.context_days,
         'day_steps': day_steps, 'history_intervals': H,

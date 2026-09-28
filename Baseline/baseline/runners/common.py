@@ -15,10 +15,10 @@ from baseline.run_identity import build_run_manifest, write_run_manifest
 from baseline.shared_cache import cache_path, shared_contract_config
 from baseline.utils import load_yaml, write_json
 
-ROOT = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
+ROOT = next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 
-COMMON = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon')
-if not COMMON.exists(): COMMON = Path(__file__).resolve().parents[3] / 'ExperimentCommon'
+COMMON = (next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())).parent / 'Base_SupportBench'
+if not COMMON.exists(): COMMON = Path(__file__).resolve().parents[3] / 'Base_SupportBench'
 if str(COMMON) not in sys.path: sys.path.insert(0, str(COMMON))
 from experiment_common.predictions import save_prediction_npz, load_prediction_npz, as_unicode_array as common_unicode_array
 

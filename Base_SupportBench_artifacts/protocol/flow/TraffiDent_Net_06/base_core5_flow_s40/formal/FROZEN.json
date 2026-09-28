@@ -1,0 +1,8 @@
+{
+  "evaluation_access_locked": false,
+  "immutable": true,
+  "protocol_name": "base_core5_flow_s40",
+  "protocol_version": "2.1.0",
+  "stage": "formal",
+  "stage_hash": "eb03e7d05011f7b94ecdb1b01bbc41b4bfa214bf9a778fcd4fe9f309a43524f1"
+}

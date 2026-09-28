@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import json, sys
-ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline'); sys.path.insert(0,str(ROOT))
+ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd()); sys.path.insert(0,str(ROOT))
 from baseline.registry import ORDER, METHODS
 from baseline.contracts import audit_repo_contract
 from baseline.utils import write_json, load_yaml

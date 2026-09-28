@@ -97,7 +97,7 @@ def _train_once(cfg, cache_dir, run_dir, vendor_root, benchmark_adj, benchmark_n
         log(f'epoch={epoch:03d} train_loss={rec["train_loss"]:.6f} val_MAE={v:.6f} val_support_MAE={rec["val_support_dependent_MAE"]:.6f} lr={rec["lr"]:.3e} time={rec["seconds"]:.1f}s')
         if v < best-1e-8:
             best=v; best_epoch=epoch; wait=0
-            torch.save({'project_version':cfg['version'],'run_identity':run_identity,'stage':stage,'model':'PatchSTG','state_dict':model.state_dict(),'model_config':mc,'num_nodes':train.x.shape[2],'mean':mean,'std':std,'seed':seed,'batch_size':batch_size,'vendor':vendor,'adapter_revision':adapter.adapter_revision,'adapter_metadata':adapter.adapter_metadata,'spatial_layout':adapter.spatial_layout,'best_val_MAE':best,'best_epoch':best_epoch},run_dir/'best.pt')
+            torch.save({'project_version':cfg['version'],'run_identity':run_identity,'stage':stage,'model':'PatchSTG','target':str(cfg['experiment'].get('target')),'state_dict':model.state_dict(),'model_config':mc,'num_nodes':train.x.shape[2],'mean':mean,'std':std,'seed':seed,'batch_size':batch_size,'vendor':vendor,'adapter_revision':adapter.adapter_revision,'adapter_metadata':adapter.adapter_metadata,'spatial_layout':adapter.spatial_layout,'best_val_MAE':best,'best_epoch':best_epoch},run_dir/'best.pt')
         else:
             wait+=1
             if wait>=patience: log(f'early_stop epoch={epoch} patience={patience}'); break
@@ -105,11 +105,50 @@ def _train_once(cfg, cache_dir, run_dir, vendor_root, benchmark_adj, benchmark_n
     ck=torch.load(run_dir/'best.pt',map_location=device,weights_only=False); model.load_state_dict(ck['state_dict']); vp,vdf,vs=evaluate(adapter,val_loader,val.meta,device)
     save_prediction_npz(run_dir/'val_predictions.npz',val.meta.view_id.astype(str).tolist(),vp.astype(np.float32),manifest_path=run_dir/'val_predictions.manifest.json',metadata={'producer':'Backbone','model':'PatchSTG','seed':int(seed),'stage':stage,'split':'val','code_project_version':str(cfg['version']),'run_identity':run_identity})
     vdf.to_csv(run_dir/'val_metrics.csv',index=False)
-    summary={'project_version':cfg['version'],'run_identity':run_identity,'stage':stage,'model':'PatchSTG','seed':seed,'parameters':params,'batch_size':batch_size,'best_epoch':best_epoch,'best_val_MAE':best,'train_seconds_total':float(time.time()-total_start),'vendor':vendor,'adapter_revision':adapter.adapter_revision,'adapter_metadata':adapter.adapter_metadata,'recipe_source':mc.get('recipe_source'),'validation':vs,'metrics_revision':METRICS_REVISION,'test_evaluated':False}
+    summary={'project_version':cfg['version'],'run_identity':run_identity,'stage':stage,'model':'PatchSTG','target':str(cfg['experiment'].get('target')),'seed':seed,'parameters':params,'batch_size':batch_size,'best_epoch':best_epoch,'best_val_MAE':best,'train_seconds_total':float(time.time()-total_start),'vendor':vendor,'adapter_revision':adapter.adapter_revision,'adapter_metadata':adapter.adapter_metadata,'recipe_source':mc.get('recipe_source'),'validation':vs,'metrics_revision':METRICS_REVISION,'test_evaluated':False}
     write_json(run_dir/'summary.json',summary); write_json(run_dir/'RUN_MANIFEST.json',{**run_identity,'code_project_version':str(cfg['version']),'model':'PatchSTG','seed':int(seed),'status':'FINISHED','best_epoch':int(best_epoch),'best_val_MAE':float(best)})
     log(f'FINISHED stage={stage} PatchSTG seed={seed}: val_MAE={vs["MAE"]:.6f} val_support={vs["support_dependent_MAE"]:.6f}; TEST NOT EVALUATED')
     return summary
 
+
+
+def smoke_patchstg(cfg, cache_dir, run_dir, vendor_root, benchmark_adj, benchmark_nodes, mean, std, seed, stage, train_batches=2, val_batches=1):
+    """Run a bounded end-to-end training smoke test against the real stage cache."""
+    seed_all(seed); run_dir=ensure_dir(run_dir); device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    mc=dict(cfg['model']); runtime=cfg['runtime']; batch_size=int(mc.get('smoke_batch_size', min(int(mc['batch_size']), 4)))
+    train_batches=max(1,int(train_batches)); val_batches=max(1,int(val_batches))
+    run_identity=load_cache_identity(cache_dir); require_cache_version_compatibility(cfg,run_identity,stage)
+    train=CachedSplit(cache_dir,'train'); val=CachedSplit(cache_dir,'val')
+    train_loader=DataLoader(train,batch_size=batch_size,shuffle=False,num_workers=0,pin_memory=torch.cuda.is_available())
+    val_loader=DataLoader(val,batch_size=batch_size,shuffle=False,num_workers=0,pin_memory=torch.cuda.is_available())
+    adapter=build_patchstg(vendor_root,train.x.shape[2],device,mean,std,mc,benchmark_adj,benchmark_nodes); model=adapter.model
+    optimizer=make_optimizer(model,mc); grad=float(mc.get('grad_clip',0.0)); losses=[]; batches_seen=0
+    log(f'SMOKE_START stage={stage} seed={seed} device={device} batch_size={batch_size} train_batches={train_batches} val_batches={val_batches}')
+    model.train()
+    for bi,b in enumerate(train_loader,1):
+        optimizer.zero_grad(set_to_none=True); pn=adapter.train_forward(b,batches_seen); _assert_prediction_shape(pn,b['y_raw'],'PatchSTG/smoke_train')
+        pr=adapter.raw(pn); y=b['y_raw'].to(device).float(); valid=b['future_valid'].to(device); loss=_loss(pr,y,valid,mc.get('train_loss','mae'))
+        if not torch.isfinite(loss): raise RuntimeError(f'Smoke train loss is non-finite: {float(loss.detach().cpu())}')
+        loss.backward()
+        if grad>0: torch.nn.utils.clip_grad_norm_(model.parameters(),grad)
+        optimizer.step(); losses.append(float(loss.detach().cpu())); batches_seen+=1
+        log(f'SMOKE_TRAIN batch={bi}/{train_batches} loss={losses[-1]:.6f}')
+        if bi>=train_batches: break
+    model.eval(); val_losses=[]
+    with torch.no_grad():
+        for bi,b in enumerate(val_loader,1):
+            pn=adapter.eval_forward(b); _assert_prediction_shape(pn,b['y_raw'],'PatchSTG/smoke_val'); pr=adapter.raw(pn)
+            y=b['y_raw'].to(device).float(); valid=b['future_valid'].to(device); loss=_loss(pr,y,valid,mc.get('train_loss','mae'))
+            if not torch.isfinite(loss): raise RuntimeError(f'Smoke val loss is non-finite: {float(loss.detach().cpu())}')
+            val_losses.append(float(loss.detach().cpu())); log(f'SMOKE_VAL batch={bi}/{val_batches} loss={val_losses[-1]:.6f}')
+            if bi>=val_batches: break
+    smoke_ck=run_dir/'smoke.pt'; run_dir.mkdir(parents=True,exist_ok=True)
+    torch.save({'project_version':cfg['version'],'run_identity':run_identity,'stage':stage,'smoke':True,'model':'PatchSTG','state_dict':model.state_dict(),'target':cfg['experiment'].get('target'),'seed':int(seed),'batch_size':batch_size},smoke_ck)
+    loaded=torch.load(smoke_ck,map_location=device,weights_only=False)
+    if loaded.get('target') != cfg['experiment'].get('target'): raise RuntimeError('Smoke checkpoint target identity mismatch')
+    write_json(run_dir/'smoke_summary.json',{'status':'PASS','stage':stage,'target':cfg['experiment'].get('target'),'seed':int(seed),'device':str(device),'batch_size':batch_size,'train_batches':train_batches,'val_batches':val_batches,'train_loss_mean':float(np.mean(losses)),'val_loss_mean':float(np.mean(val_losses)),'cache_dir':str(cache_dir),'checkpoint':str(smoke_ck)})
+    log(f'SMOKE_PASS stage={stage} target={cfg["experiment"].get("target")} seed={seed} train_loss={np.mean(losses):.6f} val_loss={np.mean(val_losses):.6f} checkpoint={smoke_ck}')
+    return {'status':'PASS','checkpoint':str(smoke_ck)}
 
 def train_patchstg(cfg, cache_dir, run_dir, vendor_root, benchmark_adj, benchmark_nodes, mean, std, seed, stage):
     last=None

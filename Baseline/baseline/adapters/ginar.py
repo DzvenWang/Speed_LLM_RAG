@@ -22,7 +22,7 @@ class GinARAdapter(OfficialAdapter):
             'y': '*_y_norm.npy',
             'time_features': ['*_tod_hist.npy', '*_dow_hist.npy'],
             'adjacency': 'adjacency.npy',
-            'prediction_contract': 'raw_speed_Mx12xN',
+            'prediction_contract': 'raw_target_Mx12xN',
             'runner': 'baseline/runners/ginar_runner.py',
             'test_access_before_evaluation': False,
         }

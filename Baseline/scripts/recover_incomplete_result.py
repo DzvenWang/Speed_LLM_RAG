@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-ROOT = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline') if Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline').exists() else Path(__file__).resolve().parents[1]
+ROOT = next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd()) if next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd()).exists() else Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from baseline.evaluation import evaluate_prediction_file

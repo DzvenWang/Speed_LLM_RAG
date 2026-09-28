@@ -29,6 +29,7 @@ def _expand(v):
 
 
 def load_yaml(path):
+    os.environ.setdefault('TRAFFIDENT_TARGET','speed')
     with open(path, 'r', encoding='utf-8') as f:
         return _expand(yaml.safe_load(f))
 

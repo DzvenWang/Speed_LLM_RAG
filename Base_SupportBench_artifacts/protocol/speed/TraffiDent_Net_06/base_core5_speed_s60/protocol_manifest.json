@@ -1,0 +1,27 @@
+{
+  "dataset": "TraffiDent_Net_06",
+  "paired_group_id": "TraffiDent_Net_06_base_core5_speed_multiseverity_v1",
+  "protocol_hash": "b0992eef705ab6a2a84c0c9830a3981f876d218499d151b0df5173d91eb5861e",
+  "protocol_name": "base_core5_speed_s60",
+  "protocol_version": "2.1.0",
+  "severity": 0.6,
+  "stages": {
+    "evaluation": {
+      "splits": {
+        "test": {
+          "families": {
+            "directional_outage": 1000,
+            "entry_random": 1000,
+            "regional_outage": 1000,
+            "sensor_outage": 1000,
+            "temporal_outage": 1000
+          },
+          "rows": 5000,
+          "unique_groups": 5000,
+          "view_hash": "d89c73df362634022f2b2176c9d96d89a75c022dd51da713b432e7e508a58fcb"
+        }
+      },
+      "stage_hash": "89628895a44855a626aa1edd620ea58f693e0608a69dbafc6c0355129b8157ef"
+    }
+  }
+}

@@ -4,11 +4,11 @@
 #PBS -l ncpus=12,ngpus=1,mem=48GB,walltime=48:00:00
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -j oe
-#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs/out/
 #PBS -N BaseSecondaryPatch
+export TRAFFIDENT_TARGET="${TARGET:-speed}"
 set -euo pipefail
-ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
-PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline
+PY=${PYTHON:-python}
 : "${METHOD:?METHOD required: SPRINT, RAFT-PatchSTG, SARAF-PatchSTG, or RAST-PatchSTG}"
 : "${SEED:?SEED required}"
 case "$METHOD" in
@@ -18,7 +18,7 @@ esac
 source "$ROOT/scripts/pbs_live_log.sh"
 baseline_live_log_start "SecondaryPatchFormal" "$METHOD" "seed${SEED}" "formal"
 baseline_install_exit_trap
-export PYTHONPATH="$ROOT:/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon:/scratch/mh20/zw1165/Speed_LLM_RAG/Protocol:/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench:${PYTHONPATH:-}"
+export PYTHONPATH="$ROOT:${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Base_SupportBench:${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Base_SupportBench:${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Base_SupportBench:${PYTHONPATH:-}"
 cd "$ROOT"
 echo "START Secondary PatchSTG Formal v1.1.0 method=$METHOD seed=$SEED"
 "$PY" scripts/verify_official_sources.py

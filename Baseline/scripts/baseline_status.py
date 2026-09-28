@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import sys
-ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
+ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 if not ROOT.exists(): ROOT=Path(__file__).resolve().parents[1]
-COMMON=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon')
-if not COMMON.exists(): COMMON=ROOT.parent/'ExperimentCommon'
+COMMON=(next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())).parent / 'Base_SupportBench'
+if not COMMON.exists(): COMMON=ROOT.parent/'Base_SupportBench'
 for p in [ROOT,COMMON]:
     if str(p) not in sys.path: sys.path.insert(0,str(p))
 from baseline.utils import load_yaml

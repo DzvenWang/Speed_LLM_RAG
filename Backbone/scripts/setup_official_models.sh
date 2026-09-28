@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
-ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Backbone
+ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Backbone
 VENDOR="$ROOT/vendor"
-PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+PY=${PYTHON:-python}
 mkdir -p "$VENDOR"
 
 clone_or_keep(){

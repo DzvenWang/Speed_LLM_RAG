@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-GADI=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
+GADI=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 ROOT=GADI if GADI.exists() else Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path: sys.path.insert(0,str(ROOT))
 

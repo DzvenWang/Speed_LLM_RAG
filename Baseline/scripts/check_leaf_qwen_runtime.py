@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse, json, sys
 from pathlib import Path
 
-ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline'); sys.path.insert(0,str(ROOT))
+ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd()); sys.path.insert(0,str(ROOT))
 from baseline.runners.common import config
 from baseline.llm.leaf_qwen import resolve_snapshot
 

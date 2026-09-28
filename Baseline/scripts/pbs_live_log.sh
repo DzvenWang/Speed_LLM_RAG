@@ -20,7 +20,7 @@ baseline_live_log_start() {
 
     local task="${1:?task name required}"
     shift || true
-    local logroot="${LOGROOT:-/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs}"
+    local logroot="${LOGROOT:-${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline_logs}"
     local stamp
     stamp="$(date +%Y%m%d_%H%M%S)"
     local jobid="${PBS_JOBID:-manual}"

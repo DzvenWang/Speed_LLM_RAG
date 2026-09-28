@@ -6,7 +6,7 @@ LRTC-TMCP is a tensor-completion method whose traffic use case relies on a
 location x day x within-day-interval tensor.  A single-day ``[N,1,H]`` tensor
 collapses the day mode and is therefore not a faithful compatibility adapter.
 
-This module resolves the canonical raw-speed/raw-valid timeline from
+This module resolves the canonical raw-target/raw-valid timeline from
 SupportBench using only currently observed benchmark cells for source auditing,
 then constructs a strictly causal same-slot multi-day tensor for each query:
 
@@ -58,11 +58,11 @@ def _sha256_ints(values: np.ndarray) -> str:
 
 @dataclass(frozen=True)
 class LRTCCanonicalHistory:
-    speed_array: np.ndarray
-    speed_channel: int | None
+    target_array: np.ndarray
+    target_channel: int | None
     valid_array: np.ndarray
     valid_channel: int | None
-    speed_path: Path
+    target_path: Path
     valid_path: Path
     history: int
     nodes: int
@@ -75,9 +75,9 @@ class LRTCCanonicalHistory:
     def context_days(self) -> int:
         return self.historical_days + 1
 
-    def _speed_slice(self, start: int) -> np.ndarray:
+    def _target_slice(self, start: int) -> np.ndarray:
         return np.asarray(
-            _array_channel(self.speed_array, self.speed_channel)[start:start + self.history],
+            _array_channel(self.target_array, self.target_channel)[start:start + self.history],
             dtype=np.float32,
         )
 
@@ -128,12 +128,12 @@ class LRTCCanonicalHistory:
         mask = np.zeros((self.nodes, D, self.history), dtype=bool)
 
         for d, hs in enumerate(starts[:-1]):
-            speed = self._speed_slice(hs)
+            target = self._target_slice(hs)
             valid = self._valid_slice(hs)
-            if speed.shape != (self.history, self.nodes) or valid.shape != speed.shape:
+            if target.shape != (self.history, self.nodes) or valid.shape != target.shape:
                 raise RuntimeError(f'LRTC canonical context truncated at historical start={hs}')
-            good = valid & np.isfinite(speed)
-            values[:, d, :] = np.where(good, speed, 0.0).T
+            good = valid & np.isfinite(target)
+            values[:, d, :] = np.where(good, target, 0.0).T
             mask[:, d, :] = good.T
 
         current_good = current_observed & np.isfinite(current_raw)
@@ -173,7 +173,7 @@ def resolve_lrtc_canonical_history_source(
     mean: float,
     std: float,
 ) -> LRTCCanonicalHistory:
-    """Resolve canonical raw speed/raw-valid arrays without hidden-value leakage."""
+    """Resolve canonical raw target/raw-valid arrays without hidden-value leakage."""
     c = cfg['runners']['LRTC-TMCP']
     H = int(cfg['experiment']['history'])
     historical_days = int(c['historical_days'])
@@ -208,7 +208,7 @@ def resolve_lrtc_canonical_history_source(
         raise FileNotFoundError(f'LRTC canonical SupportBench core directory not found: {core_dir}')
 
     probes = _probe_indices(M)
-    speed_scores: list[tuple[float, Path, np.ndarray, int | None]] = []
+    target_scores: list[tuple[float, Path, np.ndarray, int | None]] = []
     valid_scores: list[tuple[float, Path, np.ndarray, int | None]] = []
     for path, arr, ch in _iter_core_channels(core_dir, nodes=N, min_time=max_time):
         view = _array_channel(arr, ch)
@@ -226,7 +226,7 @@ def resolve_lrtc_canonical_history_source(
                 if np.any(m):
                     errs.append(float(np.mean(np.abs(cand[m] - qraw[m]))))
             if errs:
-                speed_scores.append((float(np.mean(errs)), path, arr, ch))
+                target_scores.append((float(np.mean(errs)), path, arr, ch))
 
         if _sample_is_binary(sample):
             agreements = []
@@ -244,15 +244,15 @@ def resolve_lrtc_canonical_history_source(
             if agreements:
                 valid_scores.append((float(np.mean(agreements)), path, arr, ch))
 
-    if not speed_scores:
-        raise RuntimeError(f'LRTC could not find canonical speed candidate under {core_dir}')
-    speed_scores.sort(key=lambda z: z[0])
-    speed_mae, speed_path, speed_arr, speed_ch = speed_scores[0]
-    speed_tol = float(c.get('canonical_speed_match_mae_max', 0.05))
-    if speed_mae > speed_tol:
+    if not target_scores:
+        raise RuntimeError(f'LRTC could not find canonical target candidate under {core_dir}')
+    target_scores.sort(key=lambda z: z[0])
+    target_mae, target_path, target_arr, target_ch = target_scores[0]
+    target_tol = float(c.get('canonical_target_match_mae_max', 0.05))
+    if target_mae > target_tol:
         raise RuntimeError(
-            f'LRTC canonical speed audit failed: best={speed_path} channel={speed_ch} '
-            f'observed-cell MAE={speed_mae:.6f} > {speed_tol}'
+            f'LRTC canonical target audit failed: best={target_path} channel={target_ch} '
+            f'observed-cell MAE={target_mae:.6f} > {target_tol}'
         )
 
     if not valid_scores:
@@ -267,22 +267,22 @@ def resolve_lrtc_canonical_history_source(
         )
 
     source = LRTCCanonicalHistory(
-        speed_array=speed_arr,
-        speed_channel=speed_ch,
+        target_array=target_arr,
+        target_channel=target_ch,
         valid_array=valid_arr,
         valid_channel=valid_ch,
-        speed_path=speed_path,
+        target_path=target_path,
         valid_path=valid_path,
         history=H,
         nodes=N,
         historical_days=historical_days,
         day_steps=day_steps,
-        observed_match_mae=float(speed_mae),
+        observed_match_mae=float(target_mae),
         raw_valid_agreement=float(valid_agree),
     )
     print('LRTC-TMCP CANONICAL HISTORY SOURCE', {
-        'speed_path': str(speed_path), 'speed_channel': speed_ch,
-        'observed_match_mae': speed_mae,
+        'target_path': str(target_path), 'target_channel': target_ch,
+        'observed_match_mae': target_mae,
         'valid_path': str(valid_path), 'valid_channel': valid_ch,
         'raw_valid_agreement': valid_agree,
         'historical_days': historical_days, 'context_days': source.context_days,

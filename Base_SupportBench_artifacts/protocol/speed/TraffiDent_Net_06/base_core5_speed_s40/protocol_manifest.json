@@ -1,0 +1,85 @@
+{
+  "dataset": "TraffiDent_Net_06",
+  "paired_group_id": "TraffiDent_Net_06_base_core5_speed_multiseverity_v1",
+  "protocol_hash": "25d66807b18995d6bdea538e19e75dd18c5a480aa4ea7536626f0bacc5e3195d",
+  "protocol_name": "base_core5_speed_s40",
+  "protocol_version": "2.1.0",
+  "severity": 0.4,
+  "stages": {
+    "development": {
+      "splits": {
+        "train": {
+          "families": {
+            "directional_outage": 2400,
+            "entry_random": 2400,
+            "regional_outage": 2400,
+            "sensor_outage": 2400,
+            "temporal_outage": 2400
+          },
+          "rows": 12000,
+          "unique_groups": 12000,
+          "view_hash": "faf43025c7015fa2be5ebf6d7a1ee98ac8eb6d073d7bccf8a51ba28580145a00"
+        },
+        "val": {
+          "families": {
+            "directional_outage": 1000,
+            "entry_random": 1000,
+            "regional_outage": 1000,
+            "sensor_outage": 1000,
+            "temporal_outage": 1000
+          },
+          "rows": 5000,
+          "unique_groups": 5000,
+          "view_hash": "679b83d6c625dc753fec029e072871733fb68692d9158c6a098e2caa89ec3133"
+        }
+      },
+      "stage_hash": "f68fb0c8214f96098bc28269a8b3a7aba02294cae3d62805dfce4fc2d07e711f"
+    },
+    "evaluation": {
+      "splits": {
+        "test": {
+          "families": {
+            "directional_outage": 1000,
+            "entry_random": 1000,
+            "regional_outage": 1000,
+            "sensor_outage": 1000,
+            "temporal_outage": 1000
+          },
+          "rows": 5000,
+          "unique_groups": 5000,
+          "view_hash": "9f794e45cc3bd53fbadf92547d2488656dd5697e0463d6d6b7fea0897888b7f3"
+        }
+      },
+      "stage_hash": "c886e4ff460df6cbadac07221a44dbf7e296fee49706df8f9c12af3f165bf2b0"
+    },
+    "formal": {
+      "splits": {
+        "train": {
+          "families": {
+            "directional_outage": 10000,
+            "entry_random": 10000,
+            "regional_outage": 10000,
+            "sensor_outage": 10000,
+            "temporal_outage": 10000
+          },
+          "rows": 50000,
+          "unique_groups": 50000,
+          "view_hash": "73adc8f3942ec5896e291fa041c2801771b1076cbe7054c604ab34608b2fd825"
+        },
+        "val": {
+          "families": {
+            "directional_outage": 1000,
+            "entry_random": 1000,
+            "regional_outage": 1000,
+            "sensor_outage": 1000,
+            "temporal_outage": 1000
+          },
+          "rows": 5000,
+          "unique_groups": 5000,
+          "view_hash": "58838c52ef37f2bd23b6b8a57134a04556ac91e6faf602e5ffd1d3a0b87543f0"
+        }
+      },
+      "stage_hash": "35190bc24600543e8f9fc07be4252e76d885268ae224d5ce61144b5e2162a320"
+    }
+  }
+}

@@ -82,8 +82,8 @@ with tempfile.TemporaryDirectory(prefix='sprint_causal_history_smoke_') as td:
     cfg2['experiment']['subgraph'] = subgraph
 
     source = resolve_canonical_history_source(cfg2, cache, 'val', mean=mean, std=std)
-    assert source.speed_path.name == 'traffic.npy'
-    assert source.speed_channel == 2
+    assert source.target_path.name == 'traffic.npy'
+    assert source.target_channel == 2
     assert source.valid_path.name == 'raw_valid_mask.npy'
     D=int(cfg2['runners']['SPRINT']['historical_days'])
     assert source.context_days == D + 1

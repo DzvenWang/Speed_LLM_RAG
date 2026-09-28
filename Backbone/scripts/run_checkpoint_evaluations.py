@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cross-platform runner for one explicit PatchSTG checkpoint on multiple severities.
+"""Cross-platform runner for one explicit Backbone checkpoint on multiple severities.
 
 Creates a live, timestamped combined log under Speed_LLM_RAG/Backbone_logs on both
 Windows/PowerShell and Linux. GADI PBS jobs additionally keep their per-severity PBS logs.
@@ -40,7 +40,8 @@ def _emit(fh, text: str) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument('--checkpoint', required=True, help='PatchSTG best.pt path; absolute or relative to Speed_LLM_RAG root')
+    ap.add_argument('--checkpoint', required=True, help='Backbone checkpoint path; absolute or relative to Speed_LLM_RAG root')
+    ap.add_argument('--model', required=True, choices=['STAEformer','HimNet','BigST','STDN','PatchSTG','STLAformer'])
     ap.add_argument('--expected-seed', type=int, default=None)
     ap.add_argument('--severities', nargs='+', type=int, default=[20, 40, 60, 90], choices=[20, 40, 60, 90])
     ap.add_argument('--config', default=str(ROOT / 'configs' / 'backbone.yaml'))
@@ -58,11 +59,11 @@ def main() -> None:
     log_root = REPO_ROOT / 'Backbone_logs'
     log_root.mkdir(parents=True, exist_ok=True)
     log_path = Path(args.log_path).expanduser().resolve() if args.log_path else (
-        log_root / f'PatchSTG.checkpoint_eval.all.seed{seed_tag}.{stamp}.live.log'
+        log_root / f'{args.model}.checkpoint_eval.all.seed{seed_tag}.{stamp}.live.log'
     )
     if not args.stdout_only:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-    result_root = log_root / f'PatchSTG.checkpoint_eval.all.seed{seed_tag}.{stamp}.results'
+    result_root = log_root / f'{args.model}.checkpoint_eval.all.seed{seed_tag}.{stamp}.results'
     result_root.mkdir(parents=True, exist_ok=True)
 
     env = os.environ.copy()
@@ -86,6 +87,7 @@ def main() -> None:
                 sys.executable,
                 str(ROOT / 'scripts' / 'evaluate_checkpoint.py'),
                 '--checkpoint', args.checkpoint,
+                '--model', args.model,
                 '--severity', str(sev),
                 '--config', args.config,
                 '--run-stamp', stamp,
@@ -135,8 +137,8 @@ def main() -> None:
                 raise SystemExit(4)
         _emit(fh, 'SCENARIO_COVERAGE_PASS families=' + ','.join(expected_families))
 
-        severity_csv = log_root / f'PatchSTG.checkpoint_eval.all.seed{seed_tag}.{stamp}.severity_summary.csv'
-        scenario_csv = log_root / f'PatchSTG.checkpoint_eval.all.seed{seed_tag}.{stamp}.scenario_summary.csv'
+        severity_csv = log_root / f'{args.model}.checkpoint_eval.all.seed{seed_tag}.{stamp}.severity_summary.csv'
+        scenario_csv = log_root / f'{args.model}.checkpoint_eval.all.seed{seed_tag}.{stamp}.scenario_summary.csv'
         pd.DataFrame(severity_rows).to_csv(severity_csv, index=False)
         pd.DataFrame(scenario_rows).to_csv(scenario_csv, index=False)
 

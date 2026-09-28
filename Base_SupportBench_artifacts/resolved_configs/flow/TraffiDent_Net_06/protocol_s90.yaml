@@ -1,0 +1,51 @@
+version: 2.1.0
+project:
+  root: ${SPEED_LLM_RAG_ROOT}
+  protocol_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench
+  artifact_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench_artifacts/protocol/flow
+  log_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench_logs
+  benchmark_root: ${SPEED_LLM_RAG_ROOT}/data/processed/traffident/base_supportbench/flow
+  python: auto
+source:
+  supportbench_benchmark_version: 1.2.0
+experiment:
+  dataset: TraffiDent_Net_06
+  history: 12
+  horizon: 12
+  severity: 0.9
+  distribution: id
+  seed: 10
+  families:
+  - entry_random
+  - sensor_outage
+  - temporal_outage
+  - regional_outage
+  - directional_outage
+  target: flow
+protocol:
+  name: base_core5_flow_s90
+  role: backbone_baseline_base_data
+  allowed_stages:
+  - evaluation
+  paired_group_id: TraffiDent_Net_06_base_core5_flow_multiseverity_v1
+  paired_reference_severity: 0.4
+  paired_evaluation_seed_offset: 20
+  unique_view_group: true
+  family_balanced: true
+  formal_train_policy: exact_balanced_unique_groups
+  formal_train_exact_family_balance: true
+  formal_reuses_development_val: true
+  train_only_normalization: true
+  normalized_missing_fill_value: 0.0
+  development_val_pool_policy: all_eligible
+  evaluation_pool_policy: all_eligible
+  evaluation_access_policy: frozen_manifest_direct_access
+stages:
+  development:
+    train_size: 12000
+    val_size: 5000
+  formal:
+    train_size: 50000
+    val_size: 5000
+  evaluation:
+    test_size: 5000

@@ -1,0 +1,45 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=48:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -N BackboneFormal
+#PBS -j oe
+set -euo pipefail
+: "${MODEL:?MODEL=STAEformer|HimNet|BigST|STDN|STLAformer}"
+: "${TARGET:?TARGET=speed|flow}"
+SEED=${SEED:-10}
+case "$MODEL" in STAEformer|HimNet|BigST|STDN|STLAformer) ;; *) echo "ERROR unsupported MODEL=$MODEL"; exit 2;; esac
+case "$TARGET" in speed|flow) ;; *) echo "ERROR TARGET=$TARGET"; exit 2;; esac
+[[ "$SEED" == "10" ]] || { echo "ERROR Formal seed fixed to 10"; exit 2; }
+ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
+PROJ="$ROOT/Backbone"
+ENVROOT=${TFP_ENV_ROOT:-${CONDA_PREFIX:-}}
+PYTHON="$ENVROOT/bin/python"
+[[ -x "$PYTHON" ]] || { echo "ERROR Python not executable: $PYTHON"; exit 3; }
+export SPEED_LLM_RAG_ROOT="$ROOT" TRAFFIDENT_TARGET="$TARGET" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 BACKBONE_PBS_LIVE_LOG=1
+export PYTHONPATH="$PROJ:$ROOT/Base_SupportBench:${PYTHONPATH:-}"
+export PATH="$ENVROOT/bin:$PATH"
+unset TRANSFORMERS_CACHE || true
+LOGROOT="$ROOT/Backbone_logs/$TARGET/$MODEL"; mkdir -p "$LOGROOT"
+STAMP=$(date +%Y%m%d_%H%M%S); JOBID=${PBS_JOBID:-local}
+LOG="$LOGROOT/${MODEL}.${TARGET}.formal.seed${SEED}.${JOBID}.${STAMP}.live.log"; touch "$LOG"
+cd "$PROJ"
+exec > >("$PYTHON" -u "$PROJ/timestamp_stream.py" | tee -a "$LOG") 2>&1
+trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"' EXIT
+echo "START USER_SELECTED_FORMAL model=$MODEL target=$TARGET seed=$SEED job=$JOBID host=$(hostname)"
+echo "ROOT=$ROOT PYTHON=$PYTHON TRAFFIDENT_TARGET=$TRAFFIDENT_TARGET"
+"$PYTHON" -V; nvidia-smi || true
+[[ -d "$PROJ/vendor/$MODEL" ]] || { echo "ERROR missing vendor/$MODEL"; exit 4; }
+"$PYTHON" -u scripts/preflight.py --stage formal --config configs/backbone.yaml
+"$PYTHON" -u scripts/run_model_formal.py --model "$MODEL" --seed "$SEED" --run-stamp "$STAMP" --config configs/backbone.yaml --recipes configs/model_recipes.yaml
+CHECKPOINT="$ROOT/Backbone_exps/$TARGET/$MODEL/TraffiDent_Net_06/formal/${STAMP}_seed${SEED}/best.pt"
+[[ -f "$CHECKPOINT" ]] || { echo "ERROR expected checkpoint missing: $CHECKPOINT"; exit 5; }
+echo "AUTO_EVAL_START model=$MODEL target=$TARGET checkpoint=$CHECKPOINT"
+"$PYTHON" -u scripts/post_training_evaluate.py --model "$MODEL" --checkpoint "$CHECKPOINT" --seed "$SEED" --run-stamp "$STAMP" --config configs/backbone.yaml
+echo "AUTO_EVAL_PASS model=$MODEL target=$TARGET severities=20,40,60,90"
+echo "FREEZE_STATUS=NOT_FROZEN user_must_run_freeze_checkpoint.py_explicitly"
+echo "FINISH model=$MODEL target=$TARGET seed=$SEED"

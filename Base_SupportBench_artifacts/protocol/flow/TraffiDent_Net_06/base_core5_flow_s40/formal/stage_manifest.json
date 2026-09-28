@@ -1,0 +1,70 @@
+{
+  "config_sha256": "0ec14671e227e9498f755bd9d0761c384ff662962cc30a2681d7aaeb1137779f",
+  "dataset": "TraffiDent_Net_06",
+  "distribution": "id",
+  "evaluation_masks": {
+    "val": {
+      "direct_target_fraction": 0.5892365979381443,
+      "file_sha256": "738b8e18a5f9378f340990acbcffc59544f77fa48097a2129486e773dcb03611",
+      "future_valid_fraction": 1.0,
+      "rows": 5000,
+      "support_target_fraction": 0.0
+    }
+  },
+  "families": [
+    "entry_random",
+    "sensor_outage",
+    "temporal_outage",
+    "regional_outage",
+    "directional_outage"
+  ],
+  "history": 12,
+  "horizon": 12,
+  "normalization": {
+    "mean": 219.74331877068985,
+    "normalized_missing_fill_value": 0.0,
+    "policy": "train_only_zscore",
+    "primary_channel": "flow",
+    "std": 146.28974636125258
+  },
+  "num_nodes": 388,
+  "protocol_name": "base_core5_flow_s40",
+  "protocol_version": "2.1.0",
+  "reuses_development_val_stage_hash": "d58f34729b6356d6ecd0ace8f22e1861e1e136df516a7be442a377785a7b2510",
+  "seed": 10,
+  "severity": 0.4,
+  "source": {
+    "supportbench_benchmark_version": "1.2.0",
+    "supportbench_manifest_sha256": "ab9b7054025bdde1baecb1179a94aa94b87d94f6db3ede362ebe49344be668b3",
+    "supportbench_package_version": "1.2.4",
+    "supportbench_view_manifest_sha256": "4059ca78d2b2f1afa41c493eeec05e768371a9e989349077e74a92c78162ba4d"
+  },
+  "splits": {
+    "train": {
+      "families": {
+        "directional_outage": 10000,
+        "entry_random": 10000,
+        "regional_outage": 10000,
+        "sensor_outage": 10000,
+        "temporal_outage": 10000
+      },
+      "rows": 50000,
+      "unique_groups": 50000,
+      "view_hash": "73adc8f3942ec5896e291fa041c2801771b1076cbe7054c604ab34608b2fd825"
+    },
+    "val": {
+      "families": {
+        "directional_outage": 1000,
+        "entry_random": 1000,
+        "regional_outage": 1000,
+        "sensor_outage": 1000,
+        "temporal_outage": 1000
+      },
+      "rows": 5000,
+      "unique_groups": 5000,
+      "view_hash": "58838c52ef37f2bd23b6b8a57134a04556ac91e6faf602e5ffd1d3a0b87543f0"
+    }
+  },
+  "stage": "formal",
+  "stage_hash": "eb03e7d05011f7b94ecdb1b01bbc41b4bfa214bf9a778fcd4fe9f309a43524f1"
+}

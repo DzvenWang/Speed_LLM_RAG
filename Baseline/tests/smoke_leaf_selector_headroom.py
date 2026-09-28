@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(os.environ.get("BASELINE_ROOT", "/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline"))
+ROOT = Path(os.environ.get("BASELINE_ROOT", str(next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd()))))
 if not ROOT.exists():
     ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:

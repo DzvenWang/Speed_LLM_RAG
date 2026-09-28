@@ -3,7 +3,7 @@ from pathlib import Path
 import argparse, json, sys, subprocess
 import numpy as np
 import pandas as pd
-ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline'); sys.path.insert(0,str(ROOT))
+ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd()); sys.path.insert(0,str(ROOT))
 from baseline.utils import load_yaml, write_json
 from baseline.run_identity import load_cache_identity
 from baseline.shared_cache import cache_path

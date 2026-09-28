@@ -1,0 +1,32 @@
+
+窗口 1：Speed 全部重新生成
+cd C:\Users\zwan0652\ResearchProgram\Speed_LLM_RAG
+conda activate TFP
+
+$env:SPEED_LLM_RAG_ROOT = (Get-Location).Path
+$env:PYTHONUNBUFFERED = "1"
+
+python -u Base_SupportBench\scripts\preflight.py `
+  --dataset TraffiDent_Net_06 `
+  --target speed
+
+python -u Base_SupportBench\scripts\build_dataset.py `
+  --dataset TraffiDent_Net_06 `
+  --target speed `
+  --force
+
+窗口 2：Flow 全部重新生成
+cd C:\Users\zwan0652\ResearchProgram\Speed_LLM_RAG
+conda activate TFP
+
+$env:SPEED_LLM_RAG_ROOT = (Get-Location).Path
+$env:PYTHONUNBUFFERED = "1"
+
+python -u Base_SupportBench\scripts\preflight.py `
+  --dataset TraffiDent_Net_06 `
+  --target flow
+
+python -u Base_SupportBench\scripts\build_dataset.py `
+  --dataset TraffiDent_Net_06 `
+  --target flow `
+  --force

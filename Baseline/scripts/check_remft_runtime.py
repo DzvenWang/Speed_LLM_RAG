@@ -2,7 +2,7 @@
 from pathlib import Path
 import importlib.util, json, re, sys
 
-GADI=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
+GADI=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 ROOT=GADI if GADI.exists() else Path(__file__).resolve().parents[1]
 repo=ROOT/'vendor/ReMFT'
 nb=repo/'run.ipynb'

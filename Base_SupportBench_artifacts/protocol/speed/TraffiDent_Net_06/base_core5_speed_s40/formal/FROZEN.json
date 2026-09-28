@@ -1,0 +1,8 @@
+{
+  "evaluation_access_locked": false,
+  "immutable": true,
+  "protocol_name": "base_core5_speed_s40",
+  "protocol_version": "2.1.0",
+  "stage": "formal",
+  "stage_hash": "35190bc24600543e8f9fc07be4252e76d885268ae224d5ce61144b5e2162a320"
+}

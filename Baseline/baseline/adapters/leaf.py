@@ -14,10 +14,10 @@ class LEAFAdapter(OfficialAdapter):
     def prepare_bridge(self):
         return {
             'cache':str(self.ctx.cache_root),'needs_isolated_environment':False,
-            'recommended_python':'/scratch/mh20/zw1165/envs/TFP/bin/python',
+            'recommended_python':'python',
             'install_vllm_into_TFP':False,
             'selector_model':'Qwen2.5-1.5B-Instruct',
-            'selector_cache':'/scratch/mh20/zw1165/cache/huggingface/models--Qwen--Qwen2.5-1.5B-Instruct',
+            'selector_cache':str((next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())).parent / 'model_cache' / 'Qwen2.5-1.5B-Instruct'),
             'selector_contract':'12 official LEAF candidates per query-node; frozen Qwen returns choice 1..12; no future labels in prompt',
         }
     def run_command(self,phase):

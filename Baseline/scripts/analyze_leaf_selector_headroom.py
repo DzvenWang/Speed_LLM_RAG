@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-DEFAULT_ROOT = Path("/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline")
+DEFAULT_ROOT = Path(str(next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())))
 ROOT = Path(os.environ.get("BASELINE_ROOT", str(DEFAULT_ROOT)))
 if not ROOT.exists():
     ROOT = Path(__file__).resolve().parents[1]

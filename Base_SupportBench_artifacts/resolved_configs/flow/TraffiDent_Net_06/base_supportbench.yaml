@@ -1,0 +1,99 @@
+version: 1.2.0
+project:
+  project_root: ${SPEED_LLM_RAG_ROOT}
+  process_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench
+  data_root: ${SPEED_LLM_RAG_ROOT}/data
+  benchmark_root: ${SPEED_LLM_RAG_ROOT}/data/processed/traffident/base_supportbench/flow
+  diagnostics_root: ${SPEED_LLM_RAG_ROOT}/data/diagnostics/traffident/base_supportbench/flow
+source:
+  source_root: null
+  expected_subgraphs:
+  - TraffiDent_Net_01
+  - TraffiDent_Net_02
+  - TraffiDent_Net_03
+  - TraffiDent_Net_04
+  - TraffiDent_Net_06
+  traffic_file: traffic_2024.npy
+  nodes_file: nodes_target.csv
+  adjacency_file: adj_target.npy
+  distance_file: distance_target.npy
+  channel_mapping_file: channel_mapping.json
+  primary_channel: flow
+  link_mode: auto
+forecast:
+  history_len: 12
+  horizon: 12
+  freq_minutes: 5
+  train_ratio: 0.7
+  val_ratio: 0.1
+  test_ratio: 0.2
+  train_stride: 1
+  val_stride: 1
+  test_stride: 1
+  controlled_complete_min_fraction: 1.0
+  invalidate_synchronised_zero: true
+  synchronised_zero_node_fraction: 0.95
+sensing:
+  global_seed: 20260905
+  general_families:
+  - entry_random
+  - sensor_outage
+  - temporal_outage
+  - regional_outage
+  - directional_outage
+  severities:
+  - 0.2
+  - 0.4
+  - 0.6
+  - 0.9
+  train_severities:
+  - 0.2
+  - 0.4
+  - 0.6
+  main_severity: 0.4
+  train_views_per_window: 4
+  val_instances_per_family_severity: 1
+  test_instances_per_family_severity: 1
+  paired_main_instances: 2
+  temporal_node_fraction: 0.75
+  ood_severities:
+  - 0.4
+  regional_seen_fraction: 0.7
+  regional_id_layouts_per_severity: 32
+  regional_ood_layouts_per_severity: 16
+  regional_min_id_layouts_per_severity: 16
+  regional_min_ood_layouts_per_severity: 8
+  directional_id_layouts_per_severity: 32
+  directional_ood_layouts_per_severity: 16
+  directional_min_id_layouts_per_severity: 16
+  directional_min_ood_layouts_per_severity: 8
+  layout_min_overrides:
+    s90:
+      regional_id: 8
+      directional_id: 8
+  effective_ratio_tolerance: 0.04
+  regional_min_largest_component_fraction: 0.5
+budgets:
+  development_train_windows: 12000
+  development_val_windows: 5000
+  development_test_windows: 5000
+  selection: uniform_temporal
+experiment:
+  seed: 10
+  train_severity: 0.4
+  evaluation_severities:
+  - 0.2
+  - 0.4
+  - 0.6
+  - 0.9
+  families:
+  - entry_random
+  - sensor_outage
+  - temporal_outage
+  - regional_outage
+  - directional_outage
+  development_train_size: 12000
+  development_val_size: 5000
+  formal_train_size: 50000
+  formal_val_size: 5000
+  evaluation_test_size: 5000

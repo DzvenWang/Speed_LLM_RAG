@@ -88,7 +88,7 @@ class FrozenPatchSTG:
             '--config', str(live_backbone_config),
         ])
         sys.path.insert(0, str(broot))
-        sys.path.insert(0, str(broot.parent / 'TraffiDent_SupportBench'))
+        sys.path.insert(0, str(broot.parent / 'Base_SupportBench'))
         from backbone.adapters import build_adapter
         from supportbench.dataset import SupportBench
 

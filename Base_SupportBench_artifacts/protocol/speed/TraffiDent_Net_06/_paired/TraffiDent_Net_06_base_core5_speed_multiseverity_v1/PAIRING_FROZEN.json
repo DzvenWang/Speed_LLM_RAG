@@ -1,0 +1,24 @@
+{
+  "dataset": "TraffiDent_Net_06",
+  "distribution": "id",
+  "families": [
+    "entry_random",
+    "sensor_outage",
+    "temporal_outage",
+    "regional_outage",
+    "directional_outage"
+  ],
+  "family_counts": {
+    "directional_outage": 1000,
+    "entry_random": 1000,
+    "regional_outage": 1000,
+    "sensor_outage": 1000,
+    "temporal_outage": 1000
+  },
+  "immutable": true,
+  "paired_group_id": "TraffiDent_Net_06_base_core5_speed_multiseverity_v1",
+  "pairing_hash": "2ee78db420230afa8e3ddab3b692b57d94b3992e1ffce10627cea081851a3e29",
+  "reference_severity": 0.4,
+  "rows": 5000,
+  "supportbench_view_manifest_sha256": "4059ca78d2b2f1afa41c493eeec05e768371a9e989349077e74a92c78162ba4d"
+}

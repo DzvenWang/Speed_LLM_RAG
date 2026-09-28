@@ -17,11 +17,11 @@ T = DAY * 20
 speed = (np.arange(T * N, dtype=np.float32).reshape(T, N) % 80.0) + 1.0
 valid = np.ones((T, N), dtype=np.uint8)
 source = LRTCCanonicalHistory(
-    speed_array=speed,
-    speed_channel=None,
+    target_array=speed,
+    target_channel=None,
     valid_array=valid,
     valid_channel=None,
-    speed_path=Path('synthetic_speed.npy'),
+    target_path=Path('synthetic_target.npy'),
     valid_path=Path('synthetic_valid.npy'),
     history=H,
     nodes=N,
@@ -48,11 +48,11 @@ assert np.array_equal(v1[:, -1, :].T[obs], current[obs])
 speed2 = speed.copy()
 speed2[st + H:] = 999999.0
 source2 = LRTCCanonicalHistory(
-    speed_array=speed2,
-    speed_channel=None,
+    target_array=speed2,
+    target_channel=None,
     valid_array=valid,
     valid_channel=None,
-    speed_path=Path('synthetic_speed_mutated_future.npy'),
+    target_path=Path('synthetic_target_mutated_future.npy'),
     valid_path=Path('synthetic_valid.npy'),
     history=H,
     nodes=N,

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
+ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline
 SRC=${1:-${REMFT_BERT_PATH:-}}
 DST="$ROOT/vendor/ReMFT/LLM/BERT"
 

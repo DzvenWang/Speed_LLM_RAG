@@ -23,7 +23,7 @@ class RAFTAdapter(OfficialAdapter):
             'y':'*_y_norm.npy',
             'retrieval_memory':'train_only_full_history',
             'query_signal':'incomplete_history',
-            'prediction_contract':'raw_speed_Mx12xN',
+            'prediction_contract':'raw_target_Mx12xN',
             'runner':'baseline/runners/raft_runner.py',
             'stock_run_py_allowed_for_formal':False,
             'test_access_before_evaluation':False,

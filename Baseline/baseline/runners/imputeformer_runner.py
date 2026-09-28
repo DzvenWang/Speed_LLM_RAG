@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np, torch
 from torch import nn
 from torch.utils.data import DataLoader
-ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline');sys.path.insert(0,str(ROOT))
+ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd());sys.path.insert(0,str(ROOT))
 from baseline.runners.common import ImputationDataset,make_run_dir,require_gpu,save_val_outputs,set_seed,validate_stage
 from baseline.backbones.patchstg_bridge import FrozenPatchSTG
 from baseline.compat.imputeformer_tsl_shim import install_imputeformer_tsl_shim

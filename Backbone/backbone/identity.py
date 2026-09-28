@@ -7,7 +7,7 @@ IDENTITY_SCHEMA_VERSION = 4
 
 
 def _common_imports():
-    common = repository_root() / 'ExperimentCommon'
+    common = repository_root() / 'Base_SupportBench'
     if str(common) not in sys.path: sys.path.insert(0, str(common))
     from experiment_common.cache import load_cache_identity as _load
     return _load
@@ -21,6 +21,8 @@ def load_cache_identity(cache_dir: str | Path) -> dict:
         'consumer_stage': shared['stage'],
         'shared_cache_stage': shared['stage'],
         'dataset': shared['dataset'],
+        'target_name': shared.get('target_name','speed'),
+        'target_channel_index': int(shared.get('target_channel_index',2)),
         'protocol_name': shared['protocol_name'],
         'protocol_version': shared['protocol_version'],
         'severity': float(shared['severity']),
@@ -43,7 +45,7 @@ def load_cache_identity(cache_dir: str | Path) -> dict:
 
 def identity_key(x: dict) -> tuple:
     return (
-        x.get('identity_schema_version'), x.get('consumer_stage'), x.get('shared_cache_stage'), x.get('dataset'),
+        x.get('identity_schema_version'), x.get('consumer_stage'), x.get('shared_cache_stage'), x.get('dataset'), x.get('target_name'), x.get('target_channel_index'),
         x.get('protocol_name'), x.get('protocol_version'), float(x.get('severity', -1)), x.get('paired_group_id'),
         x.get('protocol_stage_hash'), json.dumps(x.get('split_view_hashes', {}), sort_keys=True),
         x.get('cache_fingerprint'), x.get('shared_contract_version'), x.get('cache_schema_version'),

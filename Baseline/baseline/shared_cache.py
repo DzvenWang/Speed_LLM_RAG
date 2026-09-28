@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
-COMMON = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon')
+COMMON = (next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())).parent / 'Base_SupportBench'
 if not COMMON.exists():
-    COMMON = Path(__file__).resolve().parents[2] / 'ExperimentCommon'
+    COMMON = Path(__file__).resolve().parents[2] / 'Base_SupportBench'
 if str(COMMON) not in sys.path:
     sys.path.insert(0, str(COMMON))
 
@@ -43,7 +43,7 @@ def _resolve_config_path(raw: str | Path) -> Path:
 
 
 def shared_contract_config(cfg: dict, stage: str = 'formal', severity: int | None = None) -> dict:
-    """Load the ExperimentCommon contract for one Baseline stage.
+    """Load the Base_SupportBench cache layer contract for one Baseline stage.
 
     development/formal always use the Core-5 s40 training contract.
     evaluation must bind explicitly to one frozen paired severity contract.

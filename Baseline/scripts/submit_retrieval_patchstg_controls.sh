@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
+ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline
 cd "$ROOT"
 SEED=${1:-10}
 for METHOD in RAFT-PatchSTG SARAF-PatchSTG RAST-PatchSTG; do

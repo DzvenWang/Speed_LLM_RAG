@@ -8,14 +8,14 @@ from pathlib import Path
 
 import yaml
 
-GADI_ROOT = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
+GADI_ROOT = next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 ROOT = GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[1]
-COMMON = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon')
+COMMON = (next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())).parent / 'Base_SupportBench'
 if not COMMON.exists():
-    COMMON = ROOT.parent / 'ExperimentCommon'
-SUPPORTBENCH = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench')
+    COMMON = ROOT.parent / 'Base_SupportBench'
+SUPPORTBENCH = (next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())).parent / 'Base_SupportBench'
 if not SUPPORTBENCH.exists():
-    SUPPORTBENCH = ROOT.parent / 'TraffiDent_SupportBench'
+    SUPPORTBENCH = ROOT.parent / 'Base_SupportBench'
 for p in (ROOT, COMMON, SUPPORTBENCH):
     if p.exists() and str(p) not in sys.path:
         sys.path.insert(0, str(p))
@@ -73,8 +73,8 @@ source = resolve_canonical_history_source(cfg, cache, split, mean=mean, std=std)
 print('PASS SPRINT causal history source', {
     'stage': a.stage,
     'split': split,
-    'speed_path': str(source.speed_path),
-    'speed_channel': source.speed_channel,
+    'target_path': str(source.target_path),
+    'target_channel': source.target_channel,
     'valid_path': str(source.valid_path),
     'valid_channel': source.valid_channel,
     'historical_days': source.historical_days,

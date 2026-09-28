@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-cd /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
+cd ${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline
 for m in ImputeFormer GinAR RAFT RAST SARAF ReMFT; do
   for s in 20 30; do
     echo "Submitting remaining primary formal $m seed$s"

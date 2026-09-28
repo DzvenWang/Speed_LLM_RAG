@@ -15,13 +15,13 @@ from pathlib import Path
 import numpy as np
 import torch
 
-GADI_ROOT = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
+GADI_ROOT = next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 ROOT = GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-SUPPORTBENCH_PROJECT = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench')
+SUPPORTBENCH_PROJECT = (next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())).parent / 'Base_SupportBench'
 if not SUPPORTBENCH_PROJECT.exists():
-    SUPPORTBENCH_PROJECT = ROOT.parent / 'TraffiDent_SupportBench'
+    SUPPORTBENCH_PROJECT = ROOT.parent / 'Base_SupportBench'
 if SUPPORTBENCH_PROJECT.exists() and str(SUPPORTBENCH_PROJECT) not in sys.path:
     sys.path.insert(0, str(SUPPORTBENCH_PROJECT))
 
@@ -280,7 +280,7 @@ def main():
         'adaptation': (
             f'causal historical-day SPRINT: previous {int(c["historical_days"])} days at the same '
             f'H{int(cfg["experiment"]["history"])} clock-aligned segment plus current incomplete query; '
-            'canonical raw speed/raw-valid history only; current observed values protected; no query future'
+            'canonical raw target/raw-valid history only; current observed values protected; no query future'
         ),
         'reporting_track': cfg['methods']['SPRINT']['table_group'],
         'input_matching_note': 'specialized comparator with additional causal historical-day context; not strict H12 input-matched main-table baseline',

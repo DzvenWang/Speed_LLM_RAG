@@ -1,7 +1,7 @@
 from pathlib import Path
 import json,tempfile,sys
 ROOT=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(ROOT)); sys.path.insert(0,str(ROOT.parent/'ExperimentCommon'))
+sys.path.insert(0,str(ROOT)); sys.path.insert(0,str(ROOT.parent/'Base_SupportBench'))
 from baseline.run_identity import load_cache_identity,build_run_manifest,identity_key
 with tempfile.TemporaryDirectory() as td:
     p=Path(td)

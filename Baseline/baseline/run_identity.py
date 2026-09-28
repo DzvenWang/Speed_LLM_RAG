@@ -1,8 +1,8 @@
 from __future__ import annotations
 from pathlib import Path
 import json,sys
-COMMON=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon')
-if not COMMON.exists(): COMMON=Path(__file__).resolve().parents[2]/'ExperimentCommon'
+COMMON=(next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())).parent / 'Base_SupportBench'
+if not COMMON.exists(): COMMON=Path(__file__).resolve().parents[2]/'Base_SupportBench'
 if str(COMMON) not in sys.path: sys.path.insert(0,str(COMMON))
 from experiment_common.cache import load_cache_identity as load_shared_cache_identity,identity_key as shared_identity_key
 from experiment_common.utils import canonical_sha256
@@ -14,7 +14,7 @@ def load_cache_identity(cache_dir: str|Path, project_version: str|None=None) -> 
     s=load_shared_cache_identity(cache_dir)
     return {
       'identity_schema_version':IDENTITY_SCHEMA_VERSION,'project':'Baseline',
-      'stage':s['stage'],'dataset':s['dataset'],'protocol_name':s['protocol_name'],
+      'stage':s['stage'],'dataset':s['dataset'],'target_name':s.get('target_name','speed'),'target_channel_index':int(s.get('target_channel_index',2)),'protocol_name':s['protocol_name'],
       'protocol_version':s['protocol_version'],'severity':float(s['severity']),
       'paired_group_id':s.get('paired_group_id',''),'protocol_stage_hash':s['protocol_stage_hash'],
       'split_view_hashes':s['split_view_hashes'],'cache_fingerprint':s['cache_fingerprint'],
@@ -28,7 +28,7 @@ def load_cache_identity(cache_dir: str|Path, project_version: str|None=None) -> 
 
 
 def identity_key(x:dict)->tuple:
-    return (x.get('identity_schema_version'),x.get('stage'),x.get('dataset'),x.get('protocol_name'),x.get('protocol_version'),float(x.get('severity',-1)),x.get('paired_group_id'),x.get('protocol_stage_hash'),json.dumps(x.get('split_view_hashes',{}),sort_keys=True),x.get('cache_fingerprint'),x.get('shared_contract_version'),x.get('cache_schema_version'),x.get('data_contract_revision'),x.get('time_feature_revision'),x.get('metrics_revision'),x.get('prediction_contract_revision'),x.get('time_feature_fingerprint'),x.get('time_feature_source'),x.get('time_feature_parser'),x.get('contract_fingerprint'))
+    return (x.get('identity_schema_version'),x.get('stage'),x.get('dataset'),x.get('target_name'),x.get('target_channel_index'),x.get('protocol_name'),x.get('protocol_version'),float(x.get('severity',-1)),x.get('paired_group_id'),x.get('protocol_stage_hash'),json.dumps(x.get('split_view_hashes',{}),sort_keys=True),x.get('cache_fingerprint'),x.get('shared_contract_version'),x.get('cache_schema_version'),x.get('data_contract_revision'),x.get('time_feature_revision'),x.get('metrics_revision'),x.get('prediction_contract_revision'),x.get('time_feature_fingerprint'),x.get('time_feature_source'),x.get('time_feature_parser'),x.get('contract_fingerprint'))
 
 
 def build_run_manifest(cache_dir,project_version,method,seed,track,extra=None):

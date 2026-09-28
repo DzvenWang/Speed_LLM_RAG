@@ -8,7 +8,7 @@ import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
 
-ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline'); sys.path.insert(0,str(ROOT))
+ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd()); sys.path.insert(0,str(ROOT))
 from baseline.runners.common import make_run_dir, masked_l1, require_gpu, save_val_outputs, scale_stats, set_seed, validate_stage, as_unicode_array
 from baseline.evaluation import evaluate_prediction_file
 from baseline.utils import write_json

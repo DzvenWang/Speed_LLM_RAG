@@ -24,7 +24,7 @@ class SARAFAdapter(OfficialAdapter):
             'retrieval_memory': 'train_only',
             'query_split': 'val',
             'time_marks': 'derived from frozen benchmark time index and Protocol window_start',
-            'prediction_contract': 'raw_speed_Mx12xN',
+            'prediction_contract': 'raw_target_Mx12xN',
             'runner': 'baseline/runners/saraf_runner.py',
             'stock_run_py_allowed_for_formal': False,
             'test_access_before_evaluation': False,

@@ -1,22 +1,23 @@
 version: 1.1.0
 project:
-  root: /scratch/mh20/zw1165/Speed_LLM_RAG
-  baseline_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
-  log_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs
-  exp_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_exps
-  supportbench_project: /scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench
-  benchmark_root: /scratch/mh20/zw1165/Speed_LLM_RAG/data/processed/traffident/supportbench
-  support_artifact_root: /scratch/mh20/zw1165/Speed_LLM_RAG/artifacts/supportbench
-  backbone_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone
-  backbone_exp_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_exps
-  frozen_backbone_json: /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_exps/FROZEN_BACKBONE.json
-  python: /scratch/mh20/zw1165/envs/TFP/bin/python
-  leaf_python: /scratch/mh20/zw1165/envs/TFP/bin/python
-  protocol_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol
-  protocol_artifact_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Protocol_artifacts
-  common_root: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon
+  root: ${SPEED_LLM_RAG_ROOT}
+  baseline_root: ${SPEED_LLM_RAG_ROOT}/Baseline
+  log_root: ${SPEED_LLM_RAG_ROOT}/Baseline_logs/${TRAFFIDENT_TARGET}
+  exp_root: ${SPEED_LLM_RAG_ROOT}/Baseline_exps/${TRAFFIDENT_TARGET}
+  supportbench_project: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench
+  benchmark_root: ${SPEED_LLM_RAG_ROOT}/data/processed/traffident/base_supportbench/${TRAFFIDENT_TARGET}
+  support_artifact_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench_artifacts
+  backbone_root: ${SPEED_LLM_RAG_ROOT}/Backbone
+  backbone_exp_root: ${SPEED_LLM_RAG_ROOT}/Backbone_exps
+  frozen_backbone_json: ${SPEED_LLM_RAG_ROOT}/Backbone_exps/FROZEN_BACKBONE.json
+  python: python
+  leaf_python: python
+  protocol_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench
+  protocol_artifact_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench_artifacts/protocol/${TRAFFIDENT_TARGET}
+  common_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench
 experiment:
   subgraph: TraffiDent_Net_06
+  target: ${TRAFFIDENT_TARGET}
   history: 12
   horizon: 12
   severity: 0.4
@@ -39,7 +40,7 @@ experiment:
 protocol:
   official_source_policy: exact_commit_or_first_run_resolved_commit_then_tree_sha256_lock
   test_selection_policy: direct_multiseverity_evaluation_after_completed_formal_run_no_baseline_freeze
-  prediction_contract: raw_speed_Mx12xN
+  prediction_contract: raw_target_Mx12xN
   retrieval_memory: train_only
   retrieval_memory_signal: full_train_history
   retrieval_query_signal: incomplete_query_history
@@ -58,7 +59,7 @@ protocol:
   - RAST-PatchSTG
   - RAFT-PatchSTG
   - SARAF-PatchSTG
-  paired_group_id: TraffiDent_Net_06_core5_multiseverity_v1
+  paired_group_id: TraffiDent_Net_06_base_core5_${TRAFFIDENT_TARGET}_multiseverity_v1
   evaluation_protocol_names:
     20: protocol_core5_s20
     40: protocol_core5_s40
@@ -328,7 +329,7 @@ runners:
     hgnn_num_hyper_edge: 32
     qwen_selector:
       model_name: Qwen2.5-1.5B-Instruct
-      model_cache_root: /scratch/mh20/zw1165/cache/huggingface/models--Qwen--Qwen2.5-1.5B-Instruct
+      model_cache_root: ${SPEED_LLM_RAG_ROOT}/model_cache/Qwen2.5-1.5B-Instruct
       snapshot: 989aa7980e4cf806f80c7fef2b1adb7bc71aa306
       local_files_only: true
       dtype: float16
@@ -349,7 +350,7 @@ runners:
     protect_observed_values: true
     historical_days: 28
     day_steps: 288
-    canonical_speed_match_mae_max: 0.05
+    canonical_target_match_mae_max: 0.05
     canonical_valid_agreement_min: 0.9999
     patchstg_batch_size: 32
   MoGERNN:
@@ -420,7 +421,7 @@ runners:
     use_raw_speed_space: true
     historical_days: 28
     day_steps: 288
-    canonical_speed_match_mae_max: 0.05
+    canonical_target_match_mae_max: 0.05
     canonical_valid_agreement_min: 0.9999
     extra_causal_context: true
 protocol_assertions:
@@ -456,7 +457,7 @@ frozen_backbone_contract:
   require_shared_cache_identity_match: true
   required_cache_schema_version: 2
   required_protocol_version: 2.1.0
-  required_paired_group_id: TraffiDent_Net_06_core5_multiseverity_v1
+  required_paired_group_id: TraffiDent_Net_06_base_core5_${TRAFFIDENT_TARGET}_multiseverity_v1
 shared_contract:
   required_version: 1.2.0
   required_cache_schema_version: 2
@@ -465,14 +466,14 @@ shared_contract:
   metrics_revision: traffident_metrics_v1
   prediction_contract_revision: traffident_prediction_v1
   protocol_version: 2.1.0
-  paired_group_id: TraffiDent_Net_06_core5_multiseverity_v1
+  paired_group_id: TraffiDent_Net_06_base_core5_${TRAFFIDENT_TARGET}_multiseverity_v1
   configs:
-    training: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon/configs/experiment_contract.yaml
+    training: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench_artifacts/resolved_configs/${TRAFFIDENT_TARGET}/TraffiDent_Net_06/cache_formal.yaml
     evaluation:
-      s20: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon/configs/experiment_contract_eval_s20.yaml
-      s40: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon/configs/experiment_contract_eval_s40.yaml
-      s60: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon/configs/experiment_contract_eval_s60.yaml
-      s90: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon/configs/experiment_contract_eval_s90.yaml
+      s20: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench_artifacts/resolved_configs/${TRAFFIDENT_TARGET}/TraffiDent_Net_06/cache_evaluation_s20.yaml
+      s40: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench_artifacts/resolved_configs/${TRAFFIDENT_TARGET}/TraffiDent_Net_06/cache_evaluation_s40.yaml
+      s60: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench_artifacts/resolved_configs/${TRAFFIDENT_TARGET}/TraffiDent_Net_06/cache_evaluation_s60.yaml
+      s90: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench_artifacts/resolved_configs/${TRAFFIDENT_TARGET}/TraffiDent_Net_06/cache_evaluation_s90.yaml
 formal_selection_methods:
 - ImputeFormer
 - LRTC-TMCP

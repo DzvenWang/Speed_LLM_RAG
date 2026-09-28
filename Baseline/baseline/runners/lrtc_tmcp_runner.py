@@ -13,7 +13,7 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-ROOT = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
+ROOT = next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 if not ROOT.exists():
     ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -42,7 +42,7 @@ def _split_provenance(cache: Path, split: str, source) -> dict:
         'max_window_start': int(meta.window_start.max()),
         'x_obs_file_sha256': _sha256_file(cache / f'{split}_x_obs_norm.npy'),
         'history_observed_file_sha256': _sha256_file(cache / f'{split}_history_observed.npy'),
-        'canonical_speed_path': str(source.speed_path),
+        'canonical_target_path': str(source.target_path),
         'canonical_valid_path': str(source.valid_path),
         'historical_days': int(source.historical_days),
         'context_days': int(source.context_days),

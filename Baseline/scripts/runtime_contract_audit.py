@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import ast, json, re, sys
-ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline'); sys.path.insert(0,str(ROOT)); sys.dont_write_bytecode=True
+ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd()); sys.path.insert(0,str(ROOT)); sys.dont_write_bytecode=True
 from baseline.registry import ORDER, METHODS
 from baseline.utils import load_yaml, write_json
 cfg=load_yaml(ROOT/'configs/baseline.yaml'); results={}

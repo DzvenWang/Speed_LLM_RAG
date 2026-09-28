@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import torch
 
-ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
+ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 if not ROOT.exists(): ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from baseline.llm.leaf_qwen import CHOICE_META, build_choice_tensor, build_selector_prompt, multi_ranking_loss, parse_choice, selected_positive_and_negatives

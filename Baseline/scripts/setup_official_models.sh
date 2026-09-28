@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
-ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
+ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline
 VENDOR="$ROOT/vendor"
-PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+PY=${PYTHON:-python}
 SOURCES="$ROOT/configs/official_sources.yaml"
 mkdir -p "$VENDOR"
 

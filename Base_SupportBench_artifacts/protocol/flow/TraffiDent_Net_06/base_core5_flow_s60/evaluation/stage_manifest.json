@@ -1,0 +1,65 @@
+{
+  "config_sha256": "e5bb93f8ed10d4e49c4142c91533aadb07538b2363efcc665ffa63faca8bfd82",
+  "dataset": "TraffiDent_Net_06",
+  "distribution": "id",
+  "evaluation_masks": {
+    "test": {
+      "direct_target_fraction": 0.7103041237113402,
+      "file_sha256": "988601b5c3ea3ed12fbd7cfc18ff0aa770d2764c3559a9059d71db7f124ade7c",
+      "future_valid_fraction": 1.0,
+      "rows": 5000,
+      "support_target_fraction": 0.0
+    }
+  },
+  "families": [
+    "entry_random",
+    "sensor_outage",
+    "temporal_outage",
+    "regional_outage",
+    "directional_outage"
+  ],
+  "history": 12,
+  "horizon": 12,
+  "normalization": {
+    "mean": 219.74331877068985,
+    "normalized_missing_fill_value": 0.0,
+    "policy": "train_only_zscore",
+    "primary_channel": "flow",
+    "std": 146.28974636125258
+  },
+  "num_nodes": 388,
+  "paired_evaluation": {
+    "access_policy": "frozen_manifest_direct_access",
+    "paired_group_id": "TraffiDent_Net_06_base_core5_flow_multiseverity_v1",
+    "pairing_frozen_sha256": "dcc92ab976267b93018d56f64bca6a6ea93e38caba947e955a8c8944c757b777",
+    "pairing_hash": "2ee78db420230afa8e3ddab3b692b57d94b3992e1ffce10627cea081851a3e29",
+    "pairing_manifest_sha256": "bf6e06f9f69e6d95c7c6475f678ac2c0b92b72f29c46251d66343f12af17fe39",
+    "reference_severity": 0.4
+  },
+  "protocol_name": "base_core5_flow_s60",
+  "protocol_version": "2.1.0",
+  "seed": 10,
+  "severity": 0.6,
+  "source": {
+    "supportbench_benchmark_version": "1.2.0",
+    "supportbench_manifest_sha256": "ab9b7054025bdde1baecb1179a94aa94b87d94f6db3ede362ebe49344be668b3",
+    "supportbench_package_version": "1.2.4",
+    "supportbench_view_manifest_sha256": "4059ca78d2b2f1afa41c493eeec05e768371a9e989349077e74a92c78162ba4d"
+  },
+  "splits": {
+    "test": {
+      "families": {
+        "directional_outage": 1000,
+        "entry_random": 1000,
+        "regional_outage": 1000,
+        "sensor_outage": 1000,
+        "temporal_outage": 1000
+      },
+      "rows": 5000,
+      "unique_groups": 5000,
+      "view_hash": "d89c73df362634022f2b2176c9d96d89a75c022dd51da713b432e7e508a58fcb"
+    }
+  },
+  "stage": "evaluation",
+  "stage_hash": "c3d743df1b7803b57cf170110a3d66144c1af2a34817b0820de693bd3ae8f401"
+}

@@ -90,17 +90,7 @@ PreSuRe_exps/
 PatchSTG_Oracle_logs/
 PatchSTG_Oracle_exps/
 
-PreSuRe_StateRetrieval_Diagnostic_logs/
-PreSuRe_StateRetrieval_Diagnostic_exps/
-
-Online_PSTG_logs/
-Online_PSTG_exps/
-
-Online_PSTG_RAG_logs/
-Online_PSTG_RAG_exps/
-
-Online_PreSuRe_logs/
-Online_PreSuRe_exps/
+Base_SupportBench_logs
 
 model_cache/
 

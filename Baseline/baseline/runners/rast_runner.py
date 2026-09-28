@@ -14,7 +14,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-ROOT = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
+ROOT = next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 if not ROOT.exists():
     ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))

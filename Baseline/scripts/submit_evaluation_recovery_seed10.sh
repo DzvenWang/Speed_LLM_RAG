@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
+ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline
 cd "$ROOT"
 
 METHODS=("$@")

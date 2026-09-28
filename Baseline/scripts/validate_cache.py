@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import argparse,sys
-GADI_ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
+GADI_ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 ROOT=GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[1]
-COMMON=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon')
-if not COMMON.exists(): COMMON=ROOT.parent/'ExperimentCommon'
-for q in [ROOT,COMMON,ROOT.parent/'Protocol',ROOT.parent/'TraffiDent_SupportBench']:
+COMMON=(next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())).parent / 'Base_SupportBench'
+if not COMMON.exists(): COMMON=ROOT.parent/'Base_SupportBench'
+for q in [ROOT,COMMON,ROOT.parent/'Protocol',ROOT.parent/'Base_SupportBench']:
     if str(q) not in sys.path: sys.path.insert(0,str(q))
 from baseline.utils import load_yaml
 from baseline.shared_cache import shared_contract_config, cache_path, EVALUATION_SEVERITIES

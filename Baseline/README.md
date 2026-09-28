@@ -108,3 +108,7 @@ bash scripts/submit_secondary_development.sh LEAF-Qwen1.5B 10
 ```
 
 They are not part of `formal_selection_methods` and cannot enter the main-table selection artifact.
+
+## Base_SupportBench / Speed-Flow portability
+
+Baseline consumes the same Base_SupportBench ExperimentCache as Backbone. Set `TRAFFIDENT_TARGET=speed` or `flow`. Core baseline architectures are unchanged; adapters and causal-history sources are target-neutral. Paths resolve from `SPEED_LLM_RAG_ROOT`; no project code/config/PBS script contains a fixed Windows or Gadi repository root.

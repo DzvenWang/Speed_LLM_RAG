@@ -8,8 +8,15 @@ import yaml
 
 
 def load_yaml(path):
+    os.environ.setdefault('TRAFFIDENT_TARGET','speed')
     with open(path, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f)
+        obj=yaml.safe_load(f)
+    def ex(v):
+        if isinstance(v,str): return os.path.expandvars(v)
+        if isinstance(v,dict): return {k:ex(x) for k,x in v.items()}
+        if isinstance(v,list): return [ex(x) for x in v]
+        return v
+    return ex(obj)
 
 
 def ensure_dir(path):

@@ -14,7 +14,7 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-ROOT = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
+ROOT = next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 sys.path.insert(0, str(ROOT))
 
 from baseline.runners.common import (  # noqa: E402

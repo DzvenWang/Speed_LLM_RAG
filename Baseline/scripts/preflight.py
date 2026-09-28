@@ -2,11 +2,11 @@
 from __future__ import annotations
 import argparse,importlib.util,subprocess,sys
 from pathlib import Path
-GADI_ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
+GADI_ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 ROOT=GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[1]
-COMMON=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon')
-if not COMMON.exists(): COMMON=ROOT.parent/'ExperimentCommon'
-for p in [ROOT,COMMON,ROOT.parent/'Protocol',ROOT.parent/'TraffiDent_SupportBench']:
+COMMON=(next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())).parent / 'Base_SupportBench'
+if not COMMON.exists(): COMMON=ROOT.parent/'Base_SupportBench'
+for p in [ROOT,COMMON,ROOT.parent/'Protocol',ROOT.parent/'Base_SupportBench']:
     if str(p) not in sys.path: sys.path.insert(0,str(p))
 from baseline.registry import ORDER
 from baseline.contracts import audit_repo_contract

@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
+ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline
 cd "$ROOT"
 for m in ImputeFormer LRTC-TMCP; do
   echo "Submitting $m primary PatchSTG-dependent GPU smoke"

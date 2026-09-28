@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
-GADI_ROOT=Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
+GADI_ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 ROOT=GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from baseline.utils import load_yaml

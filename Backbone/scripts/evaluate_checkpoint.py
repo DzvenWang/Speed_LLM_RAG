@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate an explicitly supplied PatchSTG checkpoint on a current evaluation cache.
+"""Evaluate an explicitly supplied Backbone checkpoint on a current evaluation cache.
 
 This is intentionally lightweight.  It mirrors the original Backbone evaluation
 behaviour: current evaluation tensors + current PatchSTG spatial layout + checkpoint
@@ -18,12 +18,13 @@ from torch.utils.data import DataLoader
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = Path(os.environ.get('SPEED_LLM_RAG_ROOT', ROOT.parent)).expanduser().resolve()
-for p in (ROOT, REPO_ROOT / 'TraffiDent_SupportBench'):
+for p in (ROOT, REPO_ROOT / 'Base_SupportBench'):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
 from backbone.data import CachedSplit
-from backbone.patchstg import build_patchstg, compute_patchstg_layout
+from backbone.adapters import build_adapter
+from backbone.patchstg import compute_patchstg_layout
 from backbone.predictions import save_prediction_npz
 from backbone.runner import evaluate
 from backbone.shared_cache import cache_path
@@ -47,6 +48,7 @@ def _resolve_checkpoint(value: str) -> Path:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument('--checkpoint', required=True)
+    ap.add_argument('--model', default=None, choices=['STAEformer','HimNet','BigST','STDN','PatchSTG','STLAformer'], help='Optional model assertion; otherwise inferred from checkpoint')
     ap.add_argument('--severity', type=int, choices=[20, 40, 60, 90], required=True)
     ap.add_argument('--expected-seed', type=int, default=None)
     ap.add_argument('--config', default=str(ROOT / 'configs' / 'backbone.yaml'))
@@ -84,6 +86,11 @@ def main() -> None:
         got_seed = ck.get('seed')
         if got_seed is not None and int(got_seed) != int(args.expected_seed):
             log(f'WARNING checkpoint seed={got_seed} differs from expected_seed={args.expected_seed}; continuing')
+    expected_target = str(cfg['experiment'].get('target','')).strip()
+    checkpoint_target = str(ck.get('target') or ck.get('run_identity',{}).get('target_name') or '').strip()
+    if checkpoint_target and expected_target and checkpoint_target != expected_target:
+        raise RuntimeError(f'Checkpoint target={checkpoint_target} conflicts with evaluation target={expected_target}')
+    log(f'TARGET_CONTRACT_PASS checkpoint_target={checkpoint_target or "legacy_unspecified"} evaluation_target={expected_target}')
 
     bench = SupportBench(cfg['experiment']['subgraph'], root=cfg['project']['benchmark_root'])
     test = CachedSplit(cache, 'test')
@@ -100,25 +107,31 @@ def main() -> None:
     if int(test.y_raw.shape[1]) != int(cfg['experiment']['horizon']):
         raise RuntimeError(f'Evaluation horizon={test.y_raw.shape[1]} != configured horizon={cfg["experiment"]["horizon"]}')
 
-    vendor_root = ROOT / 'vendor' / 'PatchSTG'
-    _, _, _, current_layout = compute_patchstg_layout(
-        vendor_root, bench.nodes, bench.adj, bench.N, ck['model_config']
-    )
-    old_layout = None
-    if isinstance(ck.get('adapter_metadata'), dict):
-        old_layout = ck['adapter_metadata'].get('spatial_layout_fingerprint')
-    layout_match = (not old_layout) or str(old_layout) == str(current_layout)
-    if not layout_match:
-        log(
-            'WARNING PatchSTG spatial layout fingerprint differs from historical checkpoint; '
-            f'checkpoint={old_layout} current={current_layout}. '
-            'Continuing with CURRENT SupportBench layout, matching the original Backbone evaluation behaviour.'
-        )
+    model_name = str(ck.get('model') or args.model or '')
+    if not model_name:
+        raise RuntimeError('Checkpoint does not declare model; pass --model explicitly')
+    if args.model is not None and model_name != args.model:
+        raise RuntimeError(f'Checkpoint model={model_name} conflicts with --model={args.model}')
 
-    # Always build PatchSTG using the current SupportBench nodes/adjacency, exactly as
-    # the original Backbone evaluation path did, then strictly load learned weights.
-    adapter = build_patchstg(
-        vendor_root, bench.N, device, float(ck['mean']), float(ck['std']),
+    old_layout = None
+    current_layout = None
+    layout_match = True
+    if model_name == 'PatchSTG':
+        vendor_root = ROOT / 'vendor' / 'PatchSTG'
+        _, _, _, current_layout = compute_patchstg_layout(
+            vendor_root, bench.nodes, bench.adj, bench.N, ck['model_config']
+        )
+        if isinstance(ck.get('adapter_metadata'), dict):
+            old_layout = ck['adapter_metadata'].get('spatial_layout_fingerprint')
+        layout_match = (not old_layout) or str(old_layout) == str(current_layout)
+        if not layout_match:
+            log(
+                'WARNING PatchSTG spatial layout fingerprint differs from historical checkpoint; '
+                f'checkpoint={old_layout} current={current_layout}. Continuing with current SupportBench layout.'
+            )
+
+    adapter = build_adapter(
+        model_name, ROOT / 'vendor', bench.N, device, float(ck['mean']), float(ck['std']),
         ck['model_config'], bench.adj, bench.nodes,
     )
     adapter.model.load_state_dict(ck['state_dict'], strict=True)
@@ -143,14 +156,14 @@ def main() -> None:
     checkpoint_sha = sha256_file(checkpoint)
     checkpoint_run_tag = checkpoint.parent.name or f'checkpoint_{checkpoint_sha[:12]}'
     out = (
-        Path(cfg['project']['exp_root']) / 'PatchSTG' / cfg['experiment']['subgraph']
+        Path(cfg['project']['exp_root']) / model_name / cfg['experiment']['subgraph']
         / 'checkpoint_evaluation' / checkpoint_run_tag / f's{args.severity}'
         / f'{stamp}_seed{seed}'
     )
     out.mkdir(parents=True, exist_ok=True)
 
     metadata = {
-        'producer': 'Backbone', 'model': 'PatchSTG', 'seed': seed,
+        'producer': 'Backbone', 'model': model_name, 'seed': seed,
         'stage': 'checkpoint_evaluation', 'severity': args.severity,
         'checkpoint': str(checkpoint), 'checkpoint_sha256': checkpoint_sha,
         'evaluation_policy': 'simple_current_cache_current_layout',
@@ -167,7 +180,7 @@ def main() -> None:
     write_json(out / 'test_summary.json', {
         'project_version': cfg.get('version'),
         'evaluation_mode': 'simple_explicit_checkpoint',
-        'model': 'PatchSTG', 'seed': seed, 'severity': args.severity,
+        'model': model_name, 'seed': seed, 'severity': args.severity,
         'checkpoint': str(checkpoint), 'checkpoint_sha256': checkpoint_sha,
         'checkpoint_best_epoch': ck.get('best_epoch'),
         'checkpoint_best_val_MAE': ck.get('best_val_MAE'),

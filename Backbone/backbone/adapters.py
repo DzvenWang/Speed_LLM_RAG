@@ -65,11 +65,11 @@ def _isolate_stdn_unused_pyg_imports():
 
 
 def st_features(batch,steps_per_day,device):
-    speed=batch['x'].to(device,non_blocking=True).float() # B,T,N
-    B,T,N=speed.shape
+    target=batch['x'].to(device,non_blocking=True).float() # B,T,N
+    B,T,N=target.shape
     tod=(batch['tod_hist'].to(device).float()/float(steps_per_day)).unsqueeze(-1).expand(B,T,N)
     dow=batch['dow_hist'].to(device).float().unsqueeze(-1).expand(B,T,N)
-    return torch.stack([speed,tod,dow],dim=-1)
+    return torch.stack([target,tod,dow],dim=-1)
 
 
 class BaseAdapter:
@@ -332,8 +332,8 @@ def stlaformer_features(batch, steps_per_day, days_per_week, device):
     embedding lookup.  TraffiDent canonical TOD/DOW are converted without
     using future timestamps or target values.
     """
-    speed = batch['x'].to(device, non_blocking=True).float()  # [B,T,N]
-    B,T,N = speed.shape
+    target = batch['x'].to(device, non_blocking=True).float()  # [B,T,N]
+    B,T,N = target.shape
     tod = batch['tod_hist'].to(device, non_blocking=True).long()
     dow = batch['dow_hist'].to(device, non_blocking=True).long()
     steps_per_week = int(steps_per_day) * int(days_per_week)
@@ -352,7 +352,7 @@ def stlaformer_features(batch, steps_per_day, days_per_week, device):
     frac = tow_slot.float() / float(steps_per_week)
     frac = torch.nextafter(frac, torch.full_like(frac, float('inf')))
     tow = frac.unsqueeze(-1).expand(B,T,N)
-    return torch.stack([speed, tow], dim=-1)
+    return torch.stack([target, tow], dim=-1)
 
 
 class STLAformerAdapter(BaseAdapter):
@@ -385,7 +385,7 @@ class STLAformerAdapter(BaseAdapter):
         obj.days_per_week = int(cfg.get('dow_slots', 7))
         obj.adapter_metadata = {
             'official_class': 'STLformer',
-            'input_contract': 'normalized_speed_plus_fractional_time_of_week',
+            'input_contract': 'normalized_target_plus_fractional_time_of_week',
             'steps_per_week': int(cfg.get('steps_per_week', 2016)),
             'future_time_features_used': False,
             'adjacency_used': False,

@@ -4,11 +4,10 @@
 #PBS -l ncpus=12
 #PBS -l ngpus=1
 #PBS -l mem=24GB
-#PBS -l walltime=24:00:00
+#PBS -l walltime=48:00:00
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -N PatchSTG
 #PBS -j oe
-#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_logs/
 
 set -euo pipefail
 
@@ -16,11 +15,13 @@ set -euo pipefail
 #   python scripts/run_experiment.py --stage formal --seed 10
 # Override at submission time when needed, e.g.
 #   qsub -v STAGE=formal,SEED=20 pbs/run_patchstg.pbs
-# Formal jobs automatically evaluate s20/s40/s60/s90 after training.
-# Disable only when needed with:
-#   qsub -v STAGE=formal,SEED=10,AUTO_EVAL=0 pbs/run_patchstg.pbs
 : "${STAGE:=formal}"
 : "${SEED:=10}"
+: "${TARGET:?TARGET must be set to speed or flow (submit with -v TARGET=speed or TARGET=flow)}"
+case "$TARGET" in
+  speed|flow) ;;
+  *) echo "ERROR: TARGET must be speed or flow; got '$TARGET'" >&2; exit 2 ;;
+esac
 case "$STAGE" in
   development|formal) ;;
   *) echo "ERROR: STAGE must be development or formal; got '$STAGE'" >&2; exit 2 ;;
@@ -30,29 +31,25 @@ if ! [[ "$SEED" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
-# Formal: auto-evaluate by default. Development: train/val only by default.
-if [[ -z "${AUTO_EVAL+x}" ]]; then
-  if [[ "$STAGE" == "formal" ]]; then AUTO_EVAL=1; else AUTO_EVAL=0; fi
-fi
-case "$AUTO_EVAL" in
-  0|1) ;;
-  *) echo "ERROR: AUTO_EVAL must be 0 or 1; got '$AUTO_EVAL'" >&2; exit 2 ;;
-esac
-if [[ "$STAGE" != "formal" && "$AUTO_EVAL" == "1" ]]; then
-  echo "ERROR: AUTO_EVAL=1 is supported only for STAGE=formal" >&2
-  exit 2
-fi
+# Formal training must evaluate s20/s40/s60/s90 after a successful checkpoint.
+# There is intentionally no AUTO_EVAL switch for Formal.
 
-ROOT="${SPEED_LLM_RAG_ROOT:-/scratch/mh20/zw1165/Speed_LLM_RAG}"
+ROOT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}"
+# If submitted from the Backbone directory, promote to the repository root.
+if [[ "$(basename "$ROOT")" == "Backbone" ]]; then ROOT="$(cd "$ROOT/.." && pwd)"; fi
 PROJ="$ROOT/Backbone"
-LOGROOT="$ROOT/Backbone_logs"
-ENVROOT="${TFP_ENV_ROOT:-/scratch/mh20/zw1165/envs/TFP}"
+LOGROOT="$ROOT/Backbone_logs/$TARGET/PatchSTG"
+ENVROOT="${TFP_ENV_ROOT:-${CONDA_PREFIX:-}}"
+if [[ -z "$ENVROOT" ]]; then
+  echo "ERROR: TFP_ENV_ROOT is not set. Submit from an activated TFP environment with TFP_ENV_ROOT=$CONDA_PREFIX." >&2
+  exit 3
+fi
 PYTHON="$ENVROOT/bin/python"
 
 mkdir -p "$LOGROOT"
 STAMP=$(date +%Y%m%d_%H%M%S)
 JOBID="${PBS_JOBID:-manual}"
-LOG="$LOGROOT/PatchSTG.${STAGE}.seed${SEED}.${JOBID}.${STAMP}.live.log"
+LOG="$LOGROOT/PatchSTG.${TARGET}.${STAGE}.seed${SEED}.${JOBID}.${STAMP}.live.log"
 touch "$LOG"
 
 early_log() {
@@ -69,9 +66,10 @@ fi
 
 cd "$PROJ"
 export SPEED_LLM_RAG_ROOT="$ROOT"
+export TRAFFIDENT_TARGET="$TARGET"
 export PATH="$ENVROOT/bin:$PATH"
 unset TRANSFORMERS_CACHE || true
-export PYTHONPATH="$PROJ:$ROOT/ExperimentCommon:$ROOT/Protocol:$ROOT/TraffiDent_SupportBench:${PYTHONPATH:-}"
+export PYTHONPATH="$PROJ:$ROOT/Base_SupportBench:${PYTHONPATH:-}"
 export PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 export BACKBONE_PBS_LIVE_LOG=1
 
@@ -79,8 +77,9 @@ export BACKBONE_PBS_LIVE_LOG=1
 exec > >("$PYTHON" -u "$PROJ/timestamp_stream.py" | tee -a "$LOG") 2>&1
 trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"' EXIT
 
-echo "START PatchSTG stage=$STAGE seed=$SEED auto_eval=$AUTO_EVAL job=$JOBID host=$(hostname)"
+echo "START PatchSTG target=$TARGET stage=$STAGE seed=$SEED job=$JOBID host=$(hostname)"
 echo "ROOT=$ROOT"
+echo "TRAFFIDENT_TARGET=$TRAFFIDENT_TARGET"
 echo "PROJ=$PROJ"
 echo "PYTHON=$PYTHON"
 echo "LIVE_LOG=$LOG"
@@ -111,18 +110,15 @@ fi
 echo "TRAINING_CHECKPOINT=$CHECKPOINT"
 echo "TRAINING_PHASE_PASS stage=$STAGE seed=$SEED"
 
-if [[ "$AUTO_EVAL" == "1" ]]; then
-  echo "AUTO_EVAL START checkpoint=$CHECKPOINT"
-  echo "AUTO_EVAL CONFIG severities=20,40,60,90 families=entry_random,sensor_outage,temporal_outage,regional_outage,directional_outage"
-  "$PYTHON" -u scripts/run_checkpoint_evaluations.py \
+if [[ "$STAGE" == "formal" ]]; then
+  echo "POST_TRAINING_EVAL START checkpoint=$CHECKPOINT"
+  "$PYTHON" -u scripts/post_training_evaluate.py \
+    --model PatchSTG \
     --checkpoint "$CHECKPOINT" \
-    --expected-seed "$SEED" \
+    --seed "$SEED" \
     --run-stamp "$STAMP" \
-    --config "$PROJ/configs/backbone.yaml" \
-    --stdout-only
-  echo "AUTO_EVAL PASS checkpoint=$CHECKPOINT"
-else
-  echo "AUTO_EVAL SKIP stage=$STAGE AUTO_EVAL=$AUTO_EVAL"
+    --config "$PROJ/configs/backbone.yaml"
+  echo "POST_TRAINING_EVAL PASS checkpoint=$CHECKPOINT"
 fi
 
-echo "FINISH PatchSTG stage=$STAGE seed=$SEED auto_eval=$AUTO_EVAL job=$JOBID"
+echo "FINISH PatchSTG target=$TARGET stage=$STAGE seed=$SEED job=$JOBID"

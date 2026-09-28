@@ -8,12 +8,12 @@
 #PBS -l walltime=24:00:00
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -j oe
-#PBS -o /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs/out/
 #PBS -N BaselineMethod
+export TRAFFIDENT_TARGET="${TARGET:-speed}"
 set -euo pipefail
-ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
-LOGROOT=/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_logs
-PY=/scratch/mh20/zw1165/envs/TFP/bin/python
+ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline
+LOGROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline_logs
+PY=${PYTHON:-python}
 METHOD=${METHOD:-MethodName}
 STAGE=${STAGE:-formal}
 SEED=${SEED:-10}
