@@ -37,7 +37,7 @@ fb = load_frozen_patchstg_registry(
     expected_time_feature_fingerprint=cm['time_feature_fingerprint'],
     expected_time_feature_source=cm['time_feature_source'],
     expected_dataset=cfg['experiment']['subgraph'],
-    expected_backbone_project_version=str(contract.get('required_project_version', '0.5.0')),
+    expected_backbone_project_version=str(contract.get('required_project_version', '1.0.10')),
 )
 if selection.get('frozen_backbone', {}).get('reference_checkpoint_sha256') != fb['reference_checkpoint_sha256']:
     raise SystemExit('FORMAL_SELECTION.json is bound to a different frozen PatchSTG reference checkpoint')

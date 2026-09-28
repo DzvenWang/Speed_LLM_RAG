@@ -161,9 +161,41 @@ class SupportBench:
             New code must not use it as Chapter-3 C_q^loss.
         """
         from .dependency import dependency_context_loss, summarize_dependency_context_loss
-        loss=dependency_context_loss(sample.artificial_mask,self.dependency_ids,self.dependency_weights)
+        artificial=np.asarray(sample.artificial_mask,bool)
+        loss=dependency_context_loss(artificial,self.dependency_ids,self.dependency_weights)
         obs=np.asarray(sample.observation_mask[...,self.speed_idx],bool).mean(axis=0)
-        dcfg=self.cfg['dependency']; support=(loss>=float(dcfg['support_dependent_missing_threshold'])) & (obs>=float(dcfg['support_dependent_target_observed_min']))
+        dcfg=self.cfg['dependency']
+        support_threshold=float(dcfg['support_dependent_missing_threshold'])
+        target_observed_min=float(dcfg['support_dependent_target_observed_min'])
+        support=(loss>=support_threshold) & (obs>=target_observed_min)
+
+        # Structural applicability diagnostic. dependency_context_loss() is a
+        # convex weighted average of each predictive source's history-missing
+        # fraction. Therefore its theoretical upper bound for this concrete
+        # sensing view is max_source_missing_fraction. If that upper bound is
+        # below support_threshold, an empty support subset is mathematically
+        # required rather than an evaluation/data bug.
+        source_missing_fraction=artificial.mean(axis=0).astype(np.float32)
+        max_source_missing_fraction=float(source_missing_fraction.max()) if source_missing_fraction.size else 0.0
+        eligible_target_count=int(np.count_nonzero(obs>=target_observed_min))
+        support_count=int(np.count_nonzero(support))
+        threshold_attainable=bool(
+            eligible_target_count>0 and
+            max_source_missing_fraction+1e-12>=support_threshold
+        )
+        if support_count>0:
+            support_status='NONEMPTY'
+            support_empty_reason=''
+        elif eligible_target_count==0:
+            support_status='N/A_STRUCTURAL'
+            support_empty_reason='no_target_meets_observed_min'
+        elif not threshold_attainable:
+            support_status='N/A_STRUCTURAL'
+            support_empty_reason='max_source_missing_fraction_below_threshold'
+        else:
+            support_status='EMPTY_ATTAINABLE'
+            support_empty_reason='threshold_attainable_but_no_target_meets_dependency_loss'
+
         q=float(dcfg.get('context_loss_quantile',0.75))
         summary=summarize_dependency_context_loss(loss,quantile=q)
         legacy=float(summary['context_loss_quantile_value'])
@@ -177,6 +209,14 @@ class SupportBench:
             'aggregate_context_loss':legacy,  # legacy v1.2.2 alias
             'legacy_aggregate_context_loss':legacy,
             'support_dependent_fraction':float(support.mean()) if len(support) else 0.0,
+            'support_dependent_target_count':support_count,
+            'support_dependent_missing_threshold':support_threshold,
+            'support_dependent_target_observed_min':target_observed_min,
+            'eligible_target_count':eligible_target_count,
+            'max_source_missing_fraction':max_source_missing_fraction,
+            'support_threshold_attainable':threshold_attainable,
+            'support_subset_status':support_status,
+            'support_subset_empty_reason':support_empty_reason,
         }
 
     def memory_episode(self, episode_id: int) -> dict[str,np.ndarray | int]:

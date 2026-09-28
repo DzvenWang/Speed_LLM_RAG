@@ -10,9 +10,10 @@ clone_or_keep(){
   local url="$2"
   local ref="$3"
   local dst="$VENDOR/$name"
-  # Existing tree-lock-no-git sources from v0.3.1 are intentionally reusable.
-  if [[ -d "$dst" && ! -d "$dst/.git" && -f "$VENDOR/SOURCE_LOCK.json" ]]; then
-    if "$PY" "$ROOT/scripts/source_lock.py" verify-one --root "$ROOT" --sources "$ROOT/configs/backbone_selection.yaml" --name "$name" >/dev/null 2>&1; then
+  # The current source_lock contract is PatchSTG-only and uses --config.
+  # Reuse a stripped PatchSTG tree only when its immutable tree lock verifies.
+  if [[ "$name" == "PatchSTG" && -d "$dst" && ! -d "$dst/.git" && -f "$VENDOR/SOURCE_LOCK.json" ]]; then
+    if "$PY" "$ROOT/scripts/source_lock.py" verify --config "$ROOT/configs/backbone.yaml" >/dev/null 2>&1; then
       echo -e "$name\t$ref\t$url\tPRESERVED_TREE_LOCK"
       return 0
     fi
@@ -40,5 +41,5 @@ clone_or_keep(){
   clone_or_keep STLAformer https://github.com/laibajiu/STLAformer.git f3eba25e2c63023a4834fd87d88da1c3347f16a9
 } | tee "$VENDOR/OFFICIAL_COMMITS.tsv"
 
-"$PY" "$ROOT/scripts/source_lock.py" create --root "$ROOT" --sources "$ROOT/configs/backbone_selection.yaml"
-echo "Official repositories ready at exact frozen commits; SOURCE_LOCK.json created/extended."
+"$PY" "$ROOT/scripts/source_lock.py" create --config "$ROOT/configs/backbone.yaml"
+echo "Official repositories ready at exact frozen commits; PatchSTG SOURCE_LOCK.json refreshed."

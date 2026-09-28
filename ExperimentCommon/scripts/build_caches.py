@@ -76,6 +76,7 @@ try:
         if a.force: cmd.append('--force')
         stage('PREPARE ' + st.upper(), cmd)
         stage('VALIDATE ' + st.upper(), [ROOT/'scripts'/'validate_cache.py', '--stage', st])
+        stage('AUDIT SUPPORT ' + st.upper(), [ROOT/'scripts'/'audit_support_subsets.py', '--stage', st])
 
     if not a.training_only:
         for cfgp in EVAL_CONFIGS:
@@ -85,6 +86,7 @@ try:
             if a.force: cmd.append('--force')
             stage('PREPARE ' + sev.upper(), cmd)
             stage('VALIDATE ' + sev.upper(), [ROOT/'scripts'/'validate_cache.py', '--config', cfgp, '--stage', 'evaluation', '--validate-locked-evaluation'])
+            stage('AUDIT SUPPORT ' + sev.upper(), [ROOT/'scripts'/'audit_support_subsets.py', '--config', cfgp, '--stage', 'evaluation'])
     else:
         emit('EVALUATION_CACHES SKIPPED (--training-only)')
 

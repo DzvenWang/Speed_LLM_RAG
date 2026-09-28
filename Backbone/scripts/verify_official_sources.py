@@ -1,5 +1,19 @@
 #!/usr/bin/env python3
+"""Verify the frozen PatchSTG source tree using the current source_lock CLI."""
 from pathlib import Path
-import subprocess, sys
+import subprocess
+import sys
+
 ROOT = Path(__file__).resolve().parents[1]
-subprocess.check_call([sys.executable, str(ROOT/'scripts'/'source_lock.py'), 'verify', '--root', str(ROOT), '--sources', str(ROOT/'configs'/'backbone_selection.yaml')], cwd=ROOT)
+CONFIG = ROOT / "configs" / "backbone.yaml"
+
+subprocess.check_call(
+    [
+        sys.executable,
+        str(ROOT / "scripts" / "source_lock.py"),
+        "verify",
+        "--config",
+        str(CONFIG),
+    ],
+    cwd=ROOT,
+)

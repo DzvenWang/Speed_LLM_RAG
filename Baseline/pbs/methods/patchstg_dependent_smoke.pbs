@@ -23,7 +23,7 @@ export PYTHONPATH="$ROOT:/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon:/sc
 unset TRANSFORMERS_CACHE || true
 cd "$ROOT"
 
-echo "START PatchSTG-dependent GPU smoke v1.0.0 method=$METHOD"
+echo "START PatchSTG-dependent GPU smoke v1.1.0 method=$METHOD"
 nvidia-smi
 "$PY" scripts/verify_official_sources.py
 "$PY" scripts/validate_cache.py --stage formal

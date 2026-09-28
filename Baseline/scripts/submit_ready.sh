@@ -1,17 +1,19 @@
 #!/bin/bash
 set -euo pipefail
-cat <<'EOF'
-Baseline v1.0.0 clean Primary-7 workflow
+cat <<'TXT'
+Baseline v1.1.0 Core-5 Primary-7 workflow
 
-Primary: ImputeFormer, LRTC-TMCP, GinAR, RAFT, RAST, SARAF, ReMFT
-Secondary: SPRINT, SLPF, MoGERNN, LEAF/LEAF-Qwen1.5B, RAST-PatchSTG
+Train/Val: s40 x 5 Core families
+Evaluate: s20/s40/s60/s90 x the same 5 Core families
 
-1) bash scripts/submit_primary_smoke.sh
-2) bash scripts/submit_primary_development.sh
-3) bash scripts/submit_ginar_stability_probe.sh 10
-4) bash scripts/submit_primary_formal_seed10.sh
-5) bash scripts/submit_primary_formal_remaining.sh  # seeds20/30 after seed10 sanity check
+1) qsub pbs/prepare_formal.pbs
+2) bash scripts/submit_primary_smoke.sh
+3) bash scripts/submit_primary_development.sh
+4) bash scripts/submit_ginar_stability_probe.sh 10
+5) bash scripts/submit_primary_formal_seed10.sh
+   -> each successful Formal job automatically evaluates its exact best.pt on s20/s40/s60/s90
 6) python scripts/primary_run_status.py
-7) python scripts/freeze_formal_selection.py
-8) bash scripts/submit_evaluation_all.sh
-EOF
+
+No Baseline FORMAL_SELECTION.json or FROZEN_BASELINE_PROTOCOL.json is required.
+For a training-only debug job use AUTO_EVAL=0 explicitly.
+TXT

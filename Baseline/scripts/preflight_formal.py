@@ -15,12 +15,16 @@ ap = argparse.ArgumentParser()
 ap.add_argument('--method', required=True, choices=['GinAR','ImputeFormer','LRTC-TMCP','SPRINT','RAFT','RAST','SARAF','MoGERNN','ReMFT','RAFT-PatchSTG','SARAF-PatchSTG','RAST-PatchSTG'])
 ap.add_argument('--seed', type=int, required=True)
 ap.add_argument('--stage', choices=['formal','evaluation'], default='formal')
+ap.add_argument('--severity', type=int, choices=[20,40,60,90])
 a = ap.parse_args()
 cfg = load_yaml(ROOT / 'configs/baseline.yaml')
+if a.stage=='evaluation' and a.severity is None: raise SystemExit('--severity is required for evaluation')
 method_seeds = [int(x) for x in cfg.get('methods', {}).get(a.method, {}).get('formal_seeds', cfg['experiment']['formal_seeds'])]
 if a.seed not in method_seeds:
     raise SystemExit(f'Invalid formal seed {a.seed} for {a.method}; allowed={method_seeds}')
-subprocess.check_call([cfg['project']['python'], str(ROOT / 'scripts/validate_cache.py'), '--stage', a.stage])
+cmd=[cfg['project']['python'], str(ROOT / 'scripts/validate_cache.py'), '--stage', a.stage]
+if a.stage=='evaluation': cmd += ['--severity', str(a.severity)]
+subprocess.check_call(cmd)
 
 need_patch = a.method in ('ImputeFormer', 'LRTC-TMCP', 'SPRINT', 'RAFT-PatchSTG', 'SARAF-PatchSTG', 'RAST-PatchSTG')
 if need_patch:
@@ -36,7 +40,7 @@ if need_patch:
         expected_time_feature_fingerprint=cm['time_feature_fingerprint'],
         expected_time_feature_source=cm['time_feature_source'],
         expected_dataset=cfg['experiment']['subgraph'],
-        expected_backbone_project_version=str(contract.get('required_project_version', '0.5.0')),
+        expected_backbone_project_version=str(contract.get('required_project_version', '1.0.10')),
     )
 
 # Method-specific runtime dependency checks.

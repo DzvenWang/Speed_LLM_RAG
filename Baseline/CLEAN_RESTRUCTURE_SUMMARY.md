@@ -18,7 +18,7 @@ SPRINT, SLPF, MoGERNN, LEAF, LEAF-Qwen1.5B, RAST-PatchSTG.
 
 ## New Primary execution path
 
-`smoke_primary.pbs -> development_primary.pbs -> GinAR stability probe -> formal_primary.pbs -> freeze_formal_selection.py -> evaluation_main.pbs`.
+`smoke_primary.pbs -> development_primary.pbs -> GinAR stability probe -> formal_primary.pbs -> direct s20/s40/s60/s90 evaluation` (same Formal PBS job).
 
 ## Validity fixes
 

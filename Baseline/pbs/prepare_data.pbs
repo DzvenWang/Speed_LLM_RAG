@@ -19,7 +19,7 @@ source "$ROOT/scripts/pbs_live_log.sh"
 baseline_live_log_start "BaselinePrep" "$STAGE"
 baseline_install_exit_trap
 cd "$ROOT"
-echo "START BaselinePrep v1.0.0 stage=$STAGE"
+echo "START BaselinePrep v1.1.0 stage=$STAGE"
 "$PY" scripts/preflight.py --stage "$STAGE"
 if [ "$FORCE" = "1" ]; then
   "$PY" scripts/prepare_data.py --stage "$STAGE" --force

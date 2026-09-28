@@ -1,6 +1,11 @@
-# Baseline v1.0.0 — Clean Primary-7 Experiment Project
+# Baseline v1.1.0 — Core-5 Primary-7 Experiment Project
 
 This is the clean-slate Baseline project for Task 1. Previous Baseline logs and experiment artifacts are intentionally not reused.
+
+
+## Core-5 benchmark contract
+
+All Primary baselines are retrained on the same frozen Core-5 s40 Formal cache used by the current Backbone. Train/Val use `entry_random`, `sensor_outage`, `temporal_outage`, `regional_outage`, and `directional_outage` at s40. Final evaluation uses the same five families on paired s20/s40/s60/s90 caches. Predictive outage families are not part of the main Baseline benchmark.
 
 ## Primary Baselines
 
@@ -29,10 +34,10 @@ Existing implementations are retained but are not submitted by the primary workf
 
 ## Clean-slate policy
 
-- Only results produced by **Baseline v1.0.0** are eligible for Formal selection.
+- Only results produced by **Baseline v1.1.0** from the current Core-5 Formal cache are eligible for evaluation.
 - There is no result-version compatibility layer and no old-result migration.
 - Every Primary method is rerun from the current Development/Formal caches.
-- `FORMAL_SELECTION.json` accepts only `status=COMPLETE`, `selection_valid=true`, current-version artifacts with the frozen run identity.
+- Baseline does **not** require `FORMAL_SELECTION.json` or `FROZEN_BASELINE_PROTOCOL.json`: after a successful Formal run, that exact run's `best.pt` is evaluated directly on paired s20/s40/s60/s90 Core-5 caches.
 
 ## Primary workflow
 
@@ -63,12 +68,16 @@ bash scripts/submit_primary_formal_seed10.sh
 # 5b. Final multi-seed Formal pass (use after seed10 is confirmed healthy)
 bash scripts/submit_primary_formal_remaining.sh  # seeds 20/30 after seed10 sanity check
 
-# 6. Inspect and freeze Formal selection
+# 6. Formal jobs automatically evaluate their own completed best.pt
+#    AUTO_EVAL=1 is the default in pbs/methods/formal_primary.pbs.
+#    Each job runs s20 -> s40 -> s60 -> s90 after training.
 python scripts/primary_run_status.py
-python scripts/freeze_formal_selection.py
 
-# 7. Evaluation
-bash scripts/submit_evaluation_all.sh
+# Optional: validate all evaluation caches manually
+qsub pbs/prepare_evaluation.pbs
+
+# Optional: standalone re-evaluation of an already completed Formal run
+# qsub -v METHOD=ImputeFormer,SEED=10 pbs/evaluation_main.pbs
 ```
 
 LRTC-TMCP is deterministic under the benchmark adapter and therefore uses seed 10 only.

@@ -41,6 +41,10 @@ def metric_bundle(pred, true, valid, direct_mask, support_mask):
     for name, nm in scopes:
         d = mae_rmse(pred, true, valid, nm)
         out[f'{name}_MAE'] = d['MAE']; out[f'{name}_RMSE'] = d['RMSE']; out[f'{name}_count'] = d['count']
+    # Explicitly expose whether the canonical support metric is defined.
+    # Structural applicability/reason is audited against SupportBench separately;
+    # this flag prevents downstream tables from confusing count=0 with a model NaN.
+    out['support_metric_defined'] = bool(out['support_count'] > 0)
     for h in (3, 6, 12):
         hh = min(h, pred.shape[1]); sl = slice(hh - 1, hh)
         for name, nm in scopes:

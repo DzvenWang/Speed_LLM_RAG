@@ -1,4 +1,4 @@
-version: 1.0.0
+version: 1.1.0
 project:
   root: /scratch/mh20/zw1165/Speed_LLM_RAG
   baseline_root: /scratch/mh20/zw1165/Speed_LLM_RAG/Baseline
@@ -26,14 +26,19 @@ experiment:
   - 20
   - 30
   families:
+  - entry_random
+  - sensor_outage
   - temporal_outage
   - regional_outage
   - directional_outage
-  - predictive_regional_outage
-  - predictive_directional_outage
+  evaluation_severities:
+  - 20
+  - 40
+  - 60
+  - 90
 protocol:
   official_source_policy: exact_commit_or_first_run_resolved_commit_then_tree_sha256_lock
-  test_selection_policy: physically_isolated_until_evaluation_stage
+  test_selection_policy: direct_multiseverity_evaluation_after_completed_formal_run_no_baseline_freeze
   prediction_contract: raw_speed_Mx12xN
   retrieval_memory: train_only
   retrieval_memory_signal: full_train_history
@@ -42,8 +47,8 @@ protocol:
   same_frozen_backbone_for_imputation_and_matched_rag: true
   cache_fingerprint_required: true
   retrieval_audit_required: true
-  shared_protocol_name: protocol_v1
-  shared_protocol_version: 1.0.0
+  shared_protocol_name: protocol_core5_s40
+  shared_protocol_version: 2.1.0
   consumer_policy: frozen_shared_protocol_only
   no_local_sampling: true
   frozen_backbone_required_for:
@@ -53,6 +58,12 @@ protocol:
   - RAST-PatchSTG
   - RAFT-PatchSTG
   - SARAF-PatchSTG
+  paired_group_id: TraffiDent_Net_06_core5_multiseverity_v1
+  evaluation_protocol_names:
+    20: protocol_core5_s20
+    40: protocol_core5_s40
+    60: protocol_core5_s60
+    90: protocol_core5_s90
 baseline_story:
   main_table:
   - ImputeFormer
@@ -416,11 +427,17 @@ protocol_assertions:
   development:
     train_rows: 12000
     val_rows: 5000
+    per_family_train: 2400
+    per_family_val: 1000
   formal:
     val_rows: 5000
     train_policy: all_eligible_unique_groups
+    train_rows: 50000
+    per_family_train: 10000
+    per_family_val: 1000
   evaluation:
     test_rows: 5000
+    per_family_test: 1000
 evaluation:
   require_formal_selection: true
   require_frozen_protocol: true
@@ -428,22 +445,34 @@ evaluation:
 frozen_backbone_contract:
   owner: Backbone
   minimum_schema_version: 3
-  required_project_version: 0.5.0
+  required_project_version: 1.0.10
   required_selected_model: PatchSTG
   use_reference_checkpoint_for_all_baseline_seeds: true
   require_checkpoint_sha256: true
   require_protocol_hash_match: true
   require_time_feature_fingerprint_match: true
   required_data_contract_revision: traffident_experiment_cache_v1
-  required_shared_contract_version: 1.0.0
+  required_shared_contract_version: 1.2.0
   require_shared_cache_identity_match: true
+  required_cache_schema_version: 2
+  required_protocol_version: 2.1.0
+  required_paired_group_id: TraffiDent_Net_06_core5_multiseverity_v1
 shared_contract:
-  required_version: 1.0.0
-  config: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon/configs/experiment_contract.yaml
+  required_version: 1.2.0
+  required_cache_schema_version: 2
   data_contract_revision: traffident_experiment_cache_v1
   time_feature_revision: traffident_time_features_v1
   metrics_revision: traffident_metrics_v1
   prediction_contract_revision: traffident_prediction_v1
+  protocol_version: 2.1.0
+  paired_group_id: TraffiDent_Net_06_core5_multiseverity_v1
+  configs:
+    training: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon/configs/experiment_contract.yaml
+    evaluation:
+      s20: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon/configs/experiment_contract_eval_s20.yaml
+      s40: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon/configs/experiment_contract_eval_s40.yaml
+      s60: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon/configs/experiment_contract_eval_s60.yaml
+      s90: /scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon/configs/experiment_contract_eval_s90.yaml
 formal_selection_methods:
 - ImputeFormer
 - LRTC-TMCP

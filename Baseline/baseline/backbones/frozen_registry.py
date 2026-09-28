@@ -3,7 +3,7 @@ from pathlib import Path
 import hashlib,json
 
 BACKBONE_SHARED_KEYS=(
- 'dataset','protocol_stage_hash','split_view_hashes','cache_fingerprint','shared_contract_version','data_contract_revision',
+ 'dataset','protocol_name','protocol_version','severity','paired_group_id','protocol_stage_hash','split_view_hashes','cache_fingerprint','shared_contract_version','cache_schema_version','data_contract_revision',
  'time_feature_revision','metrics_revision','prediction_contract_revision','time_feature_fingerprint',
  'time_feature_source','time_feature_parser','contract_fingerprint',
 )
@@ -14,17 +14,17 @@ def sha256_file(path):
         for b in iter(lambda:f.read(1024*1024),b''): h.update(b)
     return h.hexdigest()
 
-def load_frozen_patchstg_registry(path,*,require_files=True,expected_protocol_hash=None,expected_time_feature_revision=None,expected_time_feature_fingerprint=None,expected_time_feature_source=None,expected_dataset='TraffiDent_Net_06',expected_backbone_project_version='0.5.0',expected_backbone_data_contract_revision='traffident_experiment_cache_v1',expected_shared_contract_version='1.0.0',expected_metrics_revision='traffident_metrics_v1',expected_prediction_contract_revision='traffident_prediction_v1'):
+def load_frozen_patchstg_registry(path,*,require_files=True,expected_protocol_hash=None,expected_time_feature_revision=None,expected_time_feature_fingerprint=None,expected_time_feature_source=None,expected_dataset='TraffiDent_Net_06',expected_backbone_project_version='1.0.10',expected_backbone_data_contract_revision='traffident_experiment_cache_v1',expected_shared_contract_version='1.2.0',expected_cache_schema_version=2,expected_protocol_version='2.1.0',expected_paired_group_id='TraffiDent_Net_06_core5_multiseverity_v1',expected_metrics_revision='traffident_metrics_v1',expected_prediction_contract_revision='traffident_prediction_v1'):
     p=Path(path)
-    if not p.exists(): raise FileNotFoundError(f'Missing Backbone-owned frozen PatchSTG manifest: {p}. Complete Backbone v0.5.0 formal reference runs and summarize_formal.py first.')
+    if not p.exists(): raise FileNotFoundError(f'Missing Backbone-owned frozen PatchSTG manifest: {p}. Complete Backbone v1.0.10 Core-5 formal reference runs and summarize_formal.py first.')
     obj=json.loads(p.read_text())
-    if int(obj.get('schema_version',0))<3: raise RuntimeError('Frozen Backbone manifest must use schema v3 (Backbone v0.5.0).')
+    if int(obj.get('schema_version',0))<3: raise RuntimeError('Frozen Backbone manifest must use schema v3+ (Core-5 Backbone).')
     if str(obj.get('project_version'))!=str(expected_backbone_project_version): raise RuntimeError(f'Frozen Backbone project_version={obj.get("project_version")} != {expected_backbone_project_version}')
     if obj.get('selected_model')!='PatchSTG': raise RuntimeError('Frozen backbone must select PatchSTG')
     ident=obj.get('run_identity')
     if not isinstance(ident,dict): raise RuntimeError('Frozen Backbone manifest missing run_identity')
     if str(ident.get('project'))!='Backbone' or str(ident.get('consumer_stage'))!='formal': raise RuntimeError('Frozen PatchSTG must come from Backbone formal stage')
-    checks={'dataset':expected_dataset,'data_contract_revision':expected_backbone_data_contract_revision,'shared_contract_version':expected_shared_contract_version,'metrics_revision':expected_metrics_revision,'prediction_contract_revision':expected_prediction_contract_revision}
+    checks={'dataset':expected_dataset,'data_contract_revision':expected_backbone_data_contract_revision,'shared_contract_version':expected_shared_contract_version,'cache_schema_version':expected_cache_schema_version,'protocol_version':expected_protocol_version,'paired_group_id':expected_paired_group_id,'metrics_revision':expected_metrics_revision,'prediction_contract_revision':expected_prediction_contract_revision}
     if expected_protocol_hash: checks['protocol_stage_hash']=expected_protocol_hash
     if expected_time_feature_revision: checks['time_feature_revision']=expected_time_feature_revision
     if expected_time_feature_fingerprint: checks['time_feature_fingerprint']=expected_time_feature_fingerprint

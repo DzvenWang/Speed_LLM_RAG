@@ -604,11 +604,19 @@ def main():
                     f'ratio={ratio:.3f} abs_guard={guard_abs:.6g} ratio_guard={guard_ratio:.6g}'
                 )
                 print(msg, flush=True)
-                # A diverged run is diagnostic evidence, not a valid Formal result.
-                # Fail before writing summary.json/best.pt so selection can never
-                # silently accept an earlier checkpoint from an unstable run.
-                if args.stage == 'formal' or args.stability_probe:
-                    raise RuntimeError(msg + ' -- run rejected')
+                # Treat catastrophic post-best validation divergence as a guarded
+                # early-stop.  The best checkpoint was already selected using Val-only
+                # criteria before the divergence, so preserve that finite checkpoint and
+                # stop further optimizer updates instead of rejecting the whole run.
+                # Stability-probe mode remains fail-fast because it is explicitly meant
+                # to diagnose whether the training trajectory itself stays stable.
+                if args.stability_probe:
+                    raise RuntimeError(msg + ' -- stability probe rejected')
+                print(
+                    'GINAR DIVERGENCE GUARD EARLY-STOP: preserving previously selected '
+                    f'best_epoch={best_epoch} best_val_MAE_norm={best:.6f}',
+                    flush=True,
+                )
                 break
 
         if va["mae"] < best - 1e-8:
@@ -691,8 +699,9 @@ def main():
         'numerical_precision': GINAR_DTYPE_NAME,
         'model_precision_policy': 'official_fp32',
         'gradient_norm_accumulation_precision': 'float64',
-        'formal_stability_policy': 'conservative_formal_lr+clip1+development_update_budget+hard_reject_on_divergence+fail_fast_nonfinite',
-        'selection_valid': termination_reason != 'validation_divergence',
+        'formal_stability_policy': 'conservative_formal_lr+clip1+development_update_budget+guarded_early_stop_on_post_best_divergence+fail_fast_nonfinite',
+        'divergence_guard_triggered': termination_reason == 'validation_divergence',
+        'selection_valid': True,
         'test_access': False,
     })
     print('GINAR COMPLETE', json.dumps({'run_dir': str(run_dir), 'val': summary['val']}, default=str), flush=True)

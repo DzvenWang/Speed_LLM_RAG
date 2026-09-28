@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 
 from baseline.evaluation import evaluate_prediction_file
 from baseline.run_identity import build_run_manifest, write_run_manifest
-from baseline.shared_cache import cache_path
+from baseline.shared_cache import cache_path, shared_contract_config
 from baseline.utils import load_yaml, write_json
 
 ROOT = Path('/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline')
@@ -92,6 +92,12 @@ def save_val_outputs(cfg: dict, cache: Path, run_dir: Path, pred_raw: np.ndarray
         manifest_extra,
     )
     write_run_manifest(run_dir / 'RUN_MANIFEST.json', manifest)
+    reserved_identity_keys = set(manifest.keys())
+    collisions = sorted(k for k in extra_summary if k in reserved_identity_keys)
+    if collisions:
+        raise RuntimeError(
+            f'{method}: extra_summary must not overwrite canonical run-manifest fields: {collisions}'
+        )
     summary = {
         **manifest,
         'val': all_row,
@@ -211,7 +217,7 @@ def build_time_marks(cfg: dict, cache: Path, split: str) -> tuple[np.ndarray, np
     cached_dh=np.load(cache/f'{split}_dow_hist.npy',mmap_mode='r')
     cached_tf=np.load(cache/f'{split}_tod_future.npy',mmap_mode='r')
     cached_df=np.load(cache/f'{split}_dow_future.npy',mmap_mode='r')
-    shared_cfg=load_yaml((COMMON/'configs/experiment_contract.yaml') if not Path(cfg['shared_contract']['config']).exists() else Path(cfg['shared_contract']['config'])); freq=int(shared_cfg['time_features']['expected_freq_minutes'])
+    shared_cfg=shared_contract_config(cfg,'formal'); freq=int(shared_cfg['time_features']['expected_freq_minutes'])
     th=((xm[...,4]*60+xm[...,5])//freq).astype(np.int16)
     dh=xm[...,3].astype(np.int8)
     tf=((ym[...,4]*60+ym[...,5])//freq).astype(np.int16)

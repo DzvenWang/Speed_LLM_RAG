@@ -21,7 +21,7 @@ baseline_install_exit_trap
 export PYTHONPATH="$ROOT:/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon:/scratch/mh20/zw1165/Speed_LLM_RAG/Protocol:/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench:${PYTHONPATH:-}"
 unset TRANSFORMERS_CACHE || true
 cd "$ROOT"
-echo "START Primary Development v1.0.0 method=$METHOD seed=$SEED"
+echo "START Primary Core-5 Development v1.1.0 method=$METHOD seed=$SEED"
 nvidia-smi
 "$PY" scripts/verify_official_sources.py
 "$PY" scripts/preflight.py --stage development --method "$METHOD"

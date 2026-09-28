@@ -16,7 +16,7 @@ baseline_live_log_start "BaselineSmoke" "$METHOD" "seed10" "development"
 baseline_install_exit_trap
 export PYTHONPATH="$ROOT:/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon:/scratch/mh20/zw1165/Speed_LLM_RAG/Protocol:/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench:${PYTHONPATH:-}"
 cd "$ROOT"
-echo "START Primary Smoke v1.0.0 method=$METHOD"
+echo "START Primary Smoke v1.1.0 method=$METHOD"
 nvidia-smi
 "$PY" scripts/verify_official_sources.py
 "$PY" scripts/preflight.py --stage development --method "$METHOD"

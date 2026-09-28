@@ -14,7 +14,7 @@ source "$ROOT/scripts/pbs_live_log.sh"
 baseline_live_log_start "BaselineFormalPrep" "formal"
 baseline_install_exit_trap
 cd "$ROOT"
-echo "START Baseline formal preparation v1.0.0"
+echo "START Baseline formal preparation v1.1.0"
 "$PY" scripts/preflight.py --stage formal
 "$PY" scripts/prepare_data.py --stage formal
 "$PY" scripts/validate_cache.py --stage formal
@@ -24,7 +24,7 @@ if [ -f /scratch/mh20/zw1165/Speed_LLM_RAG/Backbone_exps/FROZEN_BACKBONE.json ];
   if "$PY" scripts/validate_frozen_patchstg.py; then
     echo "PASS: Backbone frozen PatchSTG is ready for dependent baselines."
   else
-    echo "INFO: a frozen-backbone file exists but is not yet compatible with Baseline v1.0.0; formal cache preparation itself is still valid."
+    echo "INFO: a frozen-backbone file exists but is not yet compatible with Baseline v1.1.0; formal cache preparation itself is still valid."
   fi
 else
   echo "INFO: Backbone FROZEN_BACKBONE.json not ready yet; non-PatchSTG baselines may still run after formal cache validation."

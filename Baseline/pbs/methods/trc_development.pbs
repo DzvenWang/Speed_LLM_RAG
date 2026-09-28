@@ -17,7 +17,7 @@ baseline_live_log_start "SecondaryTRCDevelopment" "$METHOD" "seed${SEED}" "devel
 baseline_install_exit_trap
 export PYTHONPATH="$ROOT:/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon:/scratch/mh20/zw1165/Speed_LLM_RAG/Protocol:/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench:${PYTHONPATH:-}"
 cd "$ROOT"
-echo "START Secondary TRC Development v1.0.0 method=$METHOD seed=$SEED"
+echo "START Secondary TRC Development v1.1.0 method=$METHOD seed=$SEED"
 nvidia-smi
 if [[ "$METHOD" == "MoGERNN" ]]; then "$PY" scripts/check_mogernn_inference_contract.py --stage development --seed "$SEED"; fi
 if [[ "$METHOD" == "SPRINT" ]]; then "$PY" scripts/check_sprint_runtime.py --stage development; "$PY" scripts/validate_frozen_patchstg.py; fi

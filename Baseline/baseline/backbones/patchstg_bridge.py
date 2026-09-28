@@ -65,7 +65,7 @@ class FrozenPatchSTG:
             expected_time_feature_fingerprint=cm.get('time_feature_fingerprint'),
             expected_time_feature_source=cm.get('time_feature_source'),
             expected_dataset=cfg['experiment']['subgraph'],
-            expected_backbone_project_version=str(contract.get('required_project_version', '0.5.0')),
+            expected_backbone_project_version=str(contract.get('required_project_version', '1.0.10')),
         )
         self.registry = reg
         self.reference_seed = int(reg['reference_seed'])
@@ -74,9 +74,18 @@ class FrozenPatchSTG:
         broot = Path(cfg['project']['backbone_root'])
         if not (broot / 'backbone/adapters.py').exists():
             raise FileNotFoundError(f'Missing sibling Backbone project: {broot}')
+
+        # Backbone v1.0.10 owns a single PatchSTG source lock and its source_lock.py
+        # interface is: `source_lock.py {verify,create} --config <backbone.yaml>`.
+        # Older Baseline code incorrectly called a Baseline-only `verify-one` API on
+        # the Backbone script, causing every PatchSTG-dependent baseline to fail
+        # before training.  Verify the current Backbone source through its native API.
+        live_backbone_config = broot / 'configs/backbone.yaml'
+        if not live_backbone_config.exists():
+            raise FileNotFoundError(f'Missing Backbone config: {live_backbone_config}')
         subprocess.check_call([
-            sys.executable, str(broot / 'scripts/source_lock.py'), 'verify-one',
-            '--root', str(broot), '--sources', str(broot / 'configs/backbone_selection.yaml'), '--name', 'PatchSTG'
+            sys.executable, str(broot / 'scripts/source_lock.py'), 'verify',
+            '--config', str(live_backbone_config),
         ])
         sys.path.insert(0, str(broot))
         sys.path.insert(0, str(broot.parent / 'TraffiDent_SupportBench'))
@@ -85,7 +94,7 @@ class FrozenPatchSTG:
 
         ck = torch.load(self.checkpoint, map_location='cpu', weights_only=False)
         require_reference_checkpoint_identity(ck, reg, label=str(self.checkpoint))
-        bcfg = yaml.safe_load((broot / 'configs/backbone_selection.yaml').read_text())
+        bcfg = yaml.safe_load(live_backbone_config.read_text())
         live_backbone_version = str(bcfg.get('version'))
         frozen_backbone_version = str(reg.get('project_version'))
 

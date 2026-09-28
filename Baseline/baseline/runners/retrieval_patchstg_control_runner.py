@@ -339,7 +339,7 @@ def main() -> None:
             'direct_forecast_path_replaced': 'native_linear_x -> FrozenPatchSTG',
             'native_retrieval_and_fusion_preserved': True,
             'retrieval': retrieval_info,
-            'time_feature_source': time_source,
+            'retrieval_time_mark_source': time_source,
             'retrieval_memory_split': 'train',
             'retrieval_memory_signal': 'full_train_history',
             'query_signal': 'incomplete_history',

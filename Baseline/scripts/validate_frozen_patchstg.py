@@ -27,7 +27,7 @@ def main():
         expected_time_feature_fingerprint=cm['time_feature_fingerprint'],
         expected_time_feature_source=cm['time_feature_source'],
         expected_dataset=cfg['experiment']['subgraph'],
-        expected_backbone_project_version=str(contract.get('required_project_version', '0.5.0')),
+        expected_backbone_project_version=str(contract.get('required_project_version', '1.0.10')),
     )
     print('PASS Backbone-owned FROZEN_BACKBONE.json schema', obj['schema_version'])
     print('PASS selected_model', obj['selected_model'])

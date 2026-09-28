@@ -29,7 +29,7 @@ fb = load_frozen_patchstg_registry(
     expected_time_feature_fingerprint=cm['time_feature_fingerprint'],
     expected_time_feature_source=cm['time_feature_source'],
     expected_dataset=sg,
-    expected_backbone_project_version=str(contract.get('required_project_version', '0.5.0')),
+    expected_backbone_project_version=str(contract.get('required_project_version', '1.0.10')),
 )
 
 obj = {

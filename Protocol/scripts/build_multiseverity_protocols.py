@@ -128,6 +128,12 @@ def main():
 
         run([sys.executable, str(ROOT / 'scripts' / 'validate_paired_evaluation.py')], tee)
 
+        tee.write('========== SUPPORT SUBSET AUDIT START ==========\n')
+        for s in ('20', '40', '60', '90'):
+            cfg = ROOT / 'configs' / f'protocol_s{s}.yaml'
+            run([sys.executable, str(ROOT / 'scripts' / 'audit_support_subsets.py'), '--config', str(cfg), '--stage', 'evaluation'], tee)
+        tee.write('========== SUPPORT SUBSET AUDIT DONE ==========\n')
+
         tee.write('========== STATUS ALL ==========\n')
         for cfg in CONFIGS:
             run([sys.executable, str(ROOT / 'scripts' / 'status.py'), '--config', str(cfg)], tee)

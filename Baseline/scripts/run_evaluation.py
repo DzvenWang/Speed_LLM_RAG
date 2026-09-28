@@ -21,21 +21,107 @@ from baseline.runners.sprint_runner import forecast_split as sprint_forecast
 from baseline.runners.mogernn_runner import MoGERNNDataset,build_model as mogernn_build,predict as mogernn_predict
 from baseline.runners.remft_runner import ReMFTDataset,build_model as remft_build,predict as remft_predict,load_trainable_state_dict as remft_load
 from baseline.backbones.patchstg_bridge import FrozenPatchSTG
-from baseline.run_identity import load_cache_identity
+from baseline.run_identity import load_cache_identity, require_same_identity
 from baseline.shared_cache import cache_path
-from baseline.backbones.frozen_registry import sha256_file
+from baseline.backbones.frozen_registry import sha256_file, load_frozen_patchstg_registry
 
 
-def load_sel(cfg,m,seed):
-    exp=Path(cfg['project']['exp_root']); p=exp/'FORMAL_SELECTION.json'; o=json.loads(p.read_text())
+def _validate_formal_run(cfg, m, seed, run_dir: Path):
+    exp=Path(cfg['project']['exp_root'])
     expected=load_cache_identity(cache_path(cfg,'formal'),cfg['version'])
-    if o.get('formal_run_identity')!=expected:
-        raise RuntimeError(f'FORMAL_SELECTION.json does not belong to current Baseline v{cfg["version"]} formal cache identity')
-    x=o['methods'][m][str(seed)]; cp=Path(x['checkpoint'])
+    d=Path(run_dir)
+    sp,cp,mp=d/'summary.json',d/'best.pt',d/'RUN_MANIFEST.json'
+    if not sp.exists(): raise FileNotFoundError(sp)
     if not cp.exists(): raise FileNotFoundError(cp)
-    got=sha256_file(cp)
-    if got!=str(x.get('checkpoint_sha256','')): raise RuntimeError(f'Formal checkpoint SHA256 mismatch for {m} seed={seed}')
-    return x,torch.load(cp,map_location='cpu',weights_only=False)
+    sm=json.loads(sp.read_text())
+    # RUN_MANIFEST.json is the authoritative immutable Protocol/cache identity.
+    # Older SARAF v1.1.0 summaries accidentally reused the key
+    # `time_feature_source` for a SARAF-specific diagnostic string, which
+    # overwrote the canonical identity field only in summary.json.  Validate
+    # the manifest when present so those already-trained checkpoints can be
+    # evaluated without weakening the shared identity contract.
+    if mp.exists():
+        manifest=json.loads(mp.read_text())
+        require_same_identity(manifest,expected,label=str(mp))
+        if str(manifest.get('method')) != str(m):
+            raise RuntimeError(f'Formal run manifest method mismatch: expected={m} got={manifest.get("method")}')
+        if int(manifest.get('seed',-1)) != int(seed):
+            raise RuntimeError(f'Formal run manifest seed mismatch: expected={seed} got={manifest.get("seed")}')
+        mh=manifest.get('run_identity_hash')
+        sh=sm.get('run_identity_hash')
+        if mh and sh and str(mh) != str(sh):
+            raise RuntimeError(f'Formal run summary/manifest identity hash mismatch: summary={sh} manifest={mh}')
+    else:
+        require_same_identity(sm,expected,label=str(sp))
+    if str(sm.get('method'))!=str(m):
+        raise RuntimeError(f'Formal run method mismatch: expected={m} got={sm.get("method")}')
+    if int(sm.get('seed',-1))!=int(seed):
+        raise RuntimeError(f'Formal run seed mismatch: expected={seed} got={sm.get("seed")}')
+    if str(sm.get('code_project_version',sm.get('project_version'))) != str(cfg['version']):
+        raise RuntimeError(f'Formal run was not produced by Baseline v{cfg["version"]}')
+    if str(sm.get('status',''))!='COMPLETE':
+        raise RuntimeError('Formal run status is not COMPLETE')
+    if not bool(sm.get('selection_valid',True)):
+        raise RuntimeError('Formal run is marked invalid')
+    score=float(sm.get('val',{}).get('overall_MAE',float('inf')))
+    if not np.isfinite(score):
+        raise RuntimeError('Formal run has non-finite validation MAE')
+
+    if cfg.get('methods',{}).get(m,{}).get('requires_frozen_backbone_for_final_forecast',False):
+        cm=json.loads((cache_path(cfg,'formal')/'cache_manifest.json').read_text())
+        con=cfg.get('frozen_backbone_contract',{})
+        fb=load_frozen_patchstg_registry(
+            cfg['project']['frozen_backbone_json'],
+            expected_protocol_hash=cm['protocol_stage_hash'],
+            expected_time_feature_revision=cm['time_feature_revision'],
+            expected_time_feature_fingerprint=cm['time_feature_fingerprint'],
+            expected_time_feature_source=cm['time_feature_source'],
+            expected_dataset=cfg['experiment']['subgraph'],
+            expected_backbone_project_version=str(con.get('required_project_version','1.0.10')),
+        )
+        if str(sm.get('patchstg_checkpoint'))!=str(fb['reference_checkpoint']):
+            raise RuntimeError(f'{m} seed={seed}: frozen PatchSTG checkpoint mismatch')
+        if int(sm.get('patchstg_reference_seed',-1))!=int(fb['reference_seed']):
+            raise RuntimeError(f'{m} seed={seed}: frozen PatchSTG reference seed mismatch')
+
+    sel={
+        'run_dir':str(d),
+        'checkpoint':str(cp),
+        'checkpoint_sha256':sha256_file(cp),
+        'val_overall_MAE':score,
+        'run_identity_hash':sm.get('run_identity_hash'),
+        'selection_mode':'direct_formal_run_no_baseline_freeze',
+    }
+    return sel,torch.load(cp,map_location='cpu',weights_only=False)
+
+
+def load_sel(cfg,m,seed,formal_run_dir=None):
+    """Resolve the completed Formal run directly; no Baseline freeze artifact is required."""
+    exp=Path(cfg['project']['exp_root'])
+    if formal_run_dir:
+        return _validate_formal_run(cfg,m,seed,Path(formal_run_dir))
+
+    rr=exp/m/cfg['experiment']['subgraph']/'formal'
+    latest=rr/'LATEST_RUN.txt'
+    candidates=[]
+    if latest.exists():
+        raw=latest.read_text().strip()
+        if raw:
+            candidates.append(Path(raw))
+    if rr.exists():
+        candidates.extend(sorted(rr.glob(f'*_seed{seed}'),reverse=True))
+
+    seen=set(); errors=[]
+    for d in candidates:
+        key=str(d)
+        if key in seen: continue
+        seen.add(key)
+        try:
+            return _validate_formal_run(cfg,m,seed,d)
+        except Exception as e:
+            errors.append(f'{d}: {type(e).__name__}: {e}')
+    detail='\n'.join(errors[-5:])
+    raise RuntimeError(f'No valid completed Formal run found for {m} seed={seed}.\n{detail}')
 
 
 def ginar(cfg,fc,ec,seed,device,ck):
@@ -76,7 +162,11 @@ def saraf(cfg,fc,ec,seed,device,ck):
 
 
 def rast(cfg,fc,ec,seed,device,ck,sel):
-    ds=RASTDataset(ec,'test'); dl=DataLoader(ds,batch_size=int(cfg['runners']['RAST']['batch_size']),shuffle=False); rd=Path(sel['run_dir']); m=rast_build(cfg,'native',seed,device,rd/'evaluation_database'); m.load_state_dict(ck['model']); restore_store(m,load_store(rd/'retrieval_store_best.npz')); mean,std=scale_stats(fc); return rast_predict(m,dl,device,mean,std,int(ck['best_epoch']))
+    ds=RASTDataset(ec,'test'); dl=DataLoader(ds,batch_size=int(cfg['runners']['RAST']['batch_size']),shuffle=False); rd=Path(sel['run_dir']); m=rast_build(cfg,'native',seed,device,rd/'evaluation_database'); m.load_state_dict(ck['model']); restore_store(m,load_store(rd/'retrieval_store_best.npz')); mean,std=scale_stats(fc)
+    raw, impact = rast_predict(m,dl,device,mean,std,int(ck['best_epoch']))
+    if impact is not None:
+        print('INFO RAST native evaluation returned impact diagnostics; predictions use tuple[0]', flush=True)
+    return raw
 
 
 def mogernn(cfg,fc,ec,seed,device,ck):
@@ -84,17 +174,18 @@ def mogernn(cfg,fc,ec,seed,device,ck):
 
 
 def remft(cfg,fc,ec,seed,device,ck):
-    ds=ReMFTDataset(ec,'test'); dl=DataLoader(ds,batch_size=int(cfg['runners']['ReMFT']['batch_size']),shuffle=False,num_workers=0); m=remft_build(cfg,device); remft_load(m,ck['model']); mean,std=scale_stats(fc); return remft_predict(m,dl,device,mean,std)
+    c=cfg['runners']['ReMFT']; ds=ReMFTDataset(ec,'test'); dl=DataLoader(ds,batch_size=int(c.get('formal_eval_batch_size',c['batch_size'])),shuffle=False,num_workers=0); m=remft_build(cfg,device); remft_load(m,ck['model']); mean,std=scale_stats(fc); use_amp=bool(c.get('formal_use_amp',True)); return remft_predict(m,dl,device,mean,std,use_amp=use_amp)
 
 
 def main():
     methods=['ImputeFormer','LRTC-TMCP','GinAR','RAFT','RAST','SARAF','ReMFT']
-    ap=argparse.ArgumentParser(); ap.add_argument('--method',choices=methods,required=True); ap.add_argument('--seed',type=int,required=True); a=ap.parse_args()
-    cfg=load_yaml(ROOT/'configs/baseline.yaml'); set_seed(a.seed); device=require_gpu(); exp=Path(cfg['project']['exp_root']); fc=cache_path(cfg,'formal'); ec=cache_path(cfg,'evaluation'); sel,ck=load_sel(cfg,a.method,a.seed)
+    ap=argparse.ArgumentParser(); ap.add_argument('--method',choices=methods,required=True); ap.add_argument('--seed',type=int,required=True); ap.add_argument('--severity',type=int,choices=[20,40,60,90],required=True); ap.add_argument('--formal-run-dir',default=None); a=ap.parse_args()
+    cfg=load_yaml(ROOT/'configs/baseline.yaml'); set_seed(a.seed); device=require_gpu(); exp=Path(cfg['project']['exp_root']); fc=cache_path(cfg,'formal'); ec=cache_path(cfg,'evaluation',a.severity); sel,ck=load_sel(cfg,a.method,a.seed,a.formal_run_dir)
     fn={'GinAR':ginar,'ImputeFormer':impute,'LRTC-TMCP':lrtc_tmcp,'RAFT':raft,'SARAF':saraf,'ReMFT':remft}
     raw=rast(cfg,fc,ec,a.seed,device,ck,sel) if a.method=='RAST' else fn[a.method](cfg,fc,ec,a.seed,device,ck)
-    rd=exp/'evaluation'/a.method/cfg['experiment']['subgraph']/f'seed{a.seed}'; rd.mkdir(parents=True,exist_ok=True)
-    sm=save_split_outputs(cfg,ec,rd,'test',raw,a.method,a.seed,{'formal_checkpoint':sel['checkpoint'],'formal_checkpoint_sha256':sel['checkpoint_sha256'],'reporting_track':cfg.get('methods',{}).get(a.method,{}).get('table_group','unknown'),'test_access':'evaluation_only_after_freeze'})
+    rd=exp/'evaluation'/a.method/cfg['experiment']['subgraph']/f'seed{a.seed}'/f's{a.severity}'; rd.mkdir(parents=True,exist_ok=True)
+    sm=save_split_outputs(cfg,ec,rd,'test',raw,a.method,a.seed,{'formal_checkpoint':sel['checkpoint'],'formal_checkpoint_sha256':sel['checkpoint_sha256'],'reporting_track':cfg.get('methods',{}).get(a.method,{}).get('table_group','unknown'),'test_access':'direct_after_completed_formal_run','severity':int(a.severity),'protocol_name':ec.parent.parent.parent.name})
+    print(f'EVALUATION_RESULT_DIR={rd}')
     print(json.dumps(sm,default=str,indent=2))
 
 

@@ -25,7 +25,7 @@ baseline_install_exit_trap
 export PYTHONPATH="$ROOT:/scratch/mh20/zw1165/Speed_LLM_RAG/ExperimentCommon:/scratch/mh20/zw1165/Speed_LLM_RAG/Protocol:/scratch/mh20/zw1165/Speed_LLM_RAG/TraffiDent_SupportBench:${PYTHONPATH:-}"
 unset TRANSFORMERS_CACHE || true
 cd "$ROOT"
-echo "START Primary Formal v1.0.0 method=$METHOD seed=$SEED"
+echo "START Primary Core-5 Formal v1.1.0 method=$METHOD seed=$SEED"
 nvidia-smi
 "$PY" scripts/verify_official_sources.py
 "$PY" scripts/preflight.py --stage formal --method "$METHOD"
@@ -43,4 +43,23 @@ case "$METHOD" in
   SARAF) "$PY" -u baseline/runners/saraf_runner.py --stage formal --seed "$SEED";;
   ReMFT) "$PY" scripts/check_remft_runtime.py; "$PY" -u baseline/runners/remft_runner.py --stage formal --seed "$SEED";;
 esac
+echo "PRIMARY FORMAL TRAINING PASS method=$METHOD seed=$SEED"
+
+AUTO_EVAL="${AUTO_EVAL:-1}"
+if [[ "$AUTO_EVAL" == "1" ]]; then
+  FORMAL_PARENT="/scratch/mh20/zw1165/Speed_LLM_RAG/Baseline_exps/$METHOD/TraffiDent_Net_06/formal"
+  FORMAL_RUN_DIR="$(ls -1dt "$FORMAL_PARENT"/*_seed"$SEED" 2>/dev/null | head -n 1 || true)"
+  if [[ -z "$FORMAL_RUN_DIR" || ! -d "$FORMAL_RUN_DIR" || ! -f "$FORMAL_RUN_DIR/best.pt" || ! -f "$FORMAL_RUN_DIR/summary.json" ]]; then
+    echo "ERROR invalid completed Formal run directory: $FORMAL_RUN_DIR"
+    exit 3
+  fi
+  echo "AUTO_EVAL=1"
+  echo "FORMAL_RUN_DIR=$FORMAL_RUN_DIR"
+  echo "START DIRECT Core-5 EVALUATION method=$METHOD seed=$SEED severities=s20,s40,s60,s90"
+  "$PY" -u scripts/run_evaluations.py --method "$METHOD" --seed "$SEED" --formal-run-dir "$FORMAL_RUN_DIR"
+  echo "DIRECT CORE5 EVALUATION PASS method=$METHOD seed=$SEED"
+else
+  echo "AUTO_EVAL=0; skipping post-Formal evaluation"
+fi
+
 echo "PRIMARY FORMAL PASS method=$METHOD seed=$SEED"

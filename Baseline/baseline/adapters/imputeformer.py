@@ -3,7 +3,7 @@ class ImputeFormerAdapter(OfficialAdapter):
     method='ImputeFormer'
     def compatibility_audit(self):
         repo=self.ctx.project_root/'vendor'/self.method
-        return {'entrypoint':str(repo/'experiments/run_spatiotemporal_imputation.py'),'exists':(repo/'experiments/run_spatiotemporal_imputation.py').exists(),'formal_protocol':'official ImputeFormer architecture reconstructs history only; observed values protected; completed history enters single Backbone-v0.5.0 frozen PatchSTG reference checkpoint'}
+        return {'entrypoint':str(repo/'experiments/run_spatiotemporal_imputation.py'),'exists':(repo/'experiments/run_spatiotemporal_imputation.py').exists(),'formal_protocol':'official ImputeFormer architecture reconstructs history only; observed values protected; completed history enters single Backbone-v1.0.10 frozen PatchSTG reference checkpoint'}
     def prepare_bridge(self):
         return {'cache':str(self.ctx.cache_root),'runner':'baseline/runners/imputeformer_runner.py','protect_observed_values':True,'frozen_backbone_json':str(self.ctx.frozen_backbone_json),'checkpoint_selection':'history-imputation Val only'}
     def run_command(self,phase):

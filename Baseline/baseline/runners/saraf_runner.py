@@ -229,7 +229,7 @@ def main():
     summary=save_val_outputs(cfg,cache,run_dir,pred_raw,'SARAF',seed,args.stage,{
         'best_epoch':int(best_epoch),'best_val_MSE_norm':float(best),'params':int(nparams),'wall_seconds':float(time.time()-t0),
         'official_architecture':'vendor/SARAF/models/SARAF.py::Model','official_retrieval':'vendor/SARAF/layers/Retrieval.py::RetrievalTool',
-        'time_feature_source':tsrc,'frequency_override':'5min=>288_steps_per_day','retrieval':retrieval_info,
+        'saraf_time_mark_source':tsrc,'frequency_override':'5min=>288_steps_per_day','retrieval':retrieval_info,
         'retrieval_memory_split':'train','retrieval_memory_signal':'full_train_history','query_signal':'incomplete_history',
         'train_overlap_mask':'Protocol window_start interval exclusion','checkpoint_selection':'val_only','test_access':False,
     })

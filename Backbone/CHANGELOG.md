@@ -1,3 +1,10 @@
+# v1.0.10 maintenance — Oracle ownership cleanup
+
+- Removed Oracle-specific prediction export/validation/PBS files from `Backbone`.
+- Oracle prediction-contract preparation now belongs to `Oracle_Diagnostic`.
+- Backbone remains responsible only for model training/evaluation, frozen-checkpoint management, adapters, and source-lock validation.
+- No model, checkpoint, cache, Protocol, metric, or training contract changed; project version remains 1.0.10.
+
 # v1.0.10 — Formal train → automatic Core-5 evaluation
 
 - GADI `pbs/run_patchstg.pbs` now runs s20/s40/s60/s90 checkpoint evaluation immediately after a successful formal training run.
@@ -84,3 +91,15 @@
 - Standard frozen evaluation summaries now report the same scenario metrics and aggregate them across formal seeds.
 - Added `pbs/run_checkpoint_evaluations.pbs` for one GADI job covering s20/s40/s60/s90 with one combined live log and final tables.
 - `submit_checkpoint_evaluations.sh` now defaults to the combined GADI job; set `PARALLEL=1` for four independent jobs.
+
+## Oracle prediction export utility (2026-09-26)
+- Added `scripts/export_oracle_predictions.py` for Core-5 s20/s40/s60/s90 evaluation prediction contracts plus Train-only memory predictions.
+- Added strict export validator and a timestamped Gadi PBS wrapper.
+- Export follows the same current-cache/current-PatchSTG-layout policy as `evaluate_checkpoint.py`.
+- No model, training, Protocol, cache, metric, or checkpoint contract was changed; project version remains 1.0.10.
+
+### 1.0.10 Oracle export source-lock compatibility fix
+- Fixed `scripts/verify_official_sources.py` to use the current `source_lock.py verify --config ...` CLI.
+- Updated `scripts/setup_official_models.sh` and `scripts/strip_vendor_git.sh` to remove obsolete `verify-one`, `--root`, and `--sources` arguments.
+- Preserved the current PatchSTG-only immutable source lock contract and all training/evaluation/checkpoint semantics.
+- No model, metric, Protocol, ExperimentCommon cache, or frozen checkpoint definition was changed.

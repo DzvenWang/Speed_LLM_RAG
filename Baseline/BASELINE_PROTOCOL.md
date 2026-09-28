@@ -1,37 +1,34 @@
-# Baseline Protocol v1.0.0
+# Baseline Protocol v1.1.0 — Core-5
 
-Baseline v1.0.0 is a clean-slate consumer of the frozen Shared Experiment Contract and the frozen PatchSTG backbone reference.
+Baseline v1.1.0 is a clean consumer of Protocol v2.1.0, ExperimentCommon v1.2.0 and the frozen Backbone v1.0.10 PatchSTG reference.
 
-## Primary comparison
+## Main sensing families
 
-Primary methods are exactly:
+1. `entry_random`
+2. `sensor_outage`
+3. `temporal_outage`
+4. `regional_outage`
+5. `directional_outage`
 
-`ImputeFormer, LRTC-TMCP, GinAR, RAFT, RAST, SARAF, ReMFT`.
+The two predictive outage families are not part of the main Baseline Train/Val/Test protocol.
 
-All use the same TraffiDent Net-06 split, H=12, P=12, severity=0.4, frozen masks, metrics and prediction contract. Retrieval methods use Train-only memory. Test data are not available for checkpoint selection.
+## Train / validation
 
-## No historical-result compatibility
+- Protocol: `protocol_core5_s40`
+- Severity: 40%
+- Development train: 12,000 = 2,400/family
+- Development val: 5,000 = 1,000/family
+- Formal train: 50,000 = 10,000/family
+- Formal val: 5,000 = 1,000/family
+- Checkpoint/model selection is validation-only.
 
-Old Baseline experiment artifacts are not accepted. Formal selection requires:
+## Evaluation
 
-- current `code_project_version == 1.0.0`;
-- exact shared run identity;
-- `status == COMPLETE`;
-- `selection_valid == true`;
-- the frozen PatchSTG checkpoint/seed when the method depends on PatchSTG.
+After Formal selection and protocol freeze, each selected model is evaluated on the paired frozen caches:
 
-## Reconstruction baselines
+- `protocol_core5_s20`
+- `protocol_core5_s40`
+- `protocol_core5_s60`
+- `protocol_core5_s90`
 
-ImputeFormer and LRTC-TMCP forecast through the same frozen PatchSTG reference. Reconstruction cannot access forecast-horizon observations. LRTC-TMCP is additionally restricted to query-local H12 input in the main table.
-
-## GinAR validity
-
-Formal validation divergence is a hard invalidation event, not early stopping. No selectable artifact is written after divergence. A short stability probe on the full Formal training population is required before launching Formal GinAR.
-
-## ReMFT validity
-
-The frozen BERT runtime must match the local pretrained checkpoint in hidden size, head count and encoder depth. Runtime-only randomly initialized layers are removed before training; any remaining mismatch aborts the run.
-
-## Secondary methods
-
-SPRINT, SLPF, MoGERNN, LEAF, LEAF-Qwen1.5B and RAST-PatchSTG remain implemented but are reported only as secondary or controlled experiments.
+Each severity contains 5,000 queries = 1,000/family. One evaluation PBS job per method/seed runs all four severities and writes severity-level and scenario-level summary CSVs.
