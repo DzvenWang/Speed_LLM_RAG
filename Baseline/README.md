@@ -49,7 +49,7 @@ The Baseline contract no longer requires `selected_model=PatchSTG`. `FROZEN_BACK
 ## Timestamped smoke logs (v1.3.3)
 Every line emitted by the primary smoke driver and every captured child-process stdout/stderr line is prefixed with `[YYYY-MM-DD HH:MM:SS]`. This applies to both independent and Frozen-Backbone-dependent aggregate smoke logs.
 
-## Runtime compatibility fixes (v1.3.5)
+## Runtime compatibility fixes (v1.3.6)
 
 - ReMFT resolves its local BERT checkpoint in this order: `REMFT_BERT_PATH`, project-level `model_cache/bert-base-uncased`, then legacy `vendor/ReMFT/LLM/BERT`.
 - ReMFT preflight and runner use the same resolver; no duplicate BERT copy is required.

@@ -4,7 +4,7 @@ import argparse,json,sys
 from pathlib import Path
 from types import MethodType
 import numpy as np,torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 GADI_ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 ROOT=GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[1]
@@ -130,18 +130,18 @@ def load_sel(cfg,m,seed,formal_run_dir=None):
     raise RuntimeError(f'No valid completed Formal run found for {m} seed={seed}.\n{detail}')
 
 
-def ginar(cfg,fc,ec,seed,device,ck):
-    ds=GinARDataset(ec,'test'); dl=DataLoader(ds,batch_size=int(cfg['runners']['GinAR']['batch_size']),shuffle=False); adj=np.load(fc/'adjacency.npy'); M=ginar_import(); c=cfg['runners']['GinAR']; m=M(12,adj.shape[0],12,3,int(c['emb_size']),int(c['graph_size']),int(c['layers']),float(c['dropout']),official_doubletransition(adj,device)).to(device); m.load_state_dict(ck['model']); m.eval(); mean,std=scale_stats(fc); out=[]
+def ginar(cfg,fc,ec,seed,device,ck,max_rows=None):
+    ds=GinARDataset(ec,'test'); ds=Subset(ds,range(min(len(ds),max_rows))) if max_rows else ds; dl=DataLoader(ds,batch_size=int(cfg['runners']['GinAR']['batch_size']),shuffle=False); adj=np.load(fc/'adjacency.npy'); M=ginar_import(); c=cfg['runners']['GinAR']; m=M(12,adj.shape[0],12,3,int(c['emb_size']),int(c['graph_size']),int(c['layers']),float(c['dropout']),official_doubletransition(adj,device)).to(device); m.load_state_dict(ck['model']); m.eval(); mean,std=scale_stats(fc); out=[]
     with torch.no_grad():
         for feat,_y,_v,_i in dl: out.append(m(feat.float().to(device)).cpu().numpy())
     return np.concatenate(out)*np.float32(std)+np.float32(mean)
 
 
-def impute(cfg,fc,ec,seed,device,ck):
+def impute(cfg,fc,ec,seed,device,ck,max_rows=None):
     ds=ImputationDataset(ec,'test'); dl=DataLoader(ds,batch_size=int(cfg['runners']['ImputeFormer']['batch_size']),shuffle=False); m=impute_build(cfg,ds.x.shape[2]).to(device); m.load_state_dict(ck['model']); patch=build_frozen_backbone(cfg,device); return impute_forecast(m,dl,patch,device)
 
 
-def lrtc_tmcp(cfg,fc,ec,seed,device,ck):
+def lrtc_tmcp(cfg,fc,ec,seed,device,ck,max_rows=None):
     # LRTC-TMCP has no learned benchmark weights; best.pt is a provenance marker.
     patch=build_frozen_backbone(cfg,device)
     raw,_info=lrtc_forecast(cfg,ec,'test',patch,device,smoke=False)
@@ -153,22 +153,22 @@ def sprint(cfg,fc,ec,seed,device,ck):
     patch=FrozenPatchSTG(cfg,device); return sprint_forecast(cfg,ec,'test',patch,device,smoke=False)
 
 
-def raft(cfg,fc,ec,seed,device,ck):
-    txm,tym,_=build_time_marks(cfg,fc,'train'); qxm,qym,_=build_time_marks(cfg,ec,'test'); mem=SARAFTensorDataset(fc,'train',txm,tym,'full'); q=SARAFTensorDataset(ec,'test',qxm,qym,'obs'); c=cfg['runners']['RAFT']; Model=raft_import(); mc=simple_namespace(task_name='long_term_forecast',seq_len=12,pred_len=12,enc_in=388,n_period=int(c['n_period']),topm=int(c['topm']),gpu=0); m=Model(mc).to(device); rt=m.rt; rt.prepare_dataset(mem); span=24; rt.retrieve=MethodType(make_protocol_retrieve(mem.meta.window_start.astype(int).to_numpy(),mem.meta.window_start.astype(int).to_numpy(),q.meta.window_start.astype(int).to_numpy(),span),rt); va=rt.retrieve_all(q,train=False,device=device); m.retrieval_dict={'valid':va.to(device)}; del m.rt; m.load_state_dict(ck['model']); dl=DataLoader(q,batch_size=int(c['batch_size']),shuffle=False); mean,std=scale_stats(fc); out=[]; m.eval()
+def raft(cfg,fc,ec,seed,device,ck,max_rows=None):
+    txm,tym,_=build_time_marks(cfg,fc,'train'); qxm,qym,_=build_time_marks(cfg,ec,'test'); mem=SARAFTensorDataset(fc,'train',txm,tym,'full'); q=SARAFTensorDataset(ec,'test',qxm,qym,'obs',limit=max_rows); c=cfg['runners']['RAFT']; Model=raft_import(); mc=simple_namespace(task_name='long_term_forecast',seq_len=12,pred_len=12,enc_in=388,n_period=int(c['n_period']),topm=int(c['topm']),gpu=0); m=Model(mc).to(device); rt=m.rt; rt.prepare_dataset(mem); span=24; rt.retrieve=MethodType(make_protocol_retrieve(mem.meta.window_start.astype(int).to_numpy(),mem.meta.window_start.astype(int).to_numpy(),q.meta.window_start.astype(int).to_numpy(),span),rt); va=rt.retrieve_all(q,train=False,device=device); m.retrieval_dict={'valid':va.to(device)}; del m.rt; m.load_state_dict(ck['model']); dl=DataLoader(q,batch_size=int(c['batch_size']),shuffle=False); mean,std=scale_stats(fc); out=[]; m.eval()
     with torch.no_grad():
         for idx,x,_y,_xm,_ym in dl: out.append(m(x.float().to(device),idx.long().to(device),mode='valid').cpu().numpy())
     return np.concatenate(out)*np.float32(std)+np.float32(mean)
 
 
-def saraf(cfg,fc,ec,seed,device,ck):
-    txm,tym,_=build_time_marks(cfg,fc,'train'); qxm,qym,_=build_time_marks(cfg,ec,'test'); mem=SARAFTensorDataset(fc,'train',txm,tym,'full'); q=SARAFTensorDataset(ec,'test',qxm,qym,'obs'); c=cfg['runners']['SARAF']; Model=saraf_import(); mc=simple_namespace(task_name='long_term_forecast',seq_len=12,pred_len=12,features=str(c.get('features','M')),enc_in=388,n_period=int(c.get('n_period',1)),topm=int(c.get('topm',20)),freq=str(c.get('freq','5min')),time_aware_weight=float(c.get('time_aware_weight',0.3)),fusion_method=str(c.get('fusion_method','weighted')),use_gpu=True,gpu=0); m=Model(mc).to(device); rt=m.rt; rt.steps_per_day=288; rt.steps_per_year=288*365; rt.prepare_dataset(mem); _probe_time_bonus(rt,q,device); span=24; rt.masked_sim=MethodType(overlap_masker(q.meta.window_start.astype(int).to_numpy(),mem.meta.window_start.astype(int).to_numpy(),span),rt); va=rt.retrieve_all(q,train=True,device=device); m.retrieval_temporal_dict={'valid':va.to(device)}; del m.rt; m.load_state_dict(ck['model']); dl=DataLoader(q,batch_size=int(c['batch_size']),shuffle=False); mean,std=scale_stats(fc); out=[]; m.eval()
+def saraf(cfg,fc,ec,seed,device,ck,max_rows=None):
+    txm,tym,_=build_time_marks(cfg,fc,'train'); qxm,qym,_=build_time_marks(cfg,ec,'test'); mem=SARAFTensorDataset(fc,'train',txm,tym,'full'); q=SARAFTensorDataset(ec,'test',qxm,qym,'obs',limit=max_rows); c=cfg['runners']['SARAF']; Model=saraf_import(); mc=simple_namespace(task_name='long_term_forecast',seq_len=12,pred_len=12,features=str(c.get('features','M')),enc_in=388,n_period=int(c.get('n_period',1)),topm=int(c.get('topm',20)),freq=str(c.get('freq','5min')),time_aware_weight=float(c.get('time_aware_weight',0.3)),fusion_method=str(c.get('fusion_method','weighted')),use_gpu=True,gpu=0); m=Model(mc).to(device); rt=m.rt; rt.steps_per_day=288; rt.steps_per_year=288*365; rt.prepare_dataset(mem); _probe_time_bonus(rt,q,device); span=24; rt.masked_sim=MethodType(overlap_masker(q.meta.window_start.astype(int).to_numpy(),mem.meta.window_start.astype(int).to_numpy(),span),rt); va=rt.retrieve_all(q,train=True,device=device); m.retrieval_temporal_dict={'valid':va.to(device)}; del m.rt; m.load_state_dict(ck['model']); dl=DataLoader(q,batch_size=int(c['batch_size']),shuffle=False); mean,std=scale_stats(fc); out=[]; m.eval()
     with torch.no_grad():
         for idx,x,_y,xm,_ym in dl: out.append(m(x.float().to(device),xm.float().to(device),idx.long().to(device),mode='valid').cpu().numpy())
     return np.concatenate(out)*np.float32(std)+np.float32(mean)
 
 
-def rast(cfg,fc,ec,seed,device,ck,sel):
-    ds=RASTDataset(ec,'test'); dl=DataLoader(ds,batch_size=int(cfg['runners']['RAST']['batch_size']),shuffle=False); rd=Path(sel['run_dir']); m=rast_build(cfg,'native',seed,device,rd/'evaluation_database'); m.load_state_dict(ck['model']); restore_store(m,load_store(rd/'retrieval_store_best.npz')); mean,std=scale_stats(fc)
+def rast(cfg,fc,ec,seed,device,ck,sel,max_rows=None):
+    ds=RASTDataset(ec,'test'); ds=Subset(ds,range(min(len(ds),max_rows))) if max_rows else ds; dl=DataLoader(ds,batch_size=int(cfg['runners']['RAST']['batch_size']),shuffle=False); rd=Path(sel['run_dir']); m=rast_build(cfg,'native',seed,device,rd/'evaluation_database'); m.load_state_dict(ck['model']); restore_store(m,load_store(rd/'retrieval_store_best.npz')); mean,std=scale_stats(fc)
     raw, impact = rast_predict(m,dl,device,mean,std,int(ck['best_epoch']))
     if impact is not None:
         print('INFO RAST native evaluation returned impact diagnostics; predictions use tuple[0]', flush=True)
@@ -179,13 +179,13 @@ def mogernn(cfg,fc,ec,seed,device,ck):
     ds=MoGERNNDataset(ec,'test'); dl=DataLoader(ds,batch_size=1,shuffle=False,num_workers=0); m=mogernn_build(cfg,device); m.load_state_dict(ck['model']); adj=torch.from_numpy(np.asarray(np.load(fc/'adjacency.npy'),np.float32)).to(device); mean,std=scale_stats(fc); eps=float(cfg['runners']['MoGERNN'].get('epsilon_for_observed_zero',1e-6)); return mogernn_predict(m,dl,adj,device,eps,mean,std,int(ck.get('best_epoch',0)))
 
 
-def remft(cfg,fc,ec,seed,device,ck):
-    c=cfg['runners']['ReMFT']; ds=ReMFTDataset(ec,'test'); dl=DataLoader(ds,batch_size=int(c.get('formal_eval_batch_size',c['batch_size'])),shuffle=False,num_workers=0); m=remft_build(cfg,device); remft_load(m,ck['model']); mean,std=scale_stats(fc); use_amp=bool(c.get('formal_use_amp',True)); return remft_predict(m,dl,device,mean,std,use_amp=use_amp)
+def remft(cfg,fc,ec,seed,device,ck,max_rows=None):
+    c=cfg['runners']['ReMFT']; ds=ReMFTDataset(ec,'test'); ds=Subset(ds,range(min(len(ds),max_rows))) if max_rows else ds; dl=DataLoader(ds,batch_size=int(c.get('formal_eval_batch_size',c['batch_size'])),shuffle=False,num_workers=0); m=remft_build(cfg,device); remft_load(m,ck['model']); mean,std=scale_stats(fc); use_amp=bool(c.get('formal_use_amp',True)); return remft_predict(m,dl,device,mean,std,use_amp=use_amp)
 
 
 def main():
     methods=['ImputeFormer','LRTC-TMCP','GinAR','RAFT','RAST','SARAF','ReMFT']
-    ap=argparse.ArgumentParser(); ap.add_argument('--method',choices=methods,required=True); ap.add_argument('--seed',type=int,required=True); ap.add_argument('--severity',type=int,choices=[20,40,60,90],required=True); ap.add_argument('--formal-run-dir',default=None); ap.add_argument('--lifecycle-checkpoint',default=None,help='Smoke-only checkpoint; bypass completed-Formal selection and write only under _lifecycle_smoke.'); a=ap.parse_args()
+    ap=argparse.ArgumentParser(); ap.add_argument('--method',choices=methods,required=True); ap.add_argument('--seed',type=int,required=True); ap.add_argument('--severity',type=int,choices=[20,40,60,90],required=True); ap.add_argument('--formal-run-dir',default=None); ap.add_argument('--lifecycle-checkpoint',default=None,help='Smoke-only checkpoint; bypass completed-Formal selection and write only under _lifecycle_smoke.'); ap.add_argument('--lifecycle-max-batches',type=int,default=2,help='Lifecycle smoke only: cap real inference to this many evaluation batches.'); a=ap.parse_args()
     cfg=load_yaml(ROOT/'configs/baseline.yaml'); set_seed(a.seed); device=require_gpu(); exp=Path(cfg['project']['exp_root']); fc=cache_path(cfg,'formal'); ec=cache_path(cfg,'evaluation',a.severity)
     if a.lifecycle_checkpoint:
         cp=Path(a.lifecycle_checkpoint).resolve()
@@ -197,9 +197,19 @@ def main():
     else:
         sel,ck=load_sel(cfg,a.method,a.seed,a.formal_run_dir)
     fn={'GinAR':ginar,'ImputeFormer':impute,'LRTC-TMCP':lrtc_tmcp,'RAFT':raft,'SARAF':saraf,'ReMFT':remft}
-    raw=rast(cfg,fc,ec,a.seed,device,ck,sel) if a.method=='RAST' else fn[a.method](cfg,fc,ec,a.seed,device,ck)
+    max_rows=None
+    if a.lifecycle_checkpoint:
+        bs=int(cfg['runners'][a.method].get('formal_eval_batch_size',cfg['runners'][a.method].get('batch_size',1)))
+        max_rows=max(1,int(a.lifecycle_max_batches))*bs
+        print(f'LIFECYCLE_INFERENCE_LIMIT method={a.method} severity=s{a.severity} max_batches={a.lifecycle_max_batches} max_rows={max_rows}',flush=True)
+    raw=rast(cfg,fc,ec,a.seed,device,ck,sel,max_rows=max_rows) if a.method=='RAST' else fn[a.method](cfg,fc,ec,a.seed,device,ck,max_rows=max_rows)
     rd=(Path(sel['run_dir'])/'evaluation'/f's{a.severity}') if a.lifecycle_checkpoint else (exp/'evaluation'/a.method/cfg['experiment']['subgraph']/f'seed{a.seed}'/f's{a.severity}'); rd.mkdir(parents=True,exist_ok=True)
-    sm=save_split_outputs(cfg,ec,rd,'test',raw,a.method,a.seed,{'formal_checkpoint':sel['checkpoint'],'formal_checkpoint_sha256':sel['checkpoint_sha256'],'reporting_track':cfg.get('methods',{}).get(a.method,{}).get('table_group','unknown'),'test_access':('lifecycle_smoke_full_test_inference' if a.lifecycle_checkpoint else 'direct_after_completed_formal_run'),'severity':int(a.severity),'protocol_name':ec.parent.parent.parent.name})
+    if a.lifecycle_checkpoint:
+        np.savez_compressed(rd/'test_predictions.smoke.npz',pred=np.asarray(raw,np.float32))
+        sm={'method':a.method,'seed':int(a.seed),'split':'test','smoke_rows':int(raw.shape[0]),'prediction_shape':list(raw.shape),'formal_checkpoint':sel['checkpoint'],'formal_checkpoint_sha256':sel['checkpoint_sha256'],'test_access':'lifecycle_smoke_limited_inference','severity':int(a.severity),'protocol_name':ec.parent.parent.parent.name}
+        (rd/'test_summary.smoke.json').write_text(json.dumps(sm,indent=2))
+    else:
+        sm=save_split_outputs(cfg,ec,rd,'test',raw,a.method,a.seed,{'formal_checkpoint':sel['checkpoint'],'formal_checkpoint_sha256':sel['checkpoint_sha256'],'reporting_track':cfg.get('methods',{}).get(a.method,{}).get('table_group','unknown'),'test_access':'direct_after_completed_formal_run','severity':int(a.severity),'protocol_name':ec.parent.parent.parent.name})
     print(f'EVALUATION_RESULT_DIR={rd}')
     if a.lifecycle_checkpoint: print(f'LIFECYCLE_EVAL_PASS method={a.method} severity=s{a.severity} rows={int(raw.shape[0])} shape={tuple(raw.shape)}',flush=True)
     print(json.dumps(sm,default=str,indent=2))

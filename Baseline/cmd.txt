@@ -1,0 +1,20 @@
+cd C:\Users\zwan0652\ResearchProgram\Speed_LLM_RAG
+conda activate TFP
+
+$env:SPEED_LLM_RAG_ROOT = (Get-Location).Path
+$env:PYTHONUNBUFFERED = "1"
+
+
+
+python -u Baseline\scripts\smoke_primary_independent.py `
+  --continue-on-error
+
+python -u Baseline\scripts\smoke_primary_frozen_backbone.py `
+  --continue-on-error
+
+
+
+python -u Baseline\scripts\smoke_primary_independent_lifecycle.py `
+  --continue-on-error
+
+

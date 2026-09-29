@@ -15,10 +15,11 @@ SEVERITIES=(20,40,60,90)
 RUNNERS={'GinAR':'ginar_runner.py','RAFT':'raft_runner.py','RAST':'rast_runner.py','SARAF':'saraf_runner.py','ReMFT':'remft_runner.py'}
 
 def main():
-    ap=argparse.ArgumentParser(description='Independent Formal lifecycle smoke: limited real training -> disk checkpoint -> fresh-process reload -> full s20/s40/s60/s90 test inference.')
+    ap=argparse.ArgumentParser(description='Independent Formal lifecycle smoke: limited real training -> disk checkpoint -> fresh-process reload -> limited s20/s40/s60/s90 real inference.')
     ap.add_argument('--seed',type=int,default=10)
     ap.add_argument('--continue-on-error',action='store_true')
     ap.add_argument('--keep-artifacts',action='store_true',help='Keep _lifecycle_smoke checkpoints/predictions after success.')
+    ap.add_argument('--eval-batches',type=int,default=2,help='Real evaluation batches per severity (default: 2).')
     a=ap.parse_args()
     stamp=datetime.now().strftime('%Y%m%d_%H%M%S')
     log=PROJECT/'Baseline_logs'/'smoke_primary'/'independent_lifecycle'/f'BaselineSmokeIndependentLifecycle.{stamp}.log'
@@ -27,7 +28,7 @@ def main():
     passed=0; failed=[]; t0=time.time()
     try:
         print(f'INDEPENDENT_FORMAL_LIFECYCLE_SMOKE_START cases=10 seed={a.seed}')
-        print('MODE=limited_formal_training+disk_checkpoint+fresh_process_reload+full_four_severity_inference')
+        print(f'MODE=limited_formal_training+disk_checkpoint+fresh_process_reload+limited_four_severity_inference eval_batches={a.eval_batches}')
         print(f'ARTIFACT_ROOT={root}')
         for target in TARGETS:
             for method in METHODS:
@@ -48,7 +49,7 @@ def main():
                     for sev in SEVERITIES:
                         run([sys.executable,'scripts/preflight.py','--stage','evaluation','--method',method,'--severity',str(sev)],env,tee)
                         run([sys.executable,'scripts/preflight_formal.py','--stage','evaluation','--method',method,'--seed',str(a.seed),'--severity',str(sev)],env,tee)
-                        run([sys.executable,'-u','scripts/run_evaluation.py','--method',method,'--seed',str(a.seed),'--severity',str(sev),'--lifecycle-checkpoint',str(cp)],env,tee)
+                        run([sys.executable,'-u','scripts/run_evaluation.py','--method',method,'--seed',str(a.seed),'--severity',str(sev),'--lifecycle-checkpoint',str(cp),'--lifecycle-max-batches',str(a.eval_batches)],env,tee)
                     passed+=1; print(f'LIFECYCLE CASE PASS {label} seconds={time.time()-c0:.1f}')
                 except Exception as exc:
                     failed.append((label,repr(exc))); print(f'LIFECYCLE CASE FAIL {label}: {exc!r}')

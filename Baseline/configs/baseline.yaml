@@ -1,4 +1,4 @@
-version: 1.3.5
+version: 1.3.6
 project:
   root: ${SPEED_LLM_RAG_ROOT}
   baseline_root: ${SPEED_LLM_RAG_ROOT}/Baseline
