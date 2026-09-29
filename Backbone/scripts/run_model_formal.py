@@ -3,10 +3,13 @@ from pathlib import Path
 import argparse, datetime, os, sys
 ROOT=Path(__file__).resolve().parents[1]; REPO=ROOT.parent
 sys.path[:0]=[str(ROOT),str(REPO/'Base_SupportBench')]
-from backbone.model_runner import MODELS, train_model, smoke_model
+from backbone.model_runner import MODELS as GENERIC_MODELS, train_model, smoke_model
+from backbone.runner import train_patchstg, smoke_patchstg
 from backbone.shared_cache import cache_path, validate_shared_cache
 from backbone.utils import load_yaml, log
 from supportbench.dataset import SupportBench
+
+MODELS = (*GENERIC_MODELS[:4], 'PatchSTG', *GENERIC_MODELS[4:])
 
 def main():
     ap=argparse.ArgumentParser(description='User-selected single-model Formal runner; no auto-selection and no freeze.')
@@ -27,10 +30,16 @@ def main():
     run=Path(cfg['project']['exp_root'])/a.model/cfg['experiment']['subgraph']/stage_dir/f'{stamp}_seed{a.seed}'
     log(f'USER_SELECTED_FORMAL model={a.model} target={target} seed={a.seed} smoke={a.smoke} run_dir={run} cache_dir={cache}')
     if a.smoke:
-        smoke_model(cfg,recipes,a.model,cache,run,ROOT/'vendor',bench,float(st['mean']),float(st['std']),a.seed,a.smoke_train_batches,a.smoke_val_batches)
+        if a.model == 'PatchSTG':
+            smoke_patchstg(cfg,cache,run,ROOT/'vendor'/'PatchSTG',bench.adj,bench.nodes,float(st['mean']),float(st['std']),a.seed,'formal',a.smoke_train_batches,a.smoke_val_batches)
+        else:
+            smoke_model(cfg,recipes,a.model,cache,run,ROOT/'vendor',bench,float(st['mean']),float(st['std']),a.seed,a.smoke_train_batches,a.smoke_val_batches)
         print(f'TRAINING_SMOKE_PASS model={a.model} target={target} stage=formal seed={a.seed}',flush=True)
         return
-    train_model(cfg,recipes,a.model,cache,run,ROOT/'vendor',bench,float(st['mean']),float(st['std']),a.seed)
+    if a.model == 'PatchSTG':
+        train_patchstg(cfg,cache,run,ROOT/'vendor'/'PatchSTG',bench.adj,bench.nodes,float(st['mean']),float(st['std']),a.seed,'formal')
+    else:
+        train_model(cfg,recipes,a.model,cache,run,ROOT/'vendor',bench,float(st['mean']),float(st['std']),a.seed)
     ck=run/'best.pt'
     if not ck.exists(): raise RuntimeError(f'best.pt missing after Formal training: {ck}')
     print(f'BEST_CHECKPOINT={ck}',flush=True); print(f'FORMAL_TRAINING_PASS model={a.model} target={target} seed={a.seed}',flush=True)

@@ -69,10 +69,7 @@ def main():
         env['PYTHONUNBUFFERED'] = '1'
         env.setdefault('SPEED_LLM_RAG_ROOT', str(ROOT.parent))
 
-        if model == 'PatchSTG':
-            train_cmd = [sys.executable,'-u',str(ROOT/'scripts/run_experiment.py'),'--target',target,'--stage','formal','--seed',str(a.seed),'--run-stamp',stamp,'--smoke','--smoke-train-batches',str(a.train_batches),'--smoke-val-batches',str(a.val_batches)]
-        else:
-            train_cmd = [sys.executable,'-u',str(ROOT/'scripts/run_model_formal.py'),'--model',model,'--target',target,'--seed',str(a.seed),'--run-stamp',stamp,'--smoke','--smoke-train-batches',str(a.train_batches),'--smoke-val-batches',str(a.val_batches)]
+        train_cmd = [sys.executable,'-u',str(ROOT/'scripts/run_model_formal.py'),'--model',model,'--target',target,'--seed',str(a.seed),'--run-stamp',stamp,'--smoke','--smoke-train-batches',str(a.train_batches),'--smoke-val-batches',str(a.val_batches)]
 
         rc = run_streamed(train_cmd, cwd=ROOT, env=env)
         if rc != 0:

@@ -1,3 +1,10 @@
+## 1.1.6
+- Unified PatchSTG Formal submission with the other five Backbone models through `scripts/run_model_formal.py` and `pbs/run_model_formal.pbs`.
+- PatchSTG keeps its dedicated, previously validated training/smoke implementation; the unified Formal entry point dispatches to it internally.
+- `scripts/smoke_all_formal.py` now validates all six models through the same `run_model_formal.py` user-facing Formal entry point.
+- `pbs/run_model_formal.pbs` now accepts `MODEL=PatchSTG`, so all 12 model-target Formal jobs use one PBS script.
+- Formal protocol remains unchanged: seed 10, s40 training/validation, automatic s20/s40/s60/s90 checkpoint evaluation, explicit-only freeze.
+
 ## 1.1.5
 - `scripts/smoke_all_formal.py` now automatically writes a complete controller + child-process transcript to `Backbone_logs/smoke_all_formal/BackboneSmokeAllFormal.<timestamp>.log` while continuing to stream the same output to the terminal.
 - No change to model, Formal training, checkpoint evaluation, cache, metric, or experiment-output semantics.

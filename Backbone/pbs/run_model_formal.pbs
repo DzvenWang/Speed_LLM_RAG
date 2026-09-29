@@ -9,10 +9,10 @@
 #PBS -N BackboneFormal
 #PBS -j oe
 set -euo pipefail
-: "${MODEL:?MODEL=STAEformer|HimNet|BigST|STDN|STLAformer}"
+: "${MODEL:?MODEL=STAEformer|HimNet|BigST|STDN|PatchSTG|STLAformer}"
 : "${TARGET:?TARGET=speed|flow}"
 SEED=${SEED:-10}
-case "$MODEL" in STAEformer|HimNet|BigST|STDN|STLAformer) ;; *) echo "ERROR unsupported MODEL=$MODEL"; exit 2;; esac
+case "$MODEL" in STAEformer|HimNet|BigST|STDN|PatchSTG|STLAformer) ;; *) echo "ERROR unsupported MODEL=$MODEL"; exit 2;; esac
 case "$TARGET" in speed|flow) ;; *) echo "ERROR TARGET=$TARGET"; exit 2;; esac
 [[ "$SEED" == "10" ]] || { echo "ERROR Formal seed fixed to 10"; exit 2; }
 ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
