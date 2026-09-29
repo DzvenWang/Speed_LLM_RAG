@@ -8,7 +8,7 @@ ROOT = GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from baseline.utils import load_yaml
 from baseline.shared_cache import cache_path
-from baseline.backbones.frozen_registry import load_frozen_patchstg_registry
+from baseline.backbones.frozen_registry import load_frozen_backbone_registry
 from baseline.compat.imputeformer_tsl_shim import install_imputeformer_tsl_shim
 
 ap = argparse.ArgumentParser()
@@ -26,14 +26,14 @@ cmd=[cfg['project']['python'], str(ROOT / 'scripts/validate_cache.py'), '--stage
 if a.stage=='evaluation': cmd += ['--severity', str(a.severity)]
 subprocess.check_call(cmd)
 
-need_patch = a.method in ('ImputeFormer', 'LRTC-TMCP', 'SPRINT', 'RAFT-PatchSTG', 'SARAF-PatchSTG', 'RAST-PatchSTG')
-if need_patch:
+need_frozen = a.method in ('ImputeFormer', 'LRTC-TMCP', 'SPRINT', 'RAFT-PatchSTG', 'SARAF-PatchSTG', 'RAST-PatchSTG')
+if need_frozen:
     formal_manifest = cache_path(cfg, 'formal') / 'cache_manifest.json'
     if not formal_manifest.exists():
-        raise SystemExit('Missing Baseline formal cache; frozen PatchSTG compatibility cannot be checked.')
+        raise SystemExit('Missing Baseline formal cache; frozen Backbone compatibility cannot be checked.')
     cm = json.loads(formal_manifest.read_text())
     contract = cfg.get('frozen_backbone_contract', {})
-    load_frozen_patchstg_registry(
+    load_frozen_backbone_registry(
         cfg['project']['frozen_backbone_json'],
         expected_protocol_hash=cm['protocol_stage_hash'],
         expected_time_feature_revision=cm['time_feature_revision'],

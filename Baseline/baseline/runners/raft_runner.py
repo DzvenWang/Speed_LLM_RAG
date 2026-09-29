@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import copy
 import json
 import sys
@@ -107,6 +108,19 @@ def predict(model,dl,device,mean,std):
     p=np.concatenate(out,axis=0).astype(np.float32);return p*np.float32(std)+np.float32(mean)
 
 
+def _save_lifecycle_smoke_checkpoint(payload, retrieval_store=None):
+    out = os.environ.get("BASELINE_LIFECYCLE_CHECKPOINT")
+    if not out:
+        return None
+    path = Path(out)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(payload, path)
+    if retrieval_store is not None:
+        save_store(path.with_name("retrieval_store_best.npz"), retrieval_store)
+    print(f"LIFECYCLE_CHECKPOINT_SAVE_PASS path={path}", flush=True)
+    return path
+
+
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--stage',default='development',choices=['development','formal']);ap.add_argument('--seed',type=int,default=None);ap.add_argument('--smoke',action='store_true');args=ap.parse_args()
     cfg,cache=validate_stage(args.stage,'RAFT');rcfg=cfg['runners']['RAFT'];seed=int(cfg['experiment']['seed'] if args.seed is None else args.seed);set_seed(seed);device=require_gpu()
@@ -121,7 +135,7 @@ def main():
     ri=precompute(model,memory,train,val,cfg,device);batch=int(rcfg['batch_size']);trl=mkloader(train,batch,True);val=mkloader(val,batch,False);opt=torch.optim.Adam(model.parameters(),lr=float(rcfg['learning_rate']))
     if args.smoke:
         idx,x,y,_xm,_ym=next(iter(trl));idx=idx.long().to(device);x=x.float().to(device);y=y.float().to(device);vv=torch.from_numpy(np.asarray(trl.dataset.valid[idx.cpu().numpy()],np.uint8)).bool().to(device)
-        opt.zero_grad(set_to_none=True);p=model(x,idx,mode='train');loss=masked_mse(p,y,vv);loss.backward();opt.step();print(f'RAFT GPU SMOKE PASS loss={loss.item():.6f} output={tuple(p.shape)} retrieval={ri}',flush=True);return
+        opt.zero_grad(set_to_none=True);p=model(x,idx,mode='train');loss=masked_mse(p,y,vv);loss.backward();opt.step();print(f'RAFT GPU SMOKE PASS loss={loss.item():.6f} output={tuple(p.shape)} retrieval={ri}',flush=True);_save_lifecycle_smoke_checkpoint({'model': {k:v.detach().cpu() for k,v in model.state_dict().items()}, 'best_epoch':1, 'lifecycle_smoke':True});return
     best=float('inf');state=None;be=0;stale=0;t0=time.time();pat=int(rcfg['patience'])
     for ep in range(1,int(rcfg['max_epochs'])+1):
         et=time.time();tr=run_epoch(model,trl,device,'train',opt);va=run_epoch(model,val,device,'valid',None);print(f'EPOCH {ep:03d} train_MSE_norm={tr:.6f} val_MSE_norm={va:.6f} sec={time.time()-et:.1f}',flush=True)

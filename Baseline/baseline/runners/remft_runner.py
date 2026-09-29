@@ -20,6 +20,8 @@ ROOT = GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from baseline.remft_runtime import bind_remft_bert_env, resolve_remft_bert_path
+
 from baseline.runners.common import (
     make_run_dir,
     masked_mse,
@@ -73,6 +75,11 @@ def load_official_namespace() -> dict:
             if cell.get('cell_type') != 'code':
                 continue
             code = ''.join(cell.get('source', []))
+            bert_dir = bind_remft_bert_env(ROOT)
+            bert_literal = str(bert_dir).replace('\\', '/')
+            # Official ReMFT architecture uses a repo-relative local BERT path.
+            # Redirect only that local checkpoint reference to the resolved shared cache.
+            code = code.replace('./LLM/BERT', bert_literal).replace('LLM/BERT', bert_literal)
             if 'data_file = os.path.join' in code or '# load data' in code:
                 break
             if not code.strip():
@@ -160,7 +167,7 @@ def normalize_bert_depth_to_checkpoint(model: nn.Module) -> dict:
     randomly initialized, frozen layers that have no checkpoint provenance from
     being used by the baseline.
     """
-    bert_dir = ROOT / 'vendor/ReMFT/LLM/BERT'
+    bert_dir = resolve_remft_bert_path(ROOT)
     target_depth = _checkpoint_depth(bert_dir)
     llm = model.llmodel.llm_model
     encoder = getattr(llm, 'encoder', None)
@@ -188,7 +195,7 @@ def normalize_bert_depth_to_checkpoint(model: nn.Module) -> dict:
 
 
 def llm_contract_metadata(model: nn.Module) -> dict:
-    bert_dir = ROOT / 'vendor/ReMFT/LLM/BERT'
+    bert_dir = resolve_remft_bert_path(ROOT)
     local_cfg = json.loads((bert_dir / 'config.json').read_text())
     llm = model.llmodel.llm_model
     runtime_cfg = getattr(llm, 'config', None)
@@ -227,12 +234,8 @@ def llm_contract_metadata(model: nn.Module) -> dict:
 
 def build_model(cfg: dict, device: torch.device):
     repo = ROOT / 'vendor/ReMFT'
-    bert = repo / 'LLM/BERT'
-    if not (bert / 'config.json').exists():
-        raise RuntimeError(
-            'ReMFT requires vendor/ReMFT/LLM/BERT. '
-            'Run scripts/setup_remft_bert.sh with a local BERT checkpoint.'
-        )
+    bert = bind_remft_bert_env(ROOT)
+    print(f'REMFT BERT PATH {bert}', flush=True)
     m = ReMFT12(cfg)
     m._depth_normalization = normalize_bert_depth_to_checkpoint(m)
 
@@ -450,6 +453,19 @@ def predict(model, dl, device, mean, std, use_amp: bool):
     return np.concatenate(out, 0)
 
 
+def _save_lifecycle_smoke_checkpoint(payload, retrieval_store=None):
+    out = os.environ.get("BASELINE_LIFECYCLE_CHECKPOINT")
+    if not out:
+        return None
+    path = Path(out)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(payload, path)
+    if retrieval_store is not None:
+        save_store(path.with_name("retrieval_store_best.npz"), retrieval_store)
+    print(f"LIFECYCLE_CHECKPOINT_SAVE_PASS path={path}", flush=True)
+    return path
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--stage', choices=['development', 'formal'], required=True)
@@ -515,6 +531,7 @@ def main():
             },
             flush=True,
         )
+        _save_lifecycle_smoke_checkpoint({'model': trainable_state_dict(model), 'best_epoch':1, 'checkpoint_format':'trainable_state_only_v1', 'lifecycle_smoke':True})
         return
 
     best = float('inf')

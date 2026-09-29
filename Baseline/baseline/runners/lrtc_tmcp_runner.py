@@ -19,6 +19,7 @@ if not ROOT.exists():
 sys.path.insert(0, str(ROOT))
 
 from baseline.backbones.patchstg_bridge import FrozenPatchSTG
+from baseline.backbones.frozen_backbone import build_frozen_backbone
 from baseline.compat.lrtc_tmcp import recover_batch
 from baseline.lrtc_causal_history import resolve_lrtc_canonical_history_source
 from baseline.runners.common import ImputationDataset, make_run_dir, require_gpu, save_val_outputs, set_seed, validate_stage
@@ -203,7 +204,7 @@ def main():
         raise SystemExit(f'LRTC-TMCP is deterministic; formal seed must be one of {allowed}')
     set_seed(a.seed)
     device = require_gpu()
-    patch = FrozenPatchSTG(cfg, device)
+    patch = build_frozen_backbone(cfg, device)
 
     vendor = ROOT / 'vendor' / 'LRTC-TMCP'
     for rel in ('lrtc-tmcp-demo.ipynb', 'utils.py'):
@@ -223,7 +224,9 @@ def main():
             'historical_days': prov['historical_days'],
             'context_days': prov['context_days'],
             'strict_future_isolation': prov['strict_future_isolation'],
-            'patchstg_checkpoint': str(patch.checkpoint),
+            'frozen_backbone_model': patch.registry.get('selected_model'),
+            'frozen_backbone_reference_seed': patch.reference_seed,
+            'frozen_backbone_checkpoint': str(patch.checkpoint),
         }, flush=True)
         return
 
@@ -240,8 +243,9 @@ def main():
         'tensor_layout': 'nodes_x_causal_days_x_query_slots',
         'historical_days': int(prov['historical_days']),
         'strict_future_isolation': True,
-        'patchstg_reference_seed': patch.reference_seed,
-        'patchstg_checkpoint': str(patch.checkpoint),
+        'frozen_backbone_model': patch.registry.get('selected_model'),
+        'frozen_backbone_reference_seed': patch.reference_seed,
+        'frozen_backbone_checkpoint': str(patch.checkpoint),
     }
     torch.save(marker, rd / 'best.pt')
     (rd / 'lrtc_input_provenance.json').write_text(json.dumps(prov, indent=2, sort_keys=True) + '\n')
@@ -268,8 +272,9 @@ def main():
         'mean_tmcp_seconds_per_batch': float(np.mean([x.elapsed_seconds for x in infos])) if infos else None,
         'tmcp_decomposition': str(cfg['runners']['LRTC-TMCP'].get('decomposition', 'gram_eigh')),
         'active_convergence': bool(cfg['runners']['LRTC-TMCP'].get('active_convergence', True)),
-        'patchstg_reference_seed': patch.reference_seed,
-        'patchstg_checkpoint': str(patch.checkpoint),
+        'frozen_backbone_model': patch.registry.get('selected_model'),
+        'frozen_backbone_reference_seed': patch.reference_seed,
+        'frozen_backbone_checkpoint': str(patch.checkpoint),
         'checkpoint_selection': 'none_deterministic_completion',
         'test_access': False,
     })

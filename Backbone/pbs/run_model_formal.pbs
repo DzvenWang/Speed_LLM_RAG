@@ -19,7 +19,9 @@ ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
 PROJ="$ROOT/Backbone"
 ENVROOT=${TFP_ENV_ROOT:-${CONDA_PREFIX:-}}
 PYTHON="$ENVROOT/bin/python"
+PYTHON3="$ENVROOT/bin/python3"
 [[ -x "$PYTHON" ]] || { echo "ERROR Python not executable: $PYTHON"; exit 3; }
+[[ -x "$PYTHON3" ]] || { echo "ERROR Python3 not executable: $PYTHON3"; exit 3; }
 export SPEED_LLM_RAG_ROOT="$ROOT" TRAFFIDENT_TARGET="$TARGET" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 BACKBONE_PBS_LIVE_LOG=1
 export PYTHONPATH="$PROJ:$ROOT/Base_SupportBench:${PYTHONPATH:-}"
 export PATH="$ENVROOT/bin:$PATH"
@@ -28,7 +30,7 @@ LOGROOT="$ROOT/Backbone_logs/$TARGET/$MODEL"; mkdir -p "$LOGROOT"
 STAMP=$(date +%Y%m%d_%H%M%S); JOBID=${PBS_JOBID:-local}
 LOG="$LOGROOT/${MODEL}.${TARGET}.formal.seed${SEED}.${JOBID}.${STAMP}.live.log"; touch "$LOG"
 cd "$PROJ"
-exec > >("$PYTHON" -u "$PROJ/timestamp_stream.py" | tee -a "$LOG") 2>&1
+exec > >("$PYTHON3" -u "$PROJ/timestamp_stream.py" | tee -a "$LOG") 2>&1
 trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"' EXIT
 echo "START USER_SELECTED_FORMAL model=$MODEL target=$TARGET seed=$SEED job=$JOBID host=$(hostname)"
 echo "ROOT=$ROOT PYTHON=$PYTHON TRAFFIDENT_TARGET=$TRAFFIDENT_TARGET"

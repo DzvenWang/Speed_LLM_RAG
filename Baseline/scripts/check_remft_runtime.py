@@ -4,18 +4,27 @@ import importlib.util, json, re, sys
 
 GADI=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 ROOT=GADI if GADI.exists() else Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from baseline.remft_runtime import bind_remft_bert_env
+
 repo=ROOT/'vendor/ReMFT'
 nb=repo/'run.ipynb'
-bert=repo/'LLM/BERT'
 failed=False
-for p in [nb, bert/'config.json']:
+ok=nb.exists(); print(('PASS' if ok else 'FAIL'),nb); failed |= not ok
+try:
+    bert=bind_remft_bert_env(ROOT)
+    print('PASS ReMFT BERT path', bert)
+except FileNotFoundError as exc:
+    print('FAIL ReMFT BERT path', exc, file=sys.stderr)
+    raise SystemExit(2)
+for p in [bert/'config.json']:
     ok=p.exists(); print(('PASS' if ok else 'FAIL'),p); failed |= not ok
 weights=[bert/'model.safetensors',bert/'pytorch_model.bin']
 ok=any(p.exists() for p in weights); print(('PASS' if ok else 'FAIL'),'BERT weights',*[str(p) for p in weights]); failed |= not ok
 for mod in ['torch','transformers','accelerate','einops','pandas','yaml']:
     ok=importlib.util.find_spec(mod) is not None; print(('PASS' if ok else 'FAIL'),mod); failed |= not ok
 if failed:
-    print('Set REMFT_BERT_PATH and run scripts/setup_remft_bert.sh after cloning official models.',file=sys.stderr)
     raise SystemExit(2)
 
 local_cfg=json.loads((bert/'config.json').read_text())
@@ -26,7 +35,6 @@ print('PASS ReMFT local BERT config',{
     'model_type':local_cfg.get('model_type'),
 })
 
-# Static checkpoint provenance audit when safetensors metadata is available.
 safe=bert/'model.safetensors'
 if safe.exists() and importlib.util.find_spec('safetensors') is not None:
     from safetensors import safe_open
@@ -40,14 +48,9 @@ if safe.exists() and importlib.util.find_spec('safetensors') is not None:
             'count':len(layers),'min':min(layers),'max':max(layers)
         })
 
-# Runtime contract: the 12-step PHI adaptation must construct and execute before
-# a GPU/BERT job is submitted. This catches the former namespace lambda patch
-# while preserving the official ReMFT mechanism.
-sys.path.insert(0,str(ROOT))
 import torch
 import yaml
 from baseline.runners.remft_runner import load_official_namespace, build_phi
-
 cfg=yaml.safe_load((ROOT/'configs/baseline.yaml').read_text())
 ns=load_official_namespace()
 phi=build_phi(ns,cfg).cpu().eval()

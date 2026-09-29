@@ -139,7 +139,7 @@ def main():
         return
 
     if not lock_path.exists():
-        raise SystemExit(f'Missing {lock_path}; rerun setup_official_models.sh')
+        raise SystemExit(f'Missing {lock_path}; restore the frozen official source lock before running Formal experiments')
     lock = json.loads(lock_path.read_text())
     names = [args.name] if args.action == 'verify-one' else list(sources)
     if args.action == 'verify-one' and not args.name:

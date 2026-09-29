@@ -1,8 +1,0 @@
-{
-  "extraPaths": [
-    ".",
-    "../Protocol",
-    "../TraffiDent_SupportBench"
-  ],
-  "reportMissingImports": "warning"
-}

@@ -1,4 +1,10 @@
-## 1.1.7
+# Backbone v1.1.8
+
+- Gadi PBS logging fix: `timestamp_stream.py` is launched with `$TFP_ENV_ROOT/bin/python3` instead of `$TFP_ENV_ROOT/bin/python`.
+- Formal model training, preflight, and evaluation continue to use the validated TFP `$TFP_ENV_ROOT/bin/python`; no model, recipe, Protocol, cache, or metric changes.
+- Prevents Gadi deprecated `python` launcher failure from breaking the process-substitution log pipe with SIGPIPE/exit 141.
+
+## 1.1.8
 - Direct/local `scripts/run_model_formal.py` runs now automatically tee stdout/stderr to a per-model `.local.<timestamp>.live.log` under `Backbone_logs/<target>/<model>/` while preserving live terminal output.
 - Gadi/PBS behavior is unchanged: when `BACKBONE_PBS_LIVE_LOG=1`, the Python runner does not create a second log, so the PBS job remains the single complete live log including post-training evaluation.
 - No training, cache, metric, checkpoint, or evaluation semantics changed.

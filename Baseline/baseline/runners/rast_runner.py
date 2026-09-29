@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import copy
 import json
 import sys
@@ -305,6 +306,19 @@ def predict(model, dl, device, mean, std, ep, collect_impact=False):
     impact = finalize_impact(impact_stats) if collect_impact else None
     return raw, impact
 
+def _save_lifecycle_smoke_checkpoint(payload, retrieval_store=None):
+    out = os.environ.get("BASELINE_LIFECYCLE_CHECKPOINT")
+    if not out:
+        return None
+    path = Path(out)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(payload, path)
+    if retrieval_store is not None:
+        save_store(path.with_name("retrieval_store_best.npz"), retrieval_store)
+    print(f"LIFECYCLE_CHECKPOINT_SAVE_PASS path={path}", flush=True)
+    return path
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--stage', choices=['development', 'formal'], default='formal')
@@ -383,6 +397,7 @@ def main():
             )
         else:
             print('RAST GPU SMOKE PASS', smoke['mae'], flush=True)
+        _save_lifecycle_smoke_checkpoint({'model': {k:v.detach().cpu() for k,v in model.state_dict().items()}, 'best_epoch': logical_epoch, 'lifecycle_smoke': True}, snapshot_store(model))
         return
 
     best = float('inf')

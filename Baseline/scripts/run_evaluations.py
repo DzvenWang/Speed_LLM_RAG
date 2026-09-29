@@ -53,8 +53,8 @@ def main():
         allr=df.loc[df.family.astype(str)=='ALL'].iloc[0]
         severity_rows.append({
             'Severity':f's{sev}','MAE':allr['overall_MAE'],'RMSE':allr['overall_RMSE'],
-            'Masked_MAE':allr['masked_MAE'],'Support_MAE':allr['support_MAE'],
-            'H12_MAE':allr['H12_overall_MAE'],'H12_Support_MAE':allr['H12_support_MAE'],
+            'Masked_MAE':allr['masked_MAE'],'Masked_RMSE':allr['masked_RMSE'],
+            'H3_MAE':allr['H3_overall_MAE'],'H6_MAE':allr['H6_overall_MAE'],'H12_MAE':allr['H12_overall_MAE'],
         })
         cache=cache_path(cfg,'evaluation',sev)
         meta=pd.read_csv(cache/'test_manifest.csv')
@@ -63,9 +63,8 @@ def main():
             r=df.loc[df.family.astype(str)==family].iloc[0]
             scenario_rows.append({
                 'Severity':f's{sev}','Scenario':family,'Queries':int(counts.get(family,0)),
-                'MAE':r['overall_MAE'],'RMSE':r['overall_RMSE'],'Masked_MAE':r['masked_MAE'],
-                'Support_MAE':r['support_MAE'],'H12_MAE':r['H12_overall_MAE'],
-                'H12_Support_MAE':r['H12_support_MAE'],
+                'MAE':r['overall_MAE'],'RMSE':r['overall_RMSE'],'Masked_MAE':r['masked_MAE'],'Masked_RMSE':r['masked_RMSE'],
+                'H3_MAE':r['H3_overall_MAE'],'H6_MAE':r['H6_overall_MAE'],'H12_MAE':r['H12_overall_MAE'],
             })
         print(f'========== EVALUATION s{sev} PASS ==========',flush=True)
     out=exp/'evaluation'/a.method/cfg['experiment']['subgraph']/f'seed{a.seed}'
@@ -87,7 +86,7 @@ def main():
     print('Scenario = Core-5 missing-sensing family; metrics are micro-aggregated within that scenario.')
     print('='*148)
     show=scdf.copy()
-    for c in ['MAE','RMSE','Masked_MAE','Support_MAE','H12_MAE','H12_Support_MAE']:
+    for c in ['MAE','RMSE','Masked_MAE','Masked_RMSE','H3_MAE','H6_MAE','H12_MAE']:
         show[c]=show[c].map(fmt)
     print(show.to_string(index=False))
     print(f'\nSEVERITY_SUMMARY_CSV={out / "severity_summary.csv"}')

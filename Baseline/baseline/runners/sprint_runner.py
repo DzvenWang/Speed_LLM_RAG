@@ -53,7 +53,7 @@ def import_sprint():
     except Exception as e:
         raise RuntimeError(
             'Cannot import official SPRINT package from vendor/SPRINT. '
-            'Run scripts/setup_official_models.sh and install lightweight SPRINT dependencies. '
+            'Install the required SPRINT runtime dependencies before running this secondary method. '
             f'Original error: {e!r}'
         ) from e
     return impute
@@ -286,7 +286,7 @@ def main():
         'input_matching_note': 'specialized comparator with additional causal historical-day context; not strict H12 input-matched main-table baseline',
         'sprint_historical_days': int(c['historical_days']),
         'sprint_day_steps': int(c['day_steps']),
-        'downstream_forecaster': 'Frozen PatchSTG v1.0.10 reference checkpoint',
+        'downstream_forecaster': 'Frozen PatchSTG v1.1.7 reference checkpoint',
         'patchstg_reference_seed': patch.reference_seed,
         'patchstg_checkpoint': str(patch.checkpoint),
         'checkpoint_selection': 'no learned benchmark checkpoint; SPRINT internal reconstruction validation; downstream PatchSTG frozen',

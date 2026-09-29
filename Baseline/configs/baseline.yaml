@@ -1,4 +1,4 @@
-version: 1.1.0
+version: 1.3.5
 project:
   root: ${SPEED_LLM_RAG_ROOT}
   baseline_root: ${SPEED_LLM_RAG_ROOT}/Baseline
@@ -9,7 +9,7 @@ project:
   support_artifact_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench_artifacts
   backbone_root: ${SPEED_LLM_RAG_ROOT}/Backbone
   backbone_exp_root: ${SPEED_LLM_RAG_ROOT}/Backbone_exps
-  frozen_backbone_json: ${SPEED_LLM_RAG_ROOT}/Backbone_exps/FROZEN_BACKBONE.json
+  frozen_backbone_json: ${SPEED_LLM_RAG_ROOT}/Backbone_exps/${TRAFFIDENT_TARGET}/FROZEN_BACKBONE.json
   python: python
   leaf_python: python
   protocol_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench
@@ -24,8 +24,6 @@ experiment:
   seed: 10
   formal_seeds:
   - 10
-  - 20
-  - 30
   families:
   - entry_random
   - sensor_outage
@@ -48,7 +46,7 @@ protocol:
   same_frozen_backbone_for_imputation_and_matched_rag: true
   cache_fingerprint_required: true
   retrieval_audit_required: true
-  shared_protocol_name: protocol_core5_s40
+  shared_protocol_name: base_core5_${TRAFFIDENT_TARGET}_s40
   shared_protocol_version: 2.1.0
   consumer_policy: frozen_shared_protocol_only
   no_local_sampling: true
@@ -61,10 +59,10 @@ protocol:
   - SARAF-PatchSTG
   paired_group_id: TraffiDent_Net_06_base_core5_${TRAFFIDENT_TARGET}_multiseverity_v1
   evaluation_protocol_names:
-    20: protocol_core5_s20
-    40: protocol_core5_s40
-    60: protocol_core5_s60
-    90: protocol_core5_s90
+    20: base_core5_${TRAFFIDENT_TARGET}_s20
+    40: base_core5_${TRAFFIDENT_TARGET}_s40
+    60: base_core5_${TRAFFIDENT_TARGET}_s60
+    90: base_core5_${TRAFFIDENT_TARGET}_s90
 baseline_story:
   main_table:
   - ImputeFormer
@@ -445,25 +443,24 @@ evaluation:
   save_predictions: true
 frozen_backbone_contract:
   owner: Backbone
-  minimum_schema_version: 3
-  required_project_version: 1.0.10
-  required_selected_model: PatchSTG
+  minimum_schema_version: 5
+  required_project_version: 1.1.7
   use_reference_checkpoint_for_all_baseline_seeds: true
   require_checkpoint_sha256: true
   require_protocol_hash_match: true
   require_time_feature_fingerprint_match: true
   required_data_contract_revision: traffident_experiment_cache_v1
-  required_shared_contract_version: 1.2.0
+  required_shared_contract_version: 1.2.1
   require_shared_cache_identity_match: true
-  required_cache_schema_version: 2
+  required_cache_schema_version: 3
   required_protocol_version: 2.1.0
   required_paired_group_id: TraffiDent_Net_06_base_core5_${TRAFFIDENT_TARGET}_multiseverity_v1
 shared_contract:
-  required_version: 1.2.0
-  required_cache_schema_version: 2
+  required_version: 1.2.1
+  required_cache_schema_version: 3
   data_contract_revision: traffident_experiment_cache_v1
   time_feature_revision: traffident_time_features_v1
-  metrics_revision: traffident_metrics_v1
+  metrics_revision: traffident_metrics_v2
   prediction_contract_revision: traffident_prediction_v1
   protocol_version: 2.1.0
   paired_group_id: TraffiDent_Net_06_base_core5_${TRAFFIDENT_TARGET}_multiseverity_v1

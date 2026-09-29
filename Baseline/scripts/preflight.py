@@ -16,7 +16,7 @@ from baseline.shared_cache import shared_contract_config, protocol_name, EVALUAT
 from experiment_common.time_features import assert_resolved_time_features
 from experiment_common.constants import CONTRACT_VERSION,CACHE_SCHEMA_VERSION,DATA_CONTRACT_REVISION,TIME_FEATURE_REVISION,METRICS_REVISION,PREDICTION_CONTRACT_REVISION
 from shared_protocol.consumer import load_frozen_stage
-from baseline.backbones.frozen_registry import load_frozen_patchstg_registry
+from baseline.backbones.frozen_registry import load_frozen_backbone_registry
 
 ap=argparse.ArgumentParser()
 ap.add_argument('--stage',choices=['development','formal','evaluation'],default='development')
@@ -71,16 +71,15 @@ if a.method:
     mc=cfg.get('methods',{}).get(a.method)
     if mc is None: print('FAIL unknown method',a.method); failed=True
     else: need_patch=bool(mc.get('requires_frozen_backbone_for_final_forecast',False))
-if a.stage=='evaluation': need_patch=True
 fb=Path(cfg['project']['frozen_backbone_json'])
 if need_patch or fb.exists():
     try:
         fpm,_=load_frozen_stage(cfg['project']['protocol_artifact_root'],cfg['experiment']['subgraph'],cfg['protocol']['shared_protocol_name'],'formal'); con=cfg['frozen_backbone_contract']
-        obj=load_frozen_patchstg_registry(fb,expected_protocol_hash=fpm['stage_hash'],expected_time_feature_revision=cfg['shared_contract']['time_feature_revision'],expected_time_feature_fingerprint=(tf['fingerprint'] if tf else None),expected_time_feature_source=(tf['source'] if tf else None),expected_dataset=cfg['experiment']['subgraph'],expected_backbone_project_version=con['required_project_version'],expected_backbone_data_contract_revision=con['required_data_contract_revision'],expected_shared_contract_version=con['required_shared_contract_version'],expected_cache_schema_version=con['required_cache_schema_version'],expected_protocol_version=con['required_protocol_version'],expected_paired_group_id=con['required_paired_group_id'],expected_metrics_revision=cfg['shared_contract']['metrics_revision'],expected_prediction_contract_revision=cfg['shared_contract']['prediction_contract_revision'])
-        print('PASS frozen PatchSTG reference',obj['reference_checkpoint'])
+        obj=load_frozen_backbone_registry(fb,expected_protocol_hash=fpm['stage_hash'],expected_time_feature_revision=cfg['shared_contract']['time_feature_revision'],expected_time_feature_fingerprint=(tf['fingerprint'] if tf else None),expected_time_feature_source=(tf['source'] if tf else None),expected_dataset=cfg['experiment']['subgraph'],expected_target=cfg['experiment']['target'],expected_backbone_project_version=con['required_project_version'],expected_backbone_data_contract_revision=con['required_data_contract_revision'],expected_shared_contract_version=con['required_shared_contract_version'],expected_cache_schema_version=con['required_cache_schema_version'],expected_protocol_version=con['required_protocol_version'],expected_paired_group_id=con['required_paired_group_id'],expected_metrics_revision=cfg['shared_contract']['metrics_revision'],expected_prediction_contract_revision=cfg['shared_contract']['prediction_contract_revision'])
+        print('PASS frozen Backbone',obj['selected_model'],'reference',obj['reference_checkpoint'])
     except Exception as e:
-        if need_patch: print('FAIL frozen PatchSTG',repr(e)); failed=True
-        else: print('INFO frozen PatchSTG not ready yet:',repr(e))
+        if need_patch: print('FAIL frozen Backbone',repr(e)); failed=True
+        else: print('INFO frozen Backbone not ready yet:',repr(e))
 if a.stage=='evaluation':
     print('PASS Baseline evaluation policy direct_after_completed_formal_run (no FORMAL_SELECTION/FROZEN_BASELINE_PROTOCOL required)')
 if failed: raise SystemExit(2)

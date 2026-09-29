@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd());sys.path.insert(0,str(ROOT))
 from baseline.runners.common import ImputationDataset,make_run_dir,require_gpu,save_val_outputs,set_seed,validate_stage
 from baseline.backbones.patchstg_bridge import FrozenPatchSTG
+from baseline.backbones.frozen_backbone import build_frozen_backbone
 from baseline.compat.imputeformer_tsl_shim import install_imputeformer_tsl_shim
 
 def import_model():
@@ -61,7 +62,7 @@ def forecast_val(model,dl,patch,device):
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--stage',choices=['development','formal'],default='development');ap.add_argument('--seed',type=int,required=True);ap.add_argument('--smoke',action='store_true');a=ap.parse_args()
-    cfg,cache=validate_stage(a.stage,'ImputeFormer');set_seed(a.seed);device=require_gpu();patch=FrozenPatchSTG(cfg,device);c=cfg['runners']['ImputeFormer']
+    cfg,cache=validate_stage(a.stage,'ImputeFormer');set_seed(a.seed);device=require_gpu();patch=build_frozen_backbone(cfg,device);c=cfg['runners']['ImputeFormer']
     tr=ImputationDataset(cache,'train');va=ImputationDataset(cache,'val');N=tr.x.shape[2];model=build_model(cfg,N).to(device);nparams=sum(p.numel() for p in model.parameters() if p.requires_grad)
     dl=lambda ds,sh:DataLoader(ds,batch_size=int(c['batch_size']),shuffle=sh,num_workers=0,pin_memory=True)
     trl,val=dl(tr,True),dl(va,False);opt=torch.optim.Adam(model.parameters(),lr=float(c['learning_rate']),weight_decay=float(c['weight_decay']))
@@ -90,14 +91,15 @@ def main():
             pred_raw=patch.predict_raw(comp,tod,dow)
         expected=(bs,int(cfg['experiment']['horizon']),N)
         if tuple(pred_raw.shape)!=expected:
-            raise RuntimeError(f'ImputeFormer -> Frozen PatchSTG smoke shape {tuple(pred_raw.shape)} != {expected}')
+            raise RuntimeError(f'ImputeFormer -> Frozen Backbone smoke shape {tuple(pred_raw.shape)} != {expected}')
         if not torch.isfinite(pred_raw).all():
-            raise RuntimeError('ImputeFormer -> Frozen PatchSTG smoke produced non-finite predictions')
+            raise RuntimeError('ImputeFormer -> Frozen Backbone smoke produced non-finite predictions')
         print('IMPUTEFORMER GPU SMOKE PASS',float(loss),flush=True)
-        print('IMPUTEFORMER -> FROZEN PATCHSTG GPU SMOKE PASS',
+        print('IMPUTEFORMER -> FROZEN BACKBONE GPU SMOKE PASS',
               {'prediction_shape':tuple(pred_raw.shape),
-               'patchstg_reference_seed':patch.reference_seed,
-               'patchstg_checkpoint':str(patch.checkpoint)},flush=True)
+               'frozen_backbone_model':patch.registry.get('selected_model'),
+               'frozen_backbone_reference_seed':patch.reference_seed,
+               'frozen_backbone_checkpoint':str(patch.checkpoint)},flush=True)
         return
     best=float('inf');state=None;be=0;stale=0;t0=time.time()
     for ep in range(1,int(c['max_epochs'])+1):
@@ -114,7 +116,7 @@ def main():
             stale+=1
             if stale>=int(c['patience']):print(f'EARLY STOP epoch={ep} best_epoch={be}');break
     model.load_state_dict(state);model.to(device);raw=forecast_val(model,val,patch,device);rd=make_run_dir(cfg,'ImputeFormer',a.stage,a.seed)
-    torch.save({'model':state,'best_epoch':be,'best_val_impute_mae_norm':best,'patchstg_reference_seed':patch.reference_seed,'patchstg_checkpoint':str(patch.checkpoint)},rd/'best.pt')
-    sm=save_val_outputs(cfg,cache,rd,raw,'ImputeFormer',a.seed,a.stage,{'best_epoch':be,'best_val_impute_MAE_norm':best,'params':nparams,'wall_seconds':time.time()-t0,'official_architecture':'vendor/ImputeFormer/experiments/imputeformer/models/ImputeFormer.py::ImputeFormerModel','downstream_forecaster':'Frozen PatchSTG v1.0.10 reference checkpoint','patchstg_reference_seed':patch.reference_seed,'patchstg_checkpoint':str(patch.checkpoint),'checkpoint_selection':'history-imputation validation only','test_access':False})
+    torch.save({'model':state,'best_epoch':be,'best_val_impute_mae_norm':best,'frozen_backbone_model':patch.registry.get('selected_model'),'frozen_backbone_reference_seed':patch.reference_seed,'frozen_backbone_checkpoint':str(patch.checkpoint)},rd/'best.pt')
+    sm=save_val_outputs(cfg,cache,rd,raw,'ImputeFormer',a.seed,a.stage,{'best_epoch':be,'best_val_impute_MAE_norm':best,'params':nparams,'wall_seconds':time.time()-t0,'official_architecture':'vendor/ImputeFormer/experiments/imputeformer/models/ImputeFormer.py::ImputeFormerModel','downstream_forecaster':f'Frozen {patch.registry.get("selected_model","Backbone")} reference checkpoint','frozen_backbone_model':patch.registry.get('selected_model'),'frozen_backbone_reference_seed':patch.reference_seed,'frozen_backbone_checkpoint':str(patch.checkpoint),'checkpoint_selection':'history-imputation validation only','test_access':False})
     print('IMPUTEFORMER COMPLETE',json.dumps({'run_dir':str(rd),'val':sm['val']},default=str))
 if __name__=='__main__':main()

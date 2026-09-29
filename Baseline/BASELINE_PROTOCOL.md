@@ -1,34 +1,10 @@
-# Baseline Protocol v1.1.0 — Core-5
+# Baseline Formal Protocol — v1.3.2
 
-Baseline v1.1.0 is a clean consumer of Protocol v2.1.0, ExperimentCommon v1.2.0 and the frozen Backbone v1.0.10 PatchSTG reference.
+Dataset: `TraffiDent_Net_06`; history/horizon/stride = 12/12/12; seed = 10.
+Targets are `speed` and `flow`.
 
-## Main sensing families
+Formal training and validation use severity s40. Completed Formal checkpoints are evaluated on paired s20/s40/s60/s90 evaluation caches. Generic metrics are Overall MAE/RMSE, Masked MAE/RMSE using `direct_mask`, and H3/H6/H12 metrics. Retrieval-defined support metrics are not part of the generic Baseline protocol.
 
-1. `entry_random`
-2. `sensor_outage`
-3. `temporal_outage`
-4. `regional_outage`
-5. `directional_outage`
+Primary methods are ImputeFormer, LRTC-TMCP, GinAR, RAFT, RAST, SARAF, and ReMFT. ImputeFormer and LRTC-TMCP require the target-specific Frozen Backbone registry; when PatchSTG is selected, the previously validated PatchSTG consumer bridge is used unchanged. The other five Primary methods are independent of Frozen Backbone.
 
-The two predictive outage families are not part of the main Baseline Train/Val/Test protocol.
-
-## Train / validation
-
-- Protocol: `protocol_core5_s40`
-- Severity: 40%
-- Development train: 12,000 = 2,400/family
-- Development val: 5,000 = 1,000/family
-- Formal train: 50,000 = 10,000/family
-- Formal val: 5,000 = 1,000/family
-- Checkpoint/model selection is validation-only.
-
-## Evaluation
-
-After Formal selection and protocol freeze, each selected model is evaluated on the paired frozen caches:
-
-- `protocol_core5_s20`
-- `protocol_core5_s40`
-- `protocol_core5_s60`
-- `protocol_core5_s90`
-
-Each severity contains 5,000 queries = 1,000/family. One evaluation PBS job per method/seed runs all four severities and writes severity-level and scenario-level summary CSVs.
+Base_SupportBench shared contract remains v1.2.1, ExperimentCache schema v3, metrics revision `traffident_metrics_v2`, and protocol version 2.1.0. Baseline v1.3.2 keeps the experiment protocol and model structures unchanged while making the Frozen Backbone registry generic; the validated PatchSTG bridge remains backward-compatible.

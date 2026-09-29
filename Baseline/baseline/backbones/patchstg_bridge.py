@@ -65,7 +65,15 @@ class FrozenPatchSTG:
             expected_time_feature_fingerprint=cm.get('time_feature_fingerprint'),
             expected_time_feature_source=cm.get('time_feature_source'),
             expected_dataset=cfg['experiment']['subgraph'],
-            expected_backbone_project_version=str(contract.get('required_project_version', '1.0.10')),
+            expected_target=cfg['experiment']['target'],
+            expected_backbone_project_version=str(contract.get('required_project_version', '1.1.7')),
+            expected_backbone_data_contract_revision=contract.get('required_data_contract_revision','traffident_experiment_cache_v1'),
+            expected_shared_contract_version=contract.get('required_shared_contract_version','1.2.1'),
+            expected_cache_schema_version=int(contract.get('required_cache_schema_version',3)),
+            expected_protocol_version=contract.get('required_protocol_version','2.1.0'),
+            expected_paired_group_id=contract.get('required_paired_group_id'),
+            expected_metrics_revision=cfg['shared_contract']['metrics_revision'],
+            expected_prediction_contract_revision=cfg['shared_contract']['prediction_contract_revision'],
         )
         self.registry = reg
         self.reference_seed = int(reg['reference_seed'])
@@ -75,7 +83,7 @@ class FrozenPatchSTG:
         if not (broot / 'backbone/adapters.py').exists():
             raise FileNotFoundError(f'Missing sibling Backbone project: {broot}')
 
-        # Backbone v1.0.10 owns a single PatchSTG source lock and its source_lock.py
+        # Backbone v1.1.7 owns the PatchSTG source lock and its source_lock.py
         # interface is: `source_lock.py {verify,create} --config <backbone.yaml>`.
         # Older Baseline code incorrectly called a Baseline-only `verify-one` API on
         # the Backbone script, causing every PatchSTG-dependent baseline to fail

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import copy
 import json
 import sys
@@ -167,6 +168,19 @@ def predict(model, dl, device, mean: float, std: float) -> np.ndarray:
     return pn*np.float32(std)+np.float32(mean)
 
 
+def _save_lifecycle_smoke_checkpoint(payload, retrieval_store=None):
+    out = os.environ.get("BASELINE_LIFECYCLE_CHECKPOINT")
+    if not out:
+        return None
+    path = Path(out)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(payload, path)
+    if retrieval_store is not None:
+        save_store(path.with_name("retrieval_store_best.npz"), retrieval_store)
+    print(f"LIFECYCLE_CHECKPOINT_SAVE_PASS path={path}", flush=True)
+    return path
+
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument('--stage', default='development', choices=['development','formal'])
@@ -209,6 +223,7 @@ def main():
         vi,vx,vy,vxm0,_=next(iter(val_dl)); model.eval()
         with torch.no_grad(): vp=model(vx.float().to(device),vxm0.float().to(device),vi.long().to(device),mode='valid')
         print(f'SARAF GPU SMOKE PASS train_loss={loss.item():.6f} output={tuple(vp.shape)} retrieval={retrieval_info}',flush=True)
+        _save_lifecycle_smoke_checkpoint({'model': {k:v.detach().cpu() for k,v in model.state_dict().items()}, 'best_epoch':1, 'lifecycle_smoke':True})
         return
 
     max_epochs=int(rcfg['max_epochs']); patience=int(rcfg.get('patience',5)); best=float('inf'); best_state=None; best_epoch=0; stale=0; t0=time.time()

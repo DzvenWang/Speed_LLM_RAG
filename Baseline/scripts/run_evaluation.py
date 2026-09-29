@@ -21,9 +21,10 @@ from baseline.runners.sprint_runner import forecast_split as sprint_forecast
 from baseline.runners.mogernn_runner import MoGERNNDataset,build_model as mogernn_build,predict as mogernn_predict
 from baseline.runners.remft_runner import ReMFTDataset,build_model as remft_build,predict as remft_predict,load_trainable_state_dict as remft_load
 from baseline.backbones.patchstg_bridge import FrozenPatchSTG
+from baseline.backbones.frozen_backbone import build_frozen_backbone
 from baseline.run_identity import load_cache_identity, require_same_identity
 from baseline.shared_cache import cache_path
-from baseline.backbones.frozen_registry import sha256_file, load_frozen_patchstg_registry
+from baseline.backbones.frozen_registry import sha256_file, load_frozen_backbone_registry
 
 
 def _validate_formal_run(cfg, m, seed, run_dir: Path):
@@ -70,7 +71,7 @@ def _validate_formal_run(cfg, m, seed, run_dir: Path):
     if cfg.get('methods',{}).get(m,{}).get('requires_frozen_backbone_for_final_forecast',False):
         cm=json.loads((cache_path(cfg,'formal')/'cache_manifest.json').read_text())
         con=cfg.get('frozen_backbone_contract',{})
-        fb=load_frozen_patchstg_registry(
+        fb=load_frozen_backbone_registry(
             cfg['project']['frozen_backbone_json'],
             expected_protocol_hash=cm['protocol_stage_hash'],
             expected_time_feature_revision=cm['time_feature_revision'],
@@ -79,10 +80,15 @@ def _validate_formal_run(cfg, m, seed, run_dir: Path):
             expected_dataset=cfg['experiment']['subgraph'],
             expected_backbone_project_version=str(con.get('required_project_version','1.0.10')),
         )
-        if str(sm.get('patchstg_checkpoint'))!=str(fb['reference_checkpoint']):
-            raise RuntimeError(f'{m} seed={seed}: frozen PatchSTG checkpoint mismatch')
-        if int(sm.get('patchstg_reference_seed',-1))!=int(fb['reference_seed']):
-            raise RuntimeError(f'{m} seed={seed}: frozen PatchSTG reference seed mismatch')
+        saved_model=sm.get('frozen_backbone_model')
+        saved_checkpoint=sm.get('frozen_backbone_checkpoint')
+        saved_seed=sm.get('frozen_backbone_reference_seed',-1)
+        if str(saved_model)!=str(fb['selected_model']):
+            raise RuntimeError(f'{m} seed={seed}: frozen Backbone model mismatch saved={saved_model} current={fb["selected_model"]}')
+        if str(saved_checkpoint)!=str(fb['reference_checkpoint']):
+            raise RuntimeError(f'{m} seed={seed}: frozen Backbone checkpoint mismatch')
+        if int(saved_seed)!=int(fb['reference_seed']):
+            raise RuntimeError(f'{m} seed={seed}: frozen Backbone reference seed mismatch')
 
     sel={
         'run_dir':str(d),
@@ -132,12 +138,12 @@ def ginar(cfg,fc,ec,seed,device,ck):
 
 
 def impute(cfg,fc,ec,seed,device,ck):
-    ds=ImputationDataset(ec,'test'); dl=DataLoader(ds,batch_size=int(cfg['runners']['ImputeFormer']['batch_size']),shuffle=False); m=impute_build(cfg,ds.x.shape[2]).to(device); m.load_state_dict(ck['model']); patch=FrozenPatchSTG(cfg,device); return impute_forecast(m,dl,patch,device)
+    ds=ImputationDataset(ec,'test'); dl=DataLoader(ds,batch_size=int(cfg['runners']['ImputeFormer']['batch_size']),shuffle=False); m=impute_build(cfg,ds.x.shape[2]).to(device); m.load_state_dict(ck['model']); patch=build_frozen_backbone(cfg,device); return impute_forecast(m,dl,patch,device)
 
 
 def lrtc_tmcp(cfg,fc,ec,seed,device,ck):
     # LRTC-TMCP has no learned benchmark weights; best.pt is a provenance marker.
-    patch=FrozenPatchSTG(cfg,device)
+    patch=build_frozen_backbone(cfg,device)
     raw,_info=lrtc_forecast(cfg,ec,'test',patch,device,smoke=False)
     return raw
 
@@ -179,13 +185,23 @@ def remft(cfg,fc,ec,seed,device,ck):
 
 def main():
     methods=['ImputeFormer','LRTC-TMCP','GinAR','RAFT','RAST','SARAF','ReMFT']
-    ap=argparse.ArgumentParser(); ap.add_argument('--method',choices=methods,required=True); ap.add_argument('--seed',type=int,required=True); ap.add_argument('--severity',type=int,choices=[20,40,60,90],required=True); ap.add_argument('--formal-run-dir',default=None); a=ap.parse_args()
-    cfg=load_yaml(ROOT/'configs/baseline.yaml'); set_seed(a.seed); device=require_gpu(); exp=Path(cfg['project']['exp_root']); fc=cache_path(cfg,'formal'); ec=cache_path(cfg,'evaluation',a.severity); sel,ck=load_sel(cfg,a.method,a.seed,a.formal_run_dir)
+    ap=argparse.ArgumentParser(); ap.add_argument('--method',choices=methods,required=True); ap.add_argument('--seed',type=int,required=True); ap.add_argument('--severity',type=int,choices=[20,40,60,90],required=True); ap.add_argument('--formal-run-dir',default=None); ap.add_argument('--lifecycle-checkpoint',default=None,help='Smoke-only checkpoint; bypass completed-Formal selection and write only under _lifecycle_smoke.'); a=ap.parse_args()
+    cfg=load_yaml(ROOT/'configs/baseline.yaml'); set_seed(a.seed); device=require_gpu(); exp=Path(cfg['project']['exp_root']); fc=cache_path(cfg,'formal'); ec=cache_path(cfg,'evaluation',a.severity)
+    if a.lifecycle_checkpoint:
+        cp=Path(a.lifecycle_checkpoint).resolve()
+        if not cp.exists(): raise FileNotFoundError(cp)
+        ck=torch.load(cp,map_location='cpu',weights_only=False)
+        if not bool(ck.get('lifecycle_smoke',False)): raise RuntimeError('Lifecycle checkpoint marker missing')
+        sel={'run_dir':str(cp.parent),'checkpoint':str(cp),'checkpoint_sha256':sha256_file(cp),'selection_mode':'lifecycle_smoke'}
+        print(f'LIFECYCLE_CHECKPOINT_RELOAD_PASS method={a.method} severity=s{a.severity} checkpoint={cp}',flush=True)
+    else:
+        sel,ck=load_sel(cfg,a.method,a.seed,a.formal_run_dir)
     fn={'GinAR':ginar,'ImputeFormer':impute,'LRTC-TMCP':lrtc_tmcp,'RAFT':raft,'SARAF':saraf,'ReMFT':remft}
     raw=rast(cfg,fc,ec,a.seed,device,ck,sel) if a.method=='RAST' else fn[a.method](cfg,fc,ec,a.seed,device,ck)
-    rd=exp/'evaluation'/a.method/cfg['experiment']['subgraph']/f'seed{a.seed}'/f's{a.severity}'; rd.mkdir(parents=True,exist_ok=True)
-    sm=save_split_outputs(cfg,ec,rd,'test',raw,a.method,a.seed,{'formal_checkpoint':sel['checkpoint'],'formal_checkpoint_sha256':sel['checkpoint_sha256'],'reporting_track':cfg.get('methods',{}).get(a.method,{}).get('table_group','unknown'),'test_access':'direct_after_completed_formal_run','severity':int(a.severity),'protocol_name':ec.parent.parent.parent.name})
+    rd=(Path(sel['run_dir'])/'evaluation'/f's{a.severity}') if a.lifecycle_checkpoint else (exp/'evaluation'/a.method/cfg['experiment']['subgraph']/f'seed{a.seed}'/f's{a.severity}'); rd.mkdir(parents=True,exist_ok=True)
+    sm=save_split_outputs(cfg,ec,rd,'test',raw,a.method,a.seed,{'formal_checkpoint':sel['checkpoint'],'formal_checkpoint_sha256':sel['checkpoint_sha256'],'reporting_track':cfg.get('methods',{}).get(a.method,{}).get('table_group','unknown'),'test_access':('lifecycle_smoke_full_test_inference' if a.lifecycle_checkpoint else 'direct_after_completed_formal_run'),'severity':int(a.severity),'protocol_name':ec.parent.parent.parent.name})
     print(f'EVALUATION_RESULT_DIR={rd}')
+    if a.lifecycle_checkpoint: print(f'LIFECYCLE_EVAL_PASS method={a.method} severity=s{a.severity} rows={int(raw.shape[0])} shape={tuple(raw.shape)}',flush=True)
     print(json.dumps(sm,default=str,indent=2))
 
 
