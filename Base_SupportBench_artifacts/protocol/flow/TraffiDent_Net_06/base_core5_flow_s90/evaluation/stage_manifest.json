@@ -1,14 +1,13 @@
 {
-  "config_sha256": "bea18899ee1f69bc8bf7acba921afacb528ed7ecd293d014705354b8aca518a3",
+  "config_sha256": "22a5f30d3799042b3cdf391731570f38111a5f5d296fd191aa894e3cfc7eb9ce",
   "dataset": "TraffiDent_Net_06",
   "distribution": "id",
   "evaluation_masks": {
     "test": {
       "direct_target_fraction": 0.9195876288659793,
-      "file_sha256": "f7645ae6b991f69054ff922110828ae23efe0058022faa572758b2eaba25cb3f",
+      "file_sha256": "edf7713b4c162f0baa0c448cc2d1fec8f2415528f291691ddfb6cf67b4353c8e",
       "future_valid_fraction": 1.0,
-      "rows": 5000,
-      "support_target_fraction": 0.0
+      "rows": 5000
     }
   },
   "families": [
@@ -41,8 +40,8 @@
   "seed": 10,
   "severity": 0.9,
   "source": {
-    "supportbench_benchmark_version": "1.2.0",
-    "supportbench_manifest_sha256": "ab9b7054025bdde1baecb1179a94aa94b87d94f6db3ede362ebe49344be668b3",
+    "supportbench_benchmark_version": "1.2.1",
+    "supportbench_manifest_sha256": "9b60af3681ee54c74790ffae46a61c4acc8578826cf747db59722d636771e755",
     "supportbench_package_version": "1.2.4",
     "supportbench_view_manifest_sha256": "4059ca78d2b2f1afa41c493eeec05e768371a9e989349077e74a92c78162ba4d"
   },
@@ -61,5 +60,5 @@
     }
   },
   "stage": "evaluation",
-  "stage_hash": "68aaca2ecd3990d1f87662e8d8f7da78f34c0e3d556a80f078b3e0115e8a93a9"
+  "stage_hash": "f845ff4463c1975c1077ca89cae679c3e67cbcfd947f6f5b3f17d844d5b7b0e2"
 }

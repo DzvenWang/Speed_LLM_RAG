@@ -46,19 +46,19 @@ def make_scheduler(optimizer, mc):
 
 @torch.no_grad()
 def evaluate(adapter, loader, meta, device):
-    adapter.model.eval(); preds=[]; ys=[]; valids=[]; directs=[]; supports=[]; times=[]
+    adapter.model.eval(); preds=[]; ys=[]; valids=[]; directs=[]; times=[]
     if torch.cuda.is_available(): torch.cuda.reset_peak_memory_stats(device)
     for batch in loader:
         if torch.cuda.is_available(): torch.cuda.synchronize(device)
         t0=time.perf_counter(); pn=adapter.eval_forward(batch); _assert_prediction_shape(pn,batch['y_raw'],'PatchSTG/eval'); pr=adapter.raw(pn)
         if torch.cuda.is_available(): torch.cuda.synchronize(device)
-        times.append(time.perf_counter()-t0); preds.append(pr.detach().cpu().numpy()); ys.append(batch['y_raw'].numpy()); valids.append(batch['future_valid'].numpy()); directs.append(batch['direct_mask'].numpy()); supports.append(batch['support_mask'].numpy())
-    pred=np.concatenate(preds); y=np.concatenate(ys); valid=np.concatenate(valids); direct=np.concatenate(directs); support=np.concatenate(supports)
-    rows=per_query_metrics(pred,y,valid,direct,support); df=pd.concat([meta.reset_index(drop=True),pd.DataFrame(rows)],axis=1)
-    summary=backbone_metric_summary(pred,y,valid,direct,support)
+        times.append(time.perf_counter()-t0); preds.append(pr.detach().cpu().numpy()); ys.append(batch['y_raw'].numpy()); valids.append(batch['future_valid'].numpy()); directs.append(batch['direct_mask'].numpy())
+    pred=np.concatenate(preds); y=np.concatenate(ys); valid=np.concatenate(valids); direct=np.concatenate(directs)
+    rows=per_query_metrics(pred,y,valid,direct); df=pd.concat([meta.reset_index(drop=True),pd.DataFrame(rows)],axis=1)
+    summary=backbone_metric_summary(pred,y,valid,direct)
     fam_values=np.asarray(meta['family'].astype(str))
     for fam in pd.unique(fam_values):
-        ii=np.flatnonzero(fam_values==str(fam)); fs=backbone_metric_summary(pred[ii],y[ii],valid[ii],direct[ii],support[ii])
+        ii=np.flatnonzero(fam_values==str(fam)); fs=backbone_metric_summary(pred[ii],y[ii],valid[ii],direct[ii])
         for c,v in fs.items(): summary[f'{c}__{fam}']=float(v)
     summary['inference_seconds_total']=float(sum(times)); summary['inference_ms_per_query']=float(1000*sum(times)/max(len(df),1)); summary['peak_gpu_memory_mb']=float(torch.cuda.max_memory_allocated(device)/1024**2) if torch.cuda.is_available() else 0.0
     return pred,df,summary
@@ -93,8 +93,8 @@ def _train_once(cfg, cache_dir, run_dir, vendor_root, benchmark_adj, benchmark_n
             if bi%print_every==0: log(f'epoch={epoch:03d} batch={bi:05d}/{len(train_loader):05d} train_loss={np.mean(losses[-print_every:]):.6f}')
         if scheduler is not None and epoch % max(1,int(mc.get('scheduler_step_interval',1))) == 0: scheduler.step()
         _,_,vs=evaluate(adapter,val_loader,val.meta,device); v=float(vs['MAE'])
-        rec={'epoch':epoch,'train_loss':float(np.mean(losses)),'val_MAE':v,'val_support_dependent_MAE':float(vs['support_dependent_MAE']),'lr':float(optimizer.param_groups[0]['lr']),'seconds':float(time.time()-e0)}; history.append(rec)
-        log(f'epoch={epoch:03d} train_loss={rec["train_loss"]:.6f} val_MAE={v:.6f} val_support_MAE={rec["val_support_dependent_MAE"]:.6f} lr={rec["lr"]:.3e} time={rec["seconds"]:.1f}s')
+        rec={'epoch':epoch,'train_loss':float(np.mean(losses)),'val_MAE':v,'val_masked_MAE':float(vs['directly_masked_MAE']),'lr':float(optimizer.param_groups[0]['lr']),'seconds':float(time.time()-e0)}; history.append(rec)
+        log(f'epoch={epoch:03d} train_loss={rec["train_loss"]:.6f} val_MAE={v:.6f} val_masked_MAE={rec["val_masked_MAE"]:.6f} lr={rec["lr"]:.3e} time={rec["seconds"]:.1f}s')
         if v < best-1e-8:
             best=v; best_epoch=epoch; wait=0
             torch.save({'project_version':cfg['version'],'run_identity':run_identity,'stage':stage,'model':'PatchSTG','target':str(cfg['experiment'].get('target')),'state_dict':model.state_dict(),'model_config':mc,'num_nodes':train.x.shape[2],'mean':mean,'std':std,'seed':seed,'batch_size':batch_size,'vendor':vendor,'adapter_revision':adapter.adapter_revision,'adapter_metadata':adapter.adapter_metadata,'spatial_layout':adapter.spatial_layout,'best_val_MAE':best,'best_epoch':best_epoch},run_dir/'best.pt')
@@ -107,7 +107,7 @@ def _train_once(cfg, cache_dir, run_dir, vendor_root, benchmark_adj, benchmark_n
     vdf.to_csv(run_dir/'val_metrics.csv',index=False)
     summary={'project_version':cfg['version'],'run_identity':run_identity,'stage':stage,'model':'PatchSTG','target':str(cfg['experiment'].get('target')),'seed':seed,'parameters':params,'batch_size':batch_size,'best_epoch':best_epoch,'best_val_MAE':best,'train_seconds_total':float(time.time()-total_start),'vendor':vendor,'adapter_revision':adapter.adapter_revision,'adapter_metadata':adapter.adapter_metadata,'recipe_source':mc.get('recipe_source'),'validation':vs,'metrics_revision':METRICS_REVISION,'test_evaluated':False}
     write_json(run_dir/'summary.json',summary); write_json(run_dir/'RUN_MANIFEST.json',{**run_identity,'code_project_version':str(cfg['version']),'model':'PatchSTG','seed':int(seed),'status':'FINISHED','best_epoch':int(best_epoch),'best_val_MAE':float(best)})
-    log(f'FINISHED stage={stage} PatchSTG seed={seed}: val_MAE={vs["MAE"]:.6f} val_support={vs["support_dependent_MAE"]:.6f}; TEST NOT EVALUATED')
+    log(f'FINISHED stage={stage} PatchSTG seed={seed}: val_MAE={vs["MAE"]:.6f} val_masked_MAE={vs["directly_masked_MAE"]:.6f}; TEST NOT EVALUATED')
     return summary
 
 
@@ -143,7 +143,7 @@ def smoke_patchstg(cfg, cache_dir, run_dir, vendor_root, benchmark_adj, benchmar
             val_losses.append(float(loss.detach().cpu())); log(f'SMOKE_VAL batch={bi}/{val_batches} loss={val_losses[-1]:.6f}')
             if bi>=val_batches: break
     smoke_ck=run_dir/'smoke.pt'; run_dir.mkdir(parents=True,exist_ok=True)
-    torch.save({'project_version':cfg['version'],'run_identity':run_identity,'stage':stage,'smoke':True,'model':'PatchSTG','state_dict':model.state_dict(),'target':cfg['experiment'].get('target'),'seed':int(seed),'batch_size':batch_size},smoke_ck)
+    torch.save({'project_version':cfg['version'],'run_identity':run_identity,'stage':stage,'smoke':True,'model':'PatchSTG','state_dict':model.state_dict(),'model_config':mc,'num_nodes':train.x.shape[2],'mean':mean,'std':std,'target':cfg['experiment'].get('target'),'seed':int(seed),'batch_size':batch_size,'adapter_revision':adapter.adapter_revision,'adapter_metadata':adapter.adapter_metadata},smoke_ck)
     loaded=torch.load(smoke_ck,map_location=device,weights_only=False)
     if loaded.get('target') != cfg['experiment'].get('target'): raise RuntimeError('Smoke checkpoint target identity mismatch')
     write_json(run_dir/'smoke_summary.json',{'status':'PASS','stage':stage,'target':cfg['experiment'].get('target'),'seed':int(seed),'device':str(device),'batch_size':batch_size,'train_batches':train_batches,'val_batches':val_batches,'train_loss_mean':float(np.mean(losses)),'val_loss_mean':float(np.mean(val_losses)),'cache_dir':str(cache_dir),'checkpoint':str(smoke_ck)})

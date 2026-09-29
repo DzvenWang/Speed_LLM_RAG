@@ -1,7 +1,7 @@
 {
   "dataset": "TraffiDent_Net_06",
   "paired_group_id": "TraffiDent_Net_06_base_core5_flow_multiseverity_v1",
-  "protocol_hash": "c080173b46a140ff4b74e346aaac646506921f168a30f843cfca8bce8f791cbc",
+  "protocol_hash": "24201afeb8f75761a3a1cdf0f392ffe5142878cf7a38b3643df619ff88ee4d8d",
   "protocol_name": "base_core5_flow_s40",
   "protocol_version": "2.1.0",
   "severity": 0.4,
@@ -33,7 +33,7 @@
           "view_hash": "679b83d6c625dc753fec029e072871733fb68692d9158c6a098e2caa89ec3133"
         }
       },
-      "stage_hash": "d58f34729b6356d6ecd0ace8f22e1861e1e136df516a7be442a377785a7b2510"
+      "stage_hash": "b36f2320853ac268deb21a34b0c14d48c0a701748c417f024975f6e7cb1bba0f"
     },
     "evaluation": {
       "splits": {
@@ -50,7 +50,7 @@
           "view_hash": "9f794e45cc3bd53fbadf92547d2488656dd5697e0463d6d6b7fea0897888b7f3"
         }
       },
-      "stage_hash": "2712ce1f162e10d286e4a8eab7df374daf9c3c84a27b2833ee719b4d59a575a1"
+      "stage_hash": "49007ce05919c8dcecc67850c1f4f891fa2d7e884852649cd2a03ee9cf2774b6"
     },
     "formal": {
       "splits": {
@@ -79,7 +79,7 @@
           "view_hash": "58838c52ef37f2bd23b6b8a57134a04556ac91e6faf602e5ffd1d3a0b87543f0"
         }
       },
-      "stage_hash": "eb03e7d05011f7b94ecdb1b01bbc41b4bfa214bf9a778fcd4fe9f309a43524f1"
+      "stage_hash": "c340ac16bbac85648957e6f80a375b3eb8770232a29e1dec1013bf0a708d1329"
     }
   }
 }

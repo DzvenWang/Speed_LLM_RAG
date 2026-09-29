@@ -13,9 +13,7 @@ METRIC_SPECS = [
     ('MAE', 'MAE'),
     ('RMSE', 'RMSE'),
     ('Masked_MAE', 'directly_masked_MAE'),
-    ('Support_MAE', 'support_dependent_MAE'),
     ('H12_MAE', 'H12_MAE'),
-    ('H12_Support_MAE', 'H12_support_dependent_MAE'),
 ]
 
 
@@ -111,9 +109,7 @@ def severity_table_lines(rows: Sequence[Mapping], include_seed: bool = False) ->
         ('MAE', 'MAE', '>'),
         ('RMSE', 'RMSE', '>'),
         ('Masked_MAE', 'Masked_MAE', '>'),
-        ('Support_MAE', 'Support_MAE', '>'),
         ('H12_MAE', 'H12_MAE', '>'),
-        ('H12_Support_MAE', 'H12_Support_MAE', '>'),
     ]
     return _format_table(rows, columns)
 
@@ -128,9 +124,7 @@ def scenario_table_lines(rows: Sequence[Mapping], include_seed: bool = False) ->
         ('MAE', 'MAE', '>'),
         ('RMSE', 'RMSE', '>'),
         ('Masked_MAE', 'Masked_MAE', '>'),
-        ('Support_MAE', 'Support_MAE', '>'),
         ('H12_MAE', 'H12_MAE', '>'),
-        ('H12_Support_MAE', 'H12_Support_MAE', '>'),
     ]
     return _format_table(rows, columns)
 

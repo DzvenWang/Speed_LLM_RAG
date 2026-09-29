@@ -1,6 +1,6 @@
-version: 1.2.0
+version: 1.2.1
 source:
-  supportbench_benchmark_version: 1.2.0
+  supportbench_benchmark_version: 1.2.1
 project:
   root: ${SPEED_LLM_RAG_ROOT}
   cache_root: ${SPEED_LLM_RAG_ROOT}/ExperimentCache/speed
@@ -51,10 +51,10 @@ protocol:
       family_rows:
         test: 1000
 contract:
-  cache_schema_version: 2
+  cache_schema_version: 3
   data_contract_revision: traffident_experiment_cache_v1
   time_feature_revision: traffident_time_features_v1
-  metrics_revision: traffident_metrics_v1
+  metrics_revision: traffident_metrics_v2
   prediction_contract_revision: traffident_prediction_v1
 time_features:
   allow_index_modulo_fallback: true

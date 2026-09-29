@@ -147,7 +147,7 @@ def build_one(src: Path, cfg: dict) -> None:
     )
 
     manifest={
-        'benchmark':'Base-SupportBench','version':'1.2.0','subgraph':src.name,'source_dir':str(src.resolve()),
+        'benchmark':'Base-SupportBench','version':'1.2.1','subgraph':src.name,'source_dir':str(src.resolve()),
         'shape':[int(T),int(N),int(C)],'channels':channels,'primary_channel':primary,'primary_channel_index':speed_idx,
         'history_len':int(cfg['forecast']['history_len']),'horizon':int(cfg['forecast']['horizon']),'freq_minutes':int(cfg['forecast']['freq_minutes']),
         'controlled_complete_min_fraction':float(cfg['forecast']['controlled_complete_min_fraction']),
@@ -165,7 +165,7 @@ def main():
     log(f'source_root={source}')
     for p in items: build_one(p,cfg)
     write_json(Path(cfg['project']['benchmark_root'])/'benchmark_manifest.json', {
-        'benchmark':'Base-SupportBench','version':'1.2.0','subgraphs':[p.name for p in items],
+        'benchmark':'Base-SupportBench','version':'1.2.1','subgraphs':[p.name for p in items],
         'history_len':int(cfg['forecast']['history_len']),'horizon':int(cfg['forecast']['horizon']),
         'split':'70/10/20 chronological','primary_channel':cfg['source']['primary_channel'],
         'canonical_data_rule':'Backbone/Baseline base data only; RAG/retrieval/LLM derived data are intentionally excluded',

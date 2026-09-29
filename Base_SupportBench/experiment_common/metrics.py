@@ -34,17 +34,13 @@ def mae_rmse(pred, true, valid, node_mask=None):
     return {'MAE': float(np.mean(np.abs(e))), 'RMSE': float(np.sqrt(np.mean(e * e))), 'count': int(p.size)}
 
 
-def metric_bundle(pred, true, valid, direct_mask, support_mask):
+def metric_bundle(pred, true, valid, direct_mask):
     """Canonical aggregate metrics used by Baseline/OwnModel evaluation."""
     out = {'metrics_revision': METRICS_REVISION}
-    scopes = [('overall', None), ('masked', direct_mask), ('support', support_mask)]
+    scopes = [('overall', None), ('masked', direct_mask)]
     for name, nm in scopes:
         d = mae_rmse(pred, true, valid, nm)
         out[f'{name}_MAE'] = d['MAE']; out[f'{name}_RMSE'] = d['RMSE']; out[f'{name}_count'] = d['count']
-    # Explicitly expose whether the canonical support metric is defined.
-    # Structural applicability/reason is audited against SupportBench separately;
-    # this flag prevents downstream tables from confusing count=0 with a model NaN.
-    out['support_metric_defined'] = bool(out['support_count'] > 0)
     for h in (3, 6, 12):
         hh = min(h, pred.shape[1]); sl = slice(hh - 1, hh)
         for name, nm in scopes:
@@ -55,48 +51,40 @@ def metric_bundle(pred, true, valid, direct_mask, support_mask):
     return out
 
 
-def per_query_metrics(pred, y, valid, direct, support):
+def per_query_metrics(pred, y, valid, direct):
     """Canonical per-query metrics used by Backbone training/selection."""
     rows = []
     for i in range(len(pred)):
         v = np.asarray(valid[i], bool)
         d = v & np.asarray(direct[i], bool)[None, :]
-        s = v & np.asarray(support[i], bool)[None, :]
         r = {
             'MAE': _metric(pred[i], y[i], v, 'mae'),
             'RMSE': _metric(pred[i], y[i], v, 'rmse'),
             'directly_masked_MAE': _metric(pred[i], y[i], d, 'mae'),
             'directly_masked_RMSE': _metric(pred[i], y[i], d, 'rmse'),
-            'support_dependent_MAE': _metric(pred[i], y[i], s, 'mae'),
-            'support_dependent_RMSE': _metric(pred[i], y[i], s, 'rmse'),
         }
         for h in (3, 6, 12):
             if h <= pred.shape[1]:
                 sl = slice(h - 1, h)
                 r[f'H{h}_MAE'] = _metric(pred[i, sl], y[i, sl], v[sl], 'mae')
                 r[f'H{h}_RMSE'] = _metric(pred[i, sl], y[i, sl], v[sl], 'rmse')
-                r[f'H{h}_support_dependent_MAE'] = _metric(pred[i, sl], y[i, sl], s[sl], 'mae')
-                r[f'H{h}_support_dependent_RMSE'] = _metric(pred[i, sl], y[i, sl], s[sl], 'rmse')
         rows.append(r)
     return rows
 
 
-def backbone_metric_summary(pred, true, valid, direct_mask, support_mask):
+def backbone_metric_summary(pred, true, valid, direct_mask):
     """Canonical micro-aggregated metrics using Backbone's historical key names.
 
     This is the comparison-safe aggregate used by Backbone selection, Baseline,
     and future OwnModel experiments. `per_query_metrics` remains available only
     for diagnostic CSV rows.
     """
-    b = metric_bundle(pred, true, valid, direct_mask, support_mask)
+    b = metric_bundle(pred, true, valid, direct_mask)
     out = {
         'MAE': b['overall_MAE'], 'RMSE': b['overall_RMSE'],
         'directly_masked_MAE': b['masked_MAE'], 'directly_masked_RMSE': b['masked_RMSE'],
-        'support_dependent_MAE': b['support_MAE'], 'support_dependent_RMSE': b['support_RMSE'],
     }
     for h in (3, 6, 12):
         out[f'H{h}_MAE'] = b[f'H{h}_overall_MAE']
         out[f'H{h}_RMSE'] = b[f'H{h}_overall_RMSE']
-        out[f'H{h}_support_dependent_MAE'] = b[f'H{h}_support_MAE']
-        out[f'H{h}_support_dependent_RMSE'] = b[f'H{h}_support_RMSE']
     return out

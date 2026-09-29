@@ -1,14 +1,13 @@
 {
-  "config_sha256": "0ec14671e227e9498f755bd9d0761c384ff662962cc30a2681d7aaeb1137779f",
+  "config_sha256": "8cefb130c4946ea31b41843459bddc33fc5025a9a4df48107c0d375c3737db0c",
   "dataset": "TraffiDent_Net_06",
   "distribution": "id",
   "evaluation_masks": {
     "val": {
       "direct_target_fraction": 0.5892365979381443,
-      "file_sha256": "738b8e18a5f9378f340990acbcffc59544f77fa48097a2129486e773dcb03611",
+      "file_sha256": "4285086b4728ba2f82857efaab8540855feecd5f6ccbd7d89491fa9a68ed8787",
       "future_valid_fraction": 1.0,
-      "rows": 5000,
-      "support_target_fraction": 0.0
+      "rows": 5000
     }
   },
   "families": [
@@ -30,12 +29,12 @@
   "num_nodes": 388,
   "protocol_name": "base_core5_flow_s40",
   "protocol_version": "2.1.0",
-  "reuses_development_val_stage_hash": "d58f34729b6356d6ecd0ace8f22e1861e1e136df516a7be442a377785a7b2510",
+  "reuses_development_val_stage_hash": "b36f2320853ac268deb21a34b0c14d48c0a701748c417f024975f6e7cb1bba0f",
   "seed": 10,
   "severity": 0.4,
   "source": {
-    "supportbench_benchmark_version": "1.2.0",
-    "supportbench_manifest_sha256": "ab9b7054025bdde1baecb1179a94aa94b87d94f6db3ede362ebe49344be668b3",
+    "supportbench_benchmark_version": "1.2.1",
+    "supportbench_manifest_sha256": "9b60af3681ee54c74790ffae46a61c4acc8578826cf747db59722d636771e755",
     "supportbench_package_version": "1.2.4",
     "supportbench_view_manifest_sha256": "4059ca78d2b2f1afa41c493eeec05e768371a9e989349077e74a92c78162ba4d"
   },
@@ -66,5 +65,5 @@
     }
   },
   "stage": "formal",
-  "stage_hash": "eb03e7d05011f7b94ecdb1b01bbc41b4bfa214bf9a778fcd4fe9f309a43524f1"
+  "stage_hash": "c340ac16bbac85648957e6f80a375b3eb8770232a29e1dec1013bf0a708d1329"
 }

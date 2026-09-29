@@ -155,22 +155,19 @@ def resolve_paired_evaluation_views(bench, cfg: dict, pair: pd.DataFrame) -> pd.
 def materialize_eval_masks(bench, views: pd.DataFrame, path: Path) -> dict:
     M, P, N = len(views), int(bench.P), int(bench.N)
     direct = np.zeros((M, N), dtype=np.uint8)
-    support = np.zeros((M, N), dtype=np.uint8)
     future_valid = np.zeros((M, P, N), dtype=np.uint8)
     view_ids = np.empty(M, dtype=f'<U{max(1, max(len(str(v)) for v in views.view_id.astype(str)))}')
     for i, vid in enumerate(views.view_id.astype(str)):
         s = bench.sample(vid)
         direct[i] = s.artificial_mask.any(axis=0).astype(np.uint8)
-        support[i] = np.zeros((N,), dtype=np.uint8)  # compatibility only; no RAG support scope
         future_valid[i] = s.raw_valid_future.astype(np.uint8)
         view_ids[i] = vid
         if (i + 1) % 500 == 0:
             print(f'evaluation masks: {i+1}/{M}', flush=True)
-    np.savez_compressed(path, view_id=view_ids, direct_mask=direct, support_mask=support, future_valid=future_valid)
+    np.savez_compressed(path, view_id=view_ids, direct_mask=direct, future_valid=future_valid)
     return {
         'rows': M,
         'direct_target_fraction': float(direct.mean()),
-        'support_target_fraction': float(support.mean()),
         'future_valid_fraction': float(future_valid.mean()),
         'file_sha256': sha256_file(path),
     }

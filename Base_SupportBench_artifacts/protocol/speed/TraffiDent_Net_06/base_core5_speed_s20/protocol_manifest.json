@@ -1,7 +1,7 @@
 {
   "dataset": "TraffiDent_Net_06",
   "paired_group_id": "TraffiDent_Net_06_base_core5_speed_multiseverity_v1",
-  "protocol_hash": "85f341142db5e45cc953d0d5069253326c06d5a75ec4d9056dac90a8a45381c2",
+  "protocol_hash": "bdb7cb61a3b4af2a3aaeb2825cd949324a713d81bc8e1408faf489efab76696b",
   "protocol_name": "base_core5_speed_s20",
   "protocol_version": "2.1.0",
   "severity": 0.2,
@@ -21,7 +21,7 @@
           "view_hash": "01e738465dedd395c0a909b545ffeb96e4c73f7f95860cbf2b3d441501fbdbfb"
         }
       },
-      "stage_hash": "a647cae73326892cd3e61aca5016ee326672db3a3586abcaff21d41a58255ca6"
+      "stage_hash": "c6fddc73549ce28c3b731d9012ec462218f97bedf60a28cd977f74706dcab705"
     }
   }
 }

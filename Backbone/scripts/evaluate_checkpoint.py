@@ -14,7 +14,7 @@ import sys
 import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = Path(os.environ.get('SPEED_LLM_RAG_ROOT', ROOT.parent)).expanduser().resolve()
@@ -57,6 +57,8 @@ def main() -> None:
                     help='Optional compact machine-readable result for a parent multi-severity runner')
     ap.add_argument('--quiet-summary', action='store_true',
                     help='Suppress the standalone final table; parent runner will print a combined table')
+    ap.add_argument('--smoke-test-batches', type=int, default=None,
+                    help='Bound evaluation to this many real test batches; intended only for smoke tests')
     # Retained for CLI compatibility with v1.0.5.  They are intentionally ignored.
     ap.add_argument('--layout-snapshot', default=None)
     ap.add_argument('--allow-current-layout-mismatch', action='store_true')
@@ -141,14 +143,23 @@ def main() -> None:
     )
 
     batch_size = int(ck.get('batch_size', ck['model_config'].get('batch_size', 16)))
+    eval_dataset = test
+    eval_meta = test.meta
+    if args.smoke_test_batches is not None:
+        if int(args.smoke_test_batches) < 1:
+            raise ValueError('--smoke-test-batches must be >= 1')
+        max_queries = min(len(test), int(args.smoke_test_batches) * batch_size)
+        eval_dataset = Subset(test, range(max_queries))
+        eval_meta = test.meta.iloc[:max_queries].reset_index(drop=True)
+        log(f'EVALUATION_SMOKE enabled batches={args.smoke_test_batches} queries={max_queries}')
     loader = DataLoader(
-        test, batch_size=batch_size, shuffle=False, num_workers=0,
+        eval_dataset, batch_size=batch_size, shuffle=False, num_workers=0,
         pin_memory=torch.cuda.is_available(),
     )
-    pred, df, summary = evaluate(adapter, loader, test.meta, device)
+    pred, df, summary = evaluate(adapter, loader, eval_meta, device)
     seed = int(ck.get('seed', args.expected_seed if args.expected_seed is not None else -1))
     families = [str(x) for x in cfg['experiment']['families']]
-    query_counts = {str(k): int(v) for k, v in test.meta['family'].astype(str).value_counts().to_dict().items()}
+    query_counts = {str(k): int(v) for k, v in eval_meta['family'].astype(str).value_counts().to_dict().items()}
     sev_row = severity_row(summary, args.severity, seed)
     scen_rows = scenario_rows(summary, families, args.severity, seed, query_counts)
 
@@ -165,6 +176,7 @@ def main() -> None:
     metadata = {
         'producer': 'Backbone', 'model': model_name, 'seed': seed,
         'stage': 'checkpoint_evaluation', 'severity': args.severity,
+        'smoke_test_batches': args.smoke_test_batches,
         'checkpoint': str(checkpoint), 'checkpoint_sha256': checkpoint_sha,
         'evaluation_policy': 'simple_current_cache_current_layout',
         'checkpoint_spatial_layout_fingerprint': old_layout,
@@ -172,7 +184,7 @@ def main() -> None:
         'spatial_layout_match': bool(layout_match),
     }
     save_prediction_npz(
-        out / 'test_predictions.npz', test.meta.view_id.astype(str).tolist(), pred.astype(np.float32),
+        out / 'test_predictions.npz', eval_meta.view_id.astype(str).tolist(), pred.astype(np.float32),
         manifest_path=out / 'test_predictions.manifest.json', metadata=metadata,
     )
     df.to_csv(out / 'test_metrics.csv', index=False)
@@ -206,7 +218,7 @@ def main() -> None:
         )
     log(
         f'CHECKPOINT EVALUATION COMPLETE s{args.severity} seed={seed} '
-        f'MAE={summary["MAE"]:.6f} support_MAE={summary["support_dependent_MAE"]:.6f} out={out}'
+        f'MAE={summary["MAE"]:.6f} masked_MAE={summary["directly_masked_MAE"]:.6f} out={out}'
     )
     if not args.quiet_summary:
         from backbone.evaluation_reporting import severity_table_lines, scenario_table_lines

@@ -7,7 +7,7 @@ project:
   benchmark_root: ${SPEED_LLM_RAG_ROOT}/data/processed/traffident/base_supportbench/speed
   python: auto
 source:
-  supportbench_benchmark_version: 1.2.0
+  supportbench_benchmark_version: 1.2.1
 experiment:
   dataset: TraffiDent_Net_06
   history: 12

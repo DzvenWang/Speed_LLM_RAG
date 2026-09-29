@@ -1,6 +1,6 @@
-version: 1.1.1
+version: 1.1.4
 source:
-  supportbench_benchmark_version: 1.2.0
+  supportbench_benchmark_version: 1.2.1
 project:
   root: ${SPEED_LLM_RAG_ROOT}
   backbone_root: ${SPEED_LLM_RAG_ROOT}/Backbone
@@ -31,11 +31,11 @@ experiment:
   - regional_outage
   - directional_outage
 shared_contract:
-  required_version: 1.2.0
-  required_cache_schema_version: 2
+  required_version: 1.2.1
+  required_cache_schema_version: 3
   data_contract_revision: traffident_experiment_cache_v1
   time_feature_revision: traffident_time_features_v1
-  metrics_revision: traffident_metrics_v1
+  metrics_revision: traffident_metrics_v2
   prediction_contract_revision: traffident_prediction_v1
   protocol_version: 2.1.0
   paired_group_id: TraffiDent_Net_06_base_core5_${TRAFFIDENT_TARGET}_multiseverity_v1

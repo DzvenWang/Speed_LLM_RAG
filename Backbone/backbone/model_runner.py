@@ -64,8 +64,8 @@ def _train_once(cfg, recipes, model_name, cache_dir, run_dir, vendor_root, bench
         if sched is not None:
             if plateau: sched.step(v)
             else: sched.step()
-        rec={'epoch':epoch,'train_loss':float(np.mean(losses)),'val_MAE':v,'val_support_dependent_MAE':float(vs['support_dependent_MAE']),'lr':float(opt.param_groups[0]['lr']),'seconds':float(time.time()-e0)}; history.append(rec)
-        log(f'model={model_name} epoch={epoch:03d} train_loss={rec["train_loss"]:.6f} val_MAE={v:.6f} val_support_MAE={rec["val_support_dependent_MAE"]:.6f} lr={rec["lr"]:.3e} time={rec["seconds"]:.1f}s')
+        rec={'epoch':epoch,'train_loss':float(np.mean(losses)),'val_MAE':v,'val_masked_MAE':float(vs['directly_masked_MAE']),'lr':float(opt.param_groups[0]['lr']),'seconds':float(time.time()-e0)}; history.append(rec)
+        log(f'model={model_name} epoch={epoch:03d} train_loss={rec["train_loss"]:.6f} val_MAE={v:.6f} val_masked_MAE={rec["val_masked_MAE"]:.6f} lr={rec["lr"]:.3e} time={rec["seconds"]:.1f}s')
         if v < best-1e-8:
             best=v; best_epoch=epoch; wait=0
             ck={'project_version':cfg['version'],'run_identity':ident,'stage':'formal','model':model_name,'target':target,'state_dict':model.state_dict(),'model_config':mc,'num_nodes':bench.N,'mean':mean,'std':std,'seed':seed,'batch_size':batch_size,'best_val_MAE':best,'best_epoch':best_epoch,'recipe_source':mc.get('recipe_source'),'adapter_revision':getattr(adapter,'adapter_revision',None),'adapter_metadata':getattr(adapter,'adapter_metadata',{})}

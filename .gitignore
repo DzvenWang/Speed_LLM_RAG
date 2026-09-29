@@ -90,7 +90,8 @@ PreSuRe_exps/
 PatchSTG_Oracle_logs/
 PatchSTG_Oracle_exps/
 
-Base_SupportBench_logs
+Base_SupportBench_logs/
+Base_SupportBench_artifacts/
 
 model_cache/
 

@@ -52,7 +52,7 @@ def protocol_cfg(dataset,sev,base,config_path):
         'log_root':str(PROJECT/'Base_SupportBench_logs'),
         'benchmark_root':str(PROJECT/'data'/'processed'/'traffident'/'base_supportbench'),
         'python':'auto'},
-      'source':{'supportbench_benchmark_version':'1.2.0'},
+      'source':{'supportbench_benchmark_version':'1.2.1'},
       'experiment':{'dataset':dataset,'history':12,'horizon':12,'severity':sev,'distribution':'id','seed':int(base['experiment']['seed']),'families':FAMILIES},
       'protocol':{
         'name':f'base_core5_{tag}','role':'backbone_baseline_base_data',
@@ -80,14 +80,14 @@ def cache_cfg(pcfg,stage):
       'evaluation':{'test_rows':5000,'test_unique_groups':5000,'family_rows':{'test':1000}},
     }
     return {
-      'version':'1.2.0','source':{'supportbench_benchmark_version':'1.2.0'},
+      'version':'1.2.1','source':{'supportbench_benchmark_version':'1.2.1'},
       'project':{'root':str(PROJECT),'cache_root':str(PROJECT/'ExperimentCache'),'log_root':str(PROJECT/'Base_SupportBench_logs'),
                  'benchmark_root':str(PROJECT/'data'/'processed'/'traffident'/'base_supportbench'),
                  'protocol_artifact_root':str(PROJECT/'Base_SupportBench_artifacts'/'protocol')},
       'experiment':{'subgraph':pcfg['experiment']['dataset'],'history':12,'horizon':12,'severity':sev,'normalized_fill_value':0.0,'families':FAMILIES},
       'protocol':{'name':pcfg['protocol']['name'],'version':'2.1.0','paired_group_id':pcfg['protocol']['paired_group_id'],
                   'allowed_stages':pcfg['protocol']['allowed_stages'],'no_local_sampling':True,'stage_assertions':assertions},
-      'contract':{'cache_schema_version':2,'data_contract_revision':'traffident_experiment_cache_v1','time_feature_revision':'traffident_time_features_v1','metrics_revision':'traffident_metrics_v1','prediction_contract_revision':'traffident_prediction_v1'},
+      'contract':{'cache_schema_version':3,'data_contract_revision':'traffident_experiment_cache_v1','time_feature_revision':'traffident_time_features_v1','metrics_revision':'traffident_metrics_v2','prediction_contract_revision':'traffident_prediction_v1'},
       'time_features':{'allow_index_modulo_fallback':True,'index_origin_dow':0,'expected_freq_minutes':5,'expected_steps_per_day':288}
     }
 

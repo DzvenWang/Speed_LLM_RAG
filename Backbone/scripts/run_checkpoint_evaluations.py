@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Cross-platform runner for one explicit Backbone checkpoint on multiple severities.
 
-Creates a live, timestamped combined log under Speed_LLM_RAG/Backbone_logs on both
-Windows/PowerShell and Linux. GADI PBS jobs additionally keep their per-severity PBS logs.
+Creates only the live combined .log under Speed_LLM_RAG/Backbone_logs.
+All evaluation artifacts (JSON/CSV/predictions/summaries) are stored under Backbone_exps.
 """
 from pathlib import Path
 import argparse
@@ -52,6 +52,8 @@ def main() -> None:
                     help='Do not create a second evaluation live log; print only to parent stdout/stderr')
     ap.add_argument('--layout-snapshot', default=None)
     ap.add_argument('--allow-current-layout-mismatch', action='store_true')
+    ap.add_argument('--smoke-test-batches', type=int, default=None,
+                    help='Bound each severity to this many real test batches; skips full scenario-coverage assertion')
     args = ap.parse_args()
 
     stamp = args.run_stamp or datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -63,7 +65,16 @@ def main() -> None:
     )
     if not args.stdout_only:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-    result_root = log_root / f'{args.model}.checkpoint_eval.all.seed{seed_tag}.{stamp}.results'
+    cfg = load_yaml(args.config)
+    checkpoint = Path(args.checkpoint).expanduser()
+    if not checkpoint.is_absolute():
+        checkpoint = (REPO_ROOT / checkpoint).resolve()
+    checkpoint_run_tag = checkpoint.parent.name or 'checkpoint'
+    result_root = (
+        Path(cfg['project']['exp_root']) / args.model / cfg['experiment']['subgraph']
+        / 'checkpoint_evaluation' / checkpoint_run_tag / 'combined'
+        / f'{stamp}_seed{seed_tag}'
+    )
     result_root.mkdir(parents=True, exist_ok=True)
 
     env = os.environ.copy()
@@ -100,6 +111,8 @@ def main() -> None:
                 cmd += ['--layout-snapshot', args.layout_snapshot]
             if args.allow_current_layout_mismatch:
                 cmd += ['--allow-current-layout-mismatch']
+            if args.smoke_test_batches is not None:
+                cmd += ['--smoke-test-batches', str(args.smoke_test_batches)]
             _emit(fh, 'RUN ' + subprocess.list2cmdline(cmd))
 
             proc = subprocess.Popen(
@@ -128,17 +141,19 @@ def main() -> None:
             severity_rows.append(payload['severity'])
             scenario_rows.extend(payload['scenarios'])
 
-        cfg = load_yaml(args.config)
         expected_families = [str(x) for x in cfg['experiment']['families']]
-        for sev in args.severities:
-            got = [str(r['scenario']) for r in scenario_rows if int(r['severity']) == int(sev)]
-            if set(got) != set(expected_families) or len(got) != len(expected_families):
-                _emit(fh, f'SCENARIO_COVERAGE_FAILED s{sev} expected={expected_families} got={got}')
-                raise SystemExit(4)
-        _emit(fh, 'SCENARIO_COVERAGE_PASS families=' + ','.join(expected_families))
+        if args.smoke_test_batches is None:
+            for sev in args.severities:
+                got = [str(r['scenario']) for r in scenario_rows if int(r['severity']) == int(sev)]
+                if set(got) != set(expected_families) or len(got) != len(expected_families):
+                    _emit(fh, f'SCENARIO_COVERAGE_FAILED s{sev} expected={expected_families} got={got}')
+                    raise SystemExit(4)
+            _emit(fh, 'SCENARIO_COVERAGE_PASS families=' + ','.join(expected_families))
+        else:
+            _emit(fh, f'SCENARIO_COVERAGE_SKIPPED smoke_test_batches={args.smoke_test_batches}')
 
-        severity_csv = log_root / f'{args.model}.checkpoint_eval.all.seed{seed_tag}.{stamp}.severity_summary.csv'
-        scenario_csv = log_root / f'{args.model}.checkpoint_eval.all.seed{seed_tag}.{stamp}.scenario_summary.csv'
+        severity_csv = result_root / 'severity_summary.csv'
+        scenario_csv = result_root / 'scenario_summary.csv'
         pd.DataFrame(severity_rows).to_csv(severity_csv, index=False)
         pd.DataFrame(scenario_rows).to_csv(scenario_csv, index=False)
 

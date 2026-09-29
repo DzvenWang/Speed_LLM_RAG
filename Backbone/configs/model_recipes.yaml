@@ -1,4 +1,4 @@
-version: 1.1.1
+version: 1.1.2
 models:
   STAEformer:
     recipe_source: STAEformer/model/STAEformer.yaml:PEMS04

@@ -288,7 +288,6 @@ def _materialize_split(bench, df: pd.DataFrame, out: Path, split: str, tf) -> di
         'y_norm': ((M,P,N), np.float32),
         'future_valid': ((M,P,N), np.uint8),
         'direct_mask': ((M,N), np.uint8),
-        'support_mask': ((M,N), np.uint8),
         'tod_hist': ((M,H), np.int16),
         'dow_hist': ((M,H), np.int8),
         'tod_future': ((M,P), np.int16),
@@ -317,7 +316,6 @@ def _materialize_split(bench, df: pd.DataFrame, out: Path, split: str, tf) -> di
         arr['y_norm'][i] = (s.future_target - mean) / std
         arr['future_valid'][i] = s.raw_valid_future.astype(np.uint8)
         arr['direct_mask'][i] = art.any(axis=0).astype(np.uint8)
-        arr['support_mask'][i] = np.zeros((N,), dtype=np.uint8)  # compatibility only; Base_SupportBench has no RAG support scope
         st = int(s.window_start)
         arr['tod_hist'][i] = tod[st:st+H]; arr['dow_hist'][i] = dow[st:st+H]
         arr['tod_future'][i] = tod[st+H:st+H+P]; arr['dow_future'][i] = dow[st+H:st+H+P]
@@ -535,7 +533,7 @@ def validate_cache(cfg: dict, stage: str, *, allow_locked_evaluation_validation:
     P = int(cfg['experiment']['horizon'])
     required_arrays = [
         'x_obs_norm','x_full_norm','history_observed','artificial_missing','y_raw','y_norm',
-        'future_valid','direct_mask','support_mask','tod_hist','dow_hist','tod_future','dow_future',
+        'future_valid','direct_mask','tod_hist','dow_hist','tod_future','dow_future',
     ]
     for split in expected:
         meta = pd.read_csv(out/f'{split}_manifest.csv')

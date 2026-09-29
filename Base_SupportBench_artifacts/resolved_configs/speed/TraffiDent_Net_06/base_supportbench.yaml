@@ -1,4 +1,4 @@
-version: 1.2.0
+version: 1.2.1
 project:
   project_root: ${SPEED_LLM_RAG_ROOT}
   process_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench
