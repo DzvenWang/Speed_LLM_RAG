@@ -1,3 +1,8 @@
+## 1.1.5
+- `scripts/smoke_all_formal.py` now automatically writes a complete controller + child-process transcript to `Backbone_logs/smoke_all_formal/BackboneSmokeAllFormal.<timestamp>.log` while continuing to stream the same output to the terminal.
+- No change to model, Formal training, checkpoint evaluation, cache, metric, or experiment-output semantics.
+- Removed packaged `__pycache__` directories and `.pyc` files.
+
 ## 1.1.4
 - Keep `Backbone_logs` log-only: checkpoint-evaluation result JSONs and summary CSVs now live under `Backbone_exps/<target>/<model>/<subgraph>/checkpoint_evaluation/...`.
 - Per-severity evaluation artifacts remain under `Backbone_exps`; formal smoke follows the same layout.
