@@ -11,6 +11,32 @@ from supportbench.dataset import SupportBench
 
 MODELS = (*GENERIC_MODELS[:4], 'PatchSTG', *GENERIC_MODELS[4:])
 
+class _Tee:
+    def __init__(self, *streams): self.streams=streams
+    def write(self, data):
+        for stream in self.streams:
+            stream.write(data); stream.flush()
+        return len(data)
+    def flush(self):
+        for stream in self.streams: stream.flush()
+    def isatty(self): return any(getattr(s, 'isatty', lambda: False)() for s in self.streams)
+
+
+def _enable_local_live_log(cfg, model, target, seed, stamp, smoke):
+    # PBS already timestamps and tees the complete job stream, including automatic evaluation.
+    # Only create this Python-side tee for direct/local invocations to avoid duplicate Gadi logs.
+    if os.environ.get('BACKBONE_PBS_LIVE_LOG') == '1':
+        return None, None
+    log_dir=Path(cfg['project']['log_root'])/model
+    log_dir.mkdir(parents=True,exist_ok=True)
+    mode='formal_smoke' if smoke else 'formal'
+    path=log_dir/f'{model}.{target}.{mode}.seed{seed}.local.{stamp}.live.log'
+    fh=path.open('a',encoding='utf-8',buffering=1)
+    sys.stdout=_Tee(sys.__stdout__,fh); sys.stderr=_Tee(sys.__stderr__,fh)
+    print(f'LOCAL_LIVE_LOG={path}',flush=True)
+    return path, fh
+
+
 def main():
     ap=argparse.ArgumentParser(description='User-selected single-model Formal runner; no auto-selection and no freeze.')
     ap.add_argument('--model',required=True,choices=MODELS); ap.add_argument('--target',choices=['speed','flow']); ap.add_argument('--seed',type=int,default=10); ap.add_argument('--run-stamp')
@@ -26,6 +52,7 @@ def main():
     if a.target and target != a.target: raise SystemExit(f'target resolution mismatch: CLI={a.target} config={target}')
     validate_shared_cache(cfg,'formal'); cache=cache_path(cfg,'formal'); bench=SupportBench(cfg['experiment']['subgraph'],root=cfg['project']['benchmark_root'])
     st=bench.stats['channels'][bench.manifest['primary_channel']]; stamp=a.run_stamp or datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    _live_path, _live_fh = _enable_local_live_log(cfg,a.model,target,a.seed,stamp,a.smoke)
     stage_dir='formal_smoke' if a.smoke else 'formal'
     run=Path(cfg['project']['exp_root'])/a.model/cfg['experiment']['subgraph']/stage_dir/f'{stamp}_seed{a.seed}'
     log(f'USER_SELECTED_FORMAL model={a.model} target={target} seed={a.seed} smoke={a.smoke} run_dir={run} cache_dir={cache}')

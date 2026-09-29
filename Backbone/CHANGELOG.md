@@ -1,3 +1,8 @@
+## 1.1.7
+- Direct/local `scripts/run_model_formal.py` runs now automatically tee stdout/stderr to a per-model `.local.<timestamp>.live.log` under `Backbone_logs/<target>/<model>/` while preserving live terminal output.
+- Gadi/PBS behavior is unchanged: when `BACKBONE_PBS_LIVE_LOG=1`, the Python runner does not create a second log, so the PBS job remains the single complete live log including post-training evaluation.
+- No training, cache, metric, checkpoint, or evaluation semantics changed.
+
 ## 1.1.6
 - Unified PatchSTG Formal submission with the other five Backbone models through `scripts/run_model_formal.py` and `pbs/run_model_formal.pbs`.
 - PatchSTG keeps its dedicated, previously validated training/smoke implementation; the unified Formal entry point dispatches to it internally.
