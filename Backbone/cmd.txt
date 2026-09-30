@@ -6,24 +6,22 @@ python -u Backbone\scripts\smoke_all_formal.py --continue-on-error
 
 cd /scratch/mh20/zw1165/Speed_LLM_RAG
 conda activate TFP
-
 export SPEED_LLM_RAG_ROOT=$PWD
-export PYTHONUNBUFFERED=1
 
-qsub -N STAE_speed     -v MODEL=STAEformer,TARGET=speed,SEED=10 Backbone/pbs/run_model_formal.pbs
-qsub -N STAE_flow      -v MODEL=STAEformer,TARGET=flow,SEED=10  Backbone/pbs/run_model_formal.pbs
+qsub -v MODEL=STAEformer,TARGET=speed,SEED=10 -N STAE_speed Backbone/pbs/run_model_formal.pbs
+qsub -v MODEL=STAEformer,TARGET=flow,SEED=10  -N STAE_flow  Backbone/pbs/run_model_formal.pbs
 
-qsub -N HimNet_speed   -v MODEL=HimNet,TARGET=speed,SEED=10 Backbone/pbs/run_model_formal.pbs
-qsub -N HimNet_flow    -v MODEL=HimNet,TARGET=flow,SEED=10  Backbone/pbs/run_model_formal.pbs
+qsub -v MODEL=HimNet,TARGET=speed,SEED=10 -N HimNet_speed Backbone/pbs/run_model_formal.pbs
+qsub -v MODEL=HimNet,TARGET=flow,SEED=10  -N HimNet_flow  Backbone/pbs/run_model_formal.pbs
 
-qsub -N BigST_speed    -v MODEL=BigST,TARGET=speed,SEED=10 Backbone/pbs/run_model_formal.pbs
-qsub -N BigST_flow     -v MODEL=BigST,TARGET=flow,SEED=10  Backbone/pbs/run_model_formal.pbs
+qsub -v MODEL=BigST,TARGET=speed,SEED=10 -N BigST_speed Backbone/pbs/run_model_formal.pbs
+qsub -v MODEL=BigST,TARGET=flow,SEED=10  -N BigST_flow  Backbone/pbs/run_model_formal.pbs
 
-qsub -N STDN_speed     -v MODEL=STDN,TARGET=speed,SEED=10 Backbone/pbs/run_model_formal.pbs
-qsub -N STDN_flow      -v MODEL=STDN,TARGET=flow,SEED=10  Backbone/pbs/run_model_formal.pbs
+qsub -v MODEL=STDN,TARGET=speed,SEED=10 -N STDN_speed Backbone/pbs/run_model_formal.pbs
+qsub -v MODEL=STDN,TARGET=flow,SEED=10  -N STDN_flow  Backbone/pbs/run_model_formal.pbs
 
-qsub -N PatchSTG_speed -v MODEL=PatchSTG,TARGET=speed,SEED=10 Backbone/pbs/run_model_formal.pbs
-qsub -N PatchSTG_flow  -v MODEL=PatchSTG,TARGET=flow,SEED=10  Backbone/pbs/run_model_formal.pbs
+qsub -v MODEL=PatchSTG,TARGET=speed,SEED=10 -N PatchSTG_speed Backbone/pbs/run_model_formal.pbs
+qsub -v MODEL=PatchSTG,TARGET=flow,SEED=10  -N PatchSTG_flow  Backbone/pbs/run_model_formal.pbs
 
-qsub -N STLA_speed     -v MODEL=STLAformer,TARGET=speed,SEED=10 Backbone/pbs/run_model_formal.pbs
-qsub -N STLA_flow      -v MODEL=STLAformer,TARGET=flow,SEED=10  Backbone/pbs/run_model_formal.pbs
+qsub -v MODEL=STLAformer,TARGET=speed,SEED=10 -N STLA_speed Backbone/pbs/run_model_formal.pbs
+qsub -v MODEL=STLAformer,TARGET=flow,SEED=10  -N STLA_flow  Backbone/pbs/run_model_formal.pbs

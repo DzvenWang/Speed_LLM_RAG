@@ -18,3 +18,21 @@ python -u Baseline\scripts\smoke_primary_independent_lifecycle.py `
   --continue-on-error
 
 
+cd /scratch/mh20/zw1165/Speed_LLM_RAG
+conda activate TFP
+export SPEED_LLM_RAG_ROOT=$PWD
+
+qsub -v METHOD=GinAR,TARGET=speed,SEED=10 -N GinAR_speed Baseline/pbs/methods/formal_primary.pbs
+qsub -v METHOD=GinAR,TARGET=flow,SEED=10  -N GinAR_flow  Baseline/pbs/methods/formal_primary.pbs
+
+qsub -v METHOD=RAFT,TARGET=speed,SEED=10 -N RAFT_speed Baseline/pbs/methods/formal_primary.pbs
+qsub -v METHOD=RAFT,TARGET=flow,SEED=10  -N RAFT_flow  Baseline/pbs/methods/formal_primary.pbs
+
+qsub -v METHOD=RAST,TARGET=speed,SEED=10 -N RAST_speed Baseline/pbs/methods/formal_primary.pbs
+qsub -v METHOD=RAST,TARGET=flow,SEED=10  -N RAST_flow  Baseline/pbs/methods/formal_primary.pbs
+
+qsub -v METHOD=SARAF,TARGET=speed,SEED=10 -N SARAF_speed Baseline/pbs/methods/formal_primary.pbs
+qsub -v METHOD=SARAF,TARGET=flow,SEED=10  -N SARAF_flow  Baseline/pbs/methods/formal_primary.pbs
+
+qsub -v METHOD=ReMFT,TARGET=speed,SEED=10 -N ReMFT_speed Baseline/pbs/methods/formal_primary.pbs
+qsub -v METHOD=ReMFT,TARGET=flow,SEED=10  -N ReMFT_flow  Baseline/pbs/methods/formal_primary.pbs

@@ -7,8 +7,15 @@
 #PBS -N BaselineFormal
 export TRAFFIDENT_TARGET="${TARGET:-speed}"
 set -euo pipefail
-ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline
-PY=${PYTHON:-python}
+PROJECT_ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
+ROOT="$PROJECT_ROOT/Baseline"
+ENVROOT=${TFP_ENV_ROOT:-/scratch/mh20/zw1165/envs/TFP}
+PY="$ENVROOT/bin/python"
+PY3="$ENVROOT/bin/python3"
+[[ -x "$PY" ]] || { echo "ERROR Python not executable: $PY"; exit 3; }
+[[ -x "$PY3" ]] || { echo "ERROR Python3 not executable: $PY3"; exit 3; }
+export SPEED_LLM_RAG_ROOT="$PROJECT_ROOT"
+export PATH="$ENVROOT/bin:$PATH"
 : "${METHOD:?METHOD required}"
 : "${SEED:?SEED required}"
 case "$METHOD" in
@@ -22,7 +29,7 @@ fi
 source "$ROOT/scripts/pbs_live_log.sh"
 baseline_live_log_start "BaselineFormal" "$METHOD" "seed${SEED}" "formal"
 baseline_install_exit_trap
-export PYTHONPATH="$ROOT:${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Base_SupportBench:${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Base_SupportBench:${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Base_SupportBench:${PYTHONPATH:-}"
+export PYTHONPATH="$ROOT:$PROJECT_ROOT/Base_SupportBench:${PYTHONPATH:-}"
 unset TRANSFORMERS_CACHE || true
 cd "$ROOT"
 echo "START Primary Formal v1.3.2 method=$METHOD target=$TRAFFIDENT_TARGET seed=$SEED"

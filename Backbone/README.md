@@ -1,6 +1,13 @@
-# Backbone v1.1.1 Slim
+# Backbone v1.1.9 Slim
 
 Minimal Backbone project for TraffiDent incomplete-sensing experiments.
+
+## v1.1.9 Gadi PBS environment fix
+
+- Based directly on Backbone v1.1.8 (`configs/backbone.yaml`).
+- `pbs/run_model_formal.pbs` is self-contained for the current Gadi TFP environment: `TFP_ENV_ROOT` may override the environment, otherwise it falls back to `/scratch/mh20/zw1165/envs/TFP`.
+- Formal training still uses the environment's absolute `bin/python`; timestamp streaming uses absolute `bin/python3`.
+- No model architecture, recipe, Formal protocol, ExperimentCache, training logic, or post-training evaluation logic is changed.
 
 ## Active models
 STAEformer, HimNet, BigST, STDN, PatchSTG, STLAformer.

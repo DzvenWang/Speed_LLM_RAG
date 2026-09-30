@@ -1,4 +1,4 @@
-# Baseline v1.3.2 Minimal
+# Baseline v1.3.7 Minimal
 
 Minimal experiment-execution release for TraffiDent_Net_06 under incomplete sensing.
 Model architectures, adapters, runners, hyperparameters, and the frozen experiment protocol are unchanged from v1.2.3. Development-only tests, diagnostics, setup helpers, status tools, and redundant PBS entrypoints were removed.
@@ -55,3 +55,12 @@ Every line emitted by the primary smoke driver and every captured child-process 
 - ReMFT preflight and runner use the same resolver; no duplicate BERT copy is required.
 - Smoke child processes force UTF-8 (`PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`) so vendor diagnostic output such as SARAF's sigma symbol is safe on Windows.
 - No model architecture, hyperparameter, Protocol, ExperimentCache, or Frozen Backbone contract is changed.
+
+## Gadi PBS environment fix (v1.3.7)
+
+- Based directly on Baseline v1.3.6 (`configs/baseline.yaml`).
+- `pbs/methods/formal_primary.pbs` no longer falls back to the deprecated bare `python` command.
+- `TFP_ENV_ROOT` may override the Python environment; otherwise Gadi uses `/scratch/mh20/zw1165/envs/TFP`.
+- The PBS job exports a deterministic `SPEED_LLM_RAG_ROOT`, TFP `PATH`, and a single Base_SupportBench entry in `PYTHONPATH`.
+- No Baseline model architecture, adapter, runner, hyperparameter, Formal/evaluation protocol, ExperimentCache, or Frozen Backbone contract is changed.
+

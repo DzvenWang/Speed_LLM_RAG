@@ -17,7 +17,7 @@ case "$TARGET" in speed|flow) ;; *) echo "ERROR TARGET=$TARGET"; exit 2;; esac
 [[ "$SEED" == "10" ]] || { echo "ERROR Formal seed fixed to 10"; exit 2; }
 ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
 PROJ="$ROOT/Backbone"
-ENVROOT=${TFP_ENV_ROOT:-${CONDA_PREFIX:-}}
+ENVROOT=${TFP_ENV_ROOT:-/scratch/mh20/zw1165/envs/TFP}
 PYTHON="$ENVROOT/bin/python"
 PYTHON3="$ENVROOT/bin/python3"
 [[ -x "$PYTHON" ]] || { echo "ERROR Python not executable: $PYTHON"; exit 3; }
