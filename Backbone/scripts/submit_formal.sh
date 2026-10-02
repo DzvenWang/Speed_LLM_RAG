@@ -26,14 +26,8 @@ STAMP=$(date +%Y%m%d_%H%M%S)
 PBSOUT="$LOGROOT/${MODEL}.${TARGET}.formal.seed${SEED}.${STAMP}.OU"
 
 COMMON="MODEL=$MODEL,TARGET=$TARGET,SEED=$SEED,SPEED_LLM_RAG_ROOT=$ROOT,TFP_ENV_ROOT=$ENVROOT"
-if [[ "$MODEL" == "PatchSTG" ]]; then
-  JOBID=$(qsub -N "Patch_${TARGET}" -j oe -o "$PBSOUT" \
-    -v "TARGET=$TARGET,STAGE=formal,SEED=$SEED,SPEED_LLM_RAG_ROOT=$ROOT,TFP_ENV_ROOT=$ENVROOT" \
-    "$PROJ/pbs/run_patchstg.pbs")
-else
-  JOBID=$(qsub -N "${MODEL}_${TARGET}" -j oe -o "$PBSOUT" \
-    -v "$COMMON" "$PROJ/pbs/run_model_formal.pbs")
-fi
+JOBID=$(qsub -N "${MODEL}_${TARGET}" -j oe -o "$PBSOUT" \
+  -v "$COMMON" "$PROJ/pbs/run_model_formal.pbs")
 
 echo "SUBMIT_PASS model=$MODEL target=$TARGET seed=$SEED job=$JOBID"
 echo "PBS_OUTPUT=$PBSOUT"

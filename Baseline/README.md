@@ -1,4 +1,4 @@
-# Baseline v1.3.7 Minimal
+# Baseline v1.3.10 Minimal
 
 Minimal experiment-execution release for TraffiDent_Net_06 under incomplete sensing.
 Model architectures, adapters, runners, hyperparameters, and the frozen experiment protocol are unchanged from v1.2.3. Development-only tests, diagnostics, setup helpers, status tools, and redundant PBS entrypoints were removed.
@@ -63,4 +63,19 @@ Every line emitted by the primary smoke driver and every captured child-process 
 - `TFP_ENV_ROOT` may override the Python environment; otherwise Gadi uses `/scratch/mh20/zw1165/envs/TFP`.
 - The PBS job exports a deterministic `SPEED_LLM_RAG_ROOT`, TFP `PATH`, and a single Base_SupportBench entry in `PYTHONPATH`.
 - No Baseline model architecture, adapter, runner, hyperparameter, Formal/evaluation protocol, ExperimentCache, or Frozen Backbone contract is changed.
+
+
+
+## Official-source bootstrap and method-scoped preflight (v1.3.9)
+
+- Fixes Formal jobs stopping before training when `Baseline/vendor` or `SOURCE_LOCK.json` is absent.
+- `scripts/preflight.py --method <METHOD>` now verifies only the official repository used by that method; unrelated secondary repositories no longer block a primary Formal run.
+- `scripts/setup_official_source.py --name <METHOD>` is a one-time explicit bootstrap. Exact-policy sources are detached at the configured commit; resolve-once sources resolve the configured branch once and record the resulting full commit and tree SHA in `vendor/SOURCE_LOCK.json`.
+- PBS jobs remain offline/reproducible consumers: they verify the frozen source lock and never clone or update repositories automatically.
+- No model architecture, adapter, hyperparameter, Formal/evaluation protocol, ExperimentCache, or Frozen Backbone contract is changed.
+## Frozen Backbone compatibility and version-record synchronization (v1.3.10)
+- `project_version` in `FROZEN_BACKBONE.json` is provenance metadata, not a hard compatibility gate.
+- Frozen Backbone compatibility continues to validate model identity, target, formal seed/checkpoint, SHA256, run identity, shared contract, cache schema, protocol, metrics, prediction contract, and time-feature identity.
+- Project/runtime version records are synchronized to v1.3.10, including `VERSION`, `configs/baseline.yaml`, preflight output (via config version), and Primary Formal PBS lifecycle labels.
+- No model architecture, hyperparameter, dataset split, protocol, cache, or metric definition is changed.
 

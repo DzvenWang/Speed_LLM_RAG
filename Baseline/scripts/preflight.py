@@ -46,9 +46,21 @@ try:
     expected_families=list(cfg['experiment']['families']); got_families=list(sc['experiment']['families'])
     ok=got_families==expected_families; print(('PASS' if ok else 'FAIL'),'Core-5 families',got_families); failed|=not ok
 except Exception as e: print('FAIL shared contract',repr(e)); failed=True; sc=None
-try: subprocess.check_call([cfg['project']['python'],str(ROOT/'scripts/source_lock.py'),'verify','--root',str(ROOT),'--sources',str(ROOT/'configs/official_sources.yaml')])
-except Exception: failed=True
-for m in ORDER:
+# A method-scoped Formal preflight must validate only the official source it
+# actually executes.  Requiring every primary/secondary vendor repository made
+# an unrelated missing source (e.g. LEAF) block GinAR/RAFT/etc.
+source_names = [a.method] if a.method else list(ORDER)
+try:
+    if a.method:
+        subprocess.check_call([cfg['project']['python'], str(ROOT/'scripts/source_lock.py'), 'verify-one',
+                               '--root', str(ROOT), '--sources', str(ROOT/'configs/official_sources.yaml'),
+                               '--name', a.method])
+    else:
+        subprocess.check_call([cfg['project']['python'], str(ROOT/'scripts/source_lock.py'), 'verify',
+                               '--root', str(ROOT), '--sources', str(ROOT/'configs/official_sources.yaml')])
+except Exception:
+    failed=True
+for m in source_names:
     repo=ROOT/'vendor'/m
     if not repo.exists(): print('FAIL missing repo',m); failed=True; continue
     c=audit_repo_contract(ROOT,m); ok=c['all_entrypoints_present']; print(('PASS' if ok else 'FAIL'),'entrypoint',m); failed|=not ok
@@ -75,7 +87,7 @@ fb=Path(cfg['project']['frozen_backbone_json'])
 if need_patch or fb.exists():
     try:
         fpm,_=load_frozen_stage(cfg['project']['protocol_artifact_root'],cfg['experiment']['subgraph'],cfg['protocol']['shared_protocol_name'],'formal'); con=cfg['frozen_backbone_contract']
-        obj=load_frozen_backbone_registry(fb,expected_protocol_hash=fpm['stage_hash'],expected_time_feature_revision=cfg['shared_contract']['time_feature_revision'],expected_time_feature_fingerprint=(tf['fingerprint'] if tf else None),expected_time_feature_source=(tf['source'] if tf else None),expected_dataset=cfg['experiment']['subgraph'],expected_target=cfg['experiment']['target'],expected_backbone_project_version=con['required_project_version'],expected_backbone_data_contract_revision=con['required_data_contract_revision'],expected_shared_contract_version=con['required_shared_contract_version'],expected_cache_schema_version=con['required_cache_schema_version'],expected_protocol_version=con['required_protocol_version'],expected_paired_group_id=con['required_paired_group_id'],expected_metrics_revision=cfg['shared_contract']['metrics_revision'],expected_prediction_contract_revision=cfg['shared_contract']['prediction_contract_revision'])
+        obj=load_frozen_backbone_registry(fb,expected_protocol_hash=fpm['stage_hash'],expected_time_feature_revision=cfg['shared_contract']['time_feature_revision'],expected_time_feature_fingerprint=(tf['fingerprint'] if tf else None),expected_time_feature_source=(tf['source'] if tf else None),expected_dataset=cfg['experiment']['subgraph'],expected_target=cfg['experiment']['target'],expected_backbone_data_contract_revision=con['required_data_contract_revision'],expected_shared_contract_version=con['required_shared_contract_version'],expected_cache_schema_version=con['required_cache_schema_version'],expected_protocol_version=con['required_protocol_version'],expected_paired_group_id=con['required_paired_group_id'],expected_metrics_revision=cfg['shared_contract']['metrics_revision'],expected_prediction_contract_revision=cfg['shared_contract']['prediction_contract_revision'])
         print('PASS frozen Backbone',obj['selected_model'],'reference',obj['reference_checkpoint'])
     except Exception as e:
         if need_patch: print('FAIL frozen Backbone',repr(e)); failed=True

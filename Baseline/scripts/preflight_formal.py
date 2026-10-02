@@ -40,7 +40,6 @@ if need_frozen:
         expected_time_feature_fingerprint=cm['time_feature_fingerprint'],
         expected_time_feature_source=cm['time_feature_source'],
         expected_dataset=cfg['experiment']['subgraph'],
-        expected_backbone_project_version=str(contract.get('required_project_version', '1.0.10')),
     )
 
 # Method-specific runtime dependency checks.

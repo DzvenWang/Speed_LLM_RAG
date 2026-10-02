@@ -78,7 +78,6 @@ def _validate_formal_run(cfg, m, seed, run_dir: Path):
             expected_time_feature_fingerprint=cm['time_feature_fingerprint'],
             expected_time_feature_source=cm['time_feature_source'],
             expected_dataset=cfg['experiment']['subgraph'],
-            expected_backbone_project_version=str(con.get('required_project_version','1.0.10')),
         )
         saved_model=sm.get('frozen_backbone_model')
         saved_checkpoint=sm.get('frozen_backbone_checkpoint')

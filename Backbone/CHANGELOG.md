@@ -1,3 +1,11 @@
+# Backbone v1.1.10
+
+- Unified direct/local and Gadi Formal lifecycle: Formal training now automatically evaluates the produced `best.pt` on s20/s40/s60/s90 from `run_model_formal.py`.
+- Removed duplicate post-training evaluation from the PBS wrapper.
+- Fixed child-process config/checkpoint path resolution in `post_training_evaluate.py`.
+- Unified PatchSTG submission through `pbs/run_model_formal.pbs`.
+- No model/protocol/cache/metric/hyperparameter changes; checkpoint freezing remains explicit-only.
+
 # Backbone v1.1.8
 
 - Gadi PBS logging fix: `timestamp_stream.py` is launched with `$TFP_ENV_ROOT/bin/python3` instead of `$TFP_ENV_ROOT/bin/python`.

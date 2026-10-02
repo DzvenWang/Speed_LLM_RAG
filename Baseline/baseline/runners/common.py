@@ -44,7 +44,15 @@ def validate_stage(stage: str, method: str) -> tuple[dict, Path]:
     if stage not in ('development', 'formal'):
         raise SystemExit(f'{method}: only development/formal are allowed before evaluation authorization')
     subprocess.check_call([cfg['project']['python'], str(ROOT / 'scripts' / 'validate_cache.py'), '--stage', stage])
-    subprocess.check_call([cfg['project']['python'], str(ROOT / 'scripts' / 'source_lock.py'), 'verify', '--root', str(ROOT), '--sources', str(ROOT / 'configs' / 'official_sources.yaml')])
+    # A runner must validate only the official source it actually executes.
+    # Full-source verification is reserved for repository-wide audits; otherwise
+    # an unavailable unrelated secondary baseline can block this method.
+    subprocess.check_call([
+        cfg['project']['python'], str(ROOT / 'scripts' / 'source_lock.py'),
+        'verify-one', '--root', str(ROOT),
+        '--sources', str(ROOT / 'configs' / 'official_sources.yaml'),
+        '--name', method,
+    ])
     cache = cache_path(cfg, stage)
     return cfg, cache
 

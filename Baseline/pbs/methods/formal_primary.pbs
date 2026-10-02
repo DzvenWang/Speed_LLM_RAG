@@ -22,7 +22,7 @@ case "$METHOD" in
   ImputeFormer|LRTC-TMCP|GinAR|RAFT|RAST|SARAF|ReMFT) ;;
   *) echo "METHOD=$METHOD is not a primary Baseline"; exit 2;;
 esac
-case "$SEED" in 10) ;; *) echo "Formal v1.3.2 currently requires SEED=10"; exit 2;; esac
+case "$SEED" in 10) ;; *) echo "Formal v1.3.10 currently requires SEED=10"; exit 2;; esac
 if [[ "$METHOD" == "LRTC-TMCP" && "$SEED" != "10" ]]; then
   echo "LRTC-TMCP is deterministic; only seed10 is required"; exit 2
 fi
@@ -32,7 +32,7 @@ baseline_install_exit_trap
 export PYTHONPATH="$ROOT:$PROJECT_ROOT/Base_SupportBench:${PYTHONPATH:-}"
 unset TRANSFORMERS_CACHE || true
 cd "$ROOT"
-echo "START Primary Formal v1.3.2 method=$METHOD target=$TRAFFIDENT_TARGET seed=$SEED"
+echo "START Primary Formal v1.3.10 method=$METHOD target=$TRAFFIDENT_TARGET seed=$SEED"
 nvidia-smi
 "$PY" scripts/preflight.py --stage formal --method "$METHOD"
 "$PY" scripts/preflight_formal.py --method "$METHOD" --seed "$SEED" --stage formal

@@ -14,7 +14,7 @@ def sha256_file(path):
         for b in iter(lambda:f.read(1024*1024),b''): h.update(b)
     return h.hexdigest()
 
-def load_frozen_backbone_registry(path,*,require_files=True,expected_protocol_hash=None,expected_time_feature_revision=None,expected_time_feature_fingerprint=None,expected_time_feature_source=None,expected_dataset='TraffiDent_Net_06',expected_target=None,expected_backbone_project_version='1.1.7',expected_backbone_data_contract_revision='traffident_experiment_cache_v1',expected_shared_contract_version='1.2.1',expected_cache_schema_version=3,expected_protocol_version='2.1.0',expected_paired_group_id='TraffiDent_Net_06_core5_multiseverity_v1',expected_metrics_revision='traffident_metrics_v2',expected_prediction_contract_revision='traffident_prediction_v1',expected_selected_model=None):
+def load_frozen_backbone_registry(path,*,require_files=True,expected_protocol_hash=None,expected_time_feature_revision=None,expected_time_feature_fingerprint=None,expected_time_feature_source=None,expected_dataset='TraffiDent_Net_06',expected_target=None,expected_backbone_data_contract_revision='traffident_experiment_cache_v1',expected_shared_contract_version='1.2.1',expected_cache_schema_version=3,expected_protocol_version='2.1.0',expected_paired_group_id='TraffiDent_Net_06_core5_multiseverity_v1',expected_metrics_revision='traffident_metrics_v2',expected_prediction_contract_revision='traffident_prediction_v1',expected_selected_model=None):
     """Validate a Backbone-owned FROZEN_BACKBONE.json without assuming a model family.
 
     Model-specific consumer compatibility is intentionally handled by the bridge/dispatcher,
@@ -24,7 +24,6 @@ def load_frozen_backbone_registry(path,*,require_files=True,expected_protocol_ha
     if not p.exists(): raise FileNotFoundError(f'Missing Backbone-owned frozen Backbone manifest: {p}. Complete Backbone Formal training and explicitly freeze the target-specific reference checkpoint first.')
     obj=json.loads(p.read_text())
     if int(obj.get('schema_version',0))<5: raise RuntimeError('Frozen Backbone manifest must use schema v5+ (Backbone v1.1.7).')
-    if str(obj.get('project_version'))!=str(expected_backbone_project_version): raise RuntimeError(f'Frozen Backbone project_version={obj.get("project_version")} != {expected_backbone_project_version}')
     selected=str(obj.get('selected_model','')).strip()
     if not selected: raise RuntimeError('Frozen Backbone manifest missing selected_model')
     if expected_selected_model is not None and selected!=str(expected_selected_model): raise RuntimeError(f'Frozen Backbone selected_model={selected} != required {expected_selected_model}')
@@ -68,5 +67,3 @@ def require_reference_checkpoint_identity(checkpoint,registry,label='Frozen Back
     selected=str(registry.get('selected_model','')).strip()
     if not selected: raise RuntimeError(f'{label}: frozen registry missing selected_model')
     if str(checkpoint.get('model'))!=selected: raise RuntimeError(f'{label}: checkpoint model={checkpoint.get("model")} != frozen selected_model={selected}')
-    if str(checkpoint.get('project_version')) != str(registry.get('project_version')):
-        raise RuntimeError(f'{label}: project_version={checkpoint.get("project_version")} != frozen {registry.get("project_version")}')

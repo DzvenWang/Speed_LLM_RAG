@@ -1,4 +1,14 @@
-# Backbone v1.1.9 Slim
+# Backbone v1.1.10 Slim
+
+## v1.1.10 Unified Formal lifecycle and path fix
+
+- Direct/local `scripts/run_model_formal.py` now completes the full Formal lifecycle: training -> `best.pt` -> automatic s20/s40/s60/s90 checkpoint evaluation.
+- Gadi `pbs/run_model_formal.pbs` uses the same lifecycle and no longer invokes a second duplicate post-training evaluation.
+- `scripts/post_training_evaluate.py` resolves config/checkpoint paths before launching its child evaluator, fixing the local `Backbone\Backbone\configs\backbone.yaml` failure when a repository-relative config path is supplied.
+- `scripts/submit_formal.sh` submits PatchSTG through the same unified Formal PBS entry point as the other five models.
+- Smoke behavior remains bounded and unchanged: `smoke_all_formal.py` controls smoke evaluation separately.
+- No model architecture, recipe, hyperparameter, Base_SupportBench protocol, ExperimentCache, metric, or explicit-only checkpoint-freeze semantics are changed.
+
 
 Minimal Backbone project for TraffiDent incomplete-sensing experiments.
 

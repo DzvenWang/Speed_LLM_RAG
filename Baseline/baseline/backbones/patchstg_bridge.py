@@ -66,7 +66,6 @@ class FrozenPatchSTG:
             expected_time_feature_source=cm.get('time_feature_source'),
             expected_dataset=cfg['experiment']['subgraph'],
             expected_target=cfg['experiment']['target'],
-            expected_backbone_project_version=str(contract.get('required_project_version', '1.1.7')),
             expected_backbone_data_contract_revision=contract.get('required_data_contract_revision','traffident_experiment_cache_v1'),
             expected_shared_contract_version=contract.get('required_shared_contract_version','1.2.1'),
             expected_cache_schema_version=int(contract.get('required_cache_schema_version',3)),

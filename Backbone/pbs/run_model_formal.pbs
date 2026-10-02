@@ -38,10 +38,4 @@ echo "ROOT=$ROOT PYTHON=$PYTHON TRAFFIDENT_TARGET=$TRAFFIDENT_TARGET"
 [[ -d "$PROJ/vendor/$MODEL" ]] || { echo "ERROR missing vendor/$MODEL"; exit 4; }
 "$PYTHON" -u scripts/preflight.py --stage formal --config configs/backbone.yaml
 "$PYTHON" -u scripts/run_model_formal.py --model "$MODEL" --seed "$SEED" --run-stamp "$STAMP" --config configs/backbone.yaml --recipes configs/model_recipes.yaml
-CHECKPOINT="$ROOT/Backbone_exps/$TARGET/$MODEL/TraffiDent_Net_06/formal/${STAMP}_seed${SEED}/best.pt"
-[[ -f "$CHECKPOINT" ]] || { echo "ERROR expected checkpoint missing: $CHECKPOINT"; exit 5; }
-echo "AUTO_EVAL_START model=$MODEL target=$TARGET checkpoint=$CHECKPOINT"
-"$PYTHON" -u scripts/post_training_evaluate.py --model "$MODEL" --checkpoint "$CHECKPOINT" --seed "$SEED" --run-stamp "$STAMP" --config configs/backbone.yaml
-echo "AUTO_EVAL_PASS model=$MODEL target=$TARGET severities=20,40,60,90"
-echo "FREEZE_STATUS=NOT_FROZEN user_must_run_freeze_checkpoint.py_explicitly"
 echo "FINISH model=$MODEL target=$TARGET seed=$SEED"
