@@ -40,6 +40,14 @@ if need_frozen:
         expected_time_feature_fingerprint=cm['time_feature_fingerprint'],
         expected_time_feature_source=cm['time_feature_source'],
         expected_dataset=cfg['experiment']['subgraph'],
+        expected_target=cfg['experiment']['target'],
+        expected_backbone_data_contract_revision=contract.get('required_data_contract_revision','traffident_experiment_cache_v1'),
+        expected_shared_contract_version=contract.get('required_shared_contract_version','1.2.1'),
+        expected_cache_schema_version=int(contract.get('required_cache_schema_version',3)),
+        expected_protocol_version=contract.get('required_protocol_version','2.1.0'),
+        expected_paired_group_id=contract.get('required_paired_group_id'),
+        expected_metrics_revision=cfg['shared_contract']['metrics_revision'],
+        expected_prediction_contract_revision=cfg['shared_contract']['prediction_contract_revision'],
     )
 
 # Method-specific runtime dependency checks.

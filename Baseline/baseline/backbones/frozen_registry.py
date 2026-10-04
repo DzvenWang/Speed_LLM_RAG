@@ -14,7 +14,7 @@ def sha256_file(path):
         for b in iter(lambda:f.read(1024*1024),b''): h.update(b)
     return h.hexdigest()
 
-def load_frozen_backbone_registry(path,*,require_files=True,expected_protocol_hash=None,expected_time_feature_revision=None,expected_time_feature_fingerprint=None,expected_time_feature_source=None,expected_dataset='TraffiDent_Net_06',expected_target=None,expected_backbone_data_contract_revision='traffident_experiment_cache_v1',expected_shared_contract_version='1.2.1',expected_cache_schema_version=3,expected_protocol_version='2.1.0',expected_paired_group_id='TraffiDent_Net_06_core5_multiseverity_v1',expected_metrics_revision='traffident_metrics_v2',expected_prediction_contract_revision='traffident_prediction_v1',expected_selected_model=None):
+def load_frozen_backbone_registry(path,*,require_files=True,expected_protocol_hash=None,expected_time_feature_revision=None,expected_time_feature_fingerprint=None,expected_time_feature_source=None,expected_dataset='TraffiDent_Net_06',expected_target=None,expected_backbone_data_contract_revision='traffident_experiment_cache_v1',expected_shared_contract_version='1.2.1',expected_cache_schema_version=3,expected_protocol_version='2.1.0',expected_paired_group_id=None,expected_metrics_revision='traffident_metrics_v2',expected_prediction_contract_revision='traffident_prediction_v1',expected_selected_model=None):
     """Validate a Backbone-owned FROZEN_BACKBONE.json without assuming a model family.
 
     Model-specific consumer compatibility is intentionally handled by the bridge/dispatcher,
@@ -37,7 +37,7 @@ def load_frozen_backbone_registry(path,*,require_files=True,expected_protocol_ha
     if expected_time_feature_fingerprint: checks['time_feature_fingerprint']=expected_time_feature_fingerprint
     if expected_time_feature_source: checks['time_feature_source']=expected_time_feature_source
     for k,v in checks.items():
-        if str(ident.get(k))!=str(v): raise RuntimeError(f'Frozen Backbone {k}={ident.get(k)} != required {v}')
+        if v is not None and str(ident.get(k))!=str(v): raise RuntimeError(f'Frozen Backbone {k}={ident.get(k)} != required {v}')
     cp_raw=str(obj.get('reference_checkpoint','')).strip(); expected_sha=str(obj.get('reference_checkpoint_sha256',''))
     if not cp_raw: raise RuntimeError('Frozen Backbone manifest missing reference_checkpoint')
     cp=Path(cp_raw)

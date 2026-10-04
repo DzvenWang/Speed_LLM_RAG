@@ -78,6 +78,14 @@ def _validate_formal_run(cfg, m, seed, run_dir: Path):
             expected_time_feature_fingerprint=cm['time_feature_fingerprint'],
             expected_time_feature_source=cm['time_feature_source'],
             expected_dataset=cfg['experiment']['subgraph'],
+            expected_target=cfg['experiment']['target'],
+            expected_backbone_data_contract_revision=con.get('required_data_contract_revision','traffident_experiment_cache_v1'),
+            expected_shared_contract_version=con.get('required_shared_contract_version','1.2.1'),
+            expected_cache_schema_version=int(con.get('required_cache_schema_version',3)),
+            expected_protocol_version=con.get('required_protocol_version','2.1.0'),
+            expected_paired_group_id=con.get('required_paired_group_id'),
+            expected_metrics_revision=cfg['shared_contract']['metrics_revision'],
+            expected_prediction_contract_revision=cfg['shared_contract']['prediction_contract_revision'],
         )
         saved_model=sm.get('frozen_backbone_model')
         saved_checkpoint=sm.get('frozen_backbone_checkpoint')
