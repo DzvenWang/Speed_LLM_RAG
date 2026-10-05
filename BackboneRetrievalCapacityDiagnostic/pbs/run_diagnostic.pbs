@@ -1,0 +1,38 @@
+#!/bin/bash
+# CPU-only diagnostic: all numerical-backbone predictions are reused from Backbone_exps.
+#PBS -P mh20
+#PBS -q normal
+#PBS -l ncpus=12
+#PBS -l mem=64GB
+#PBS -l walltime=24:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -N BRCD
+#PBS -j oe
+set -euo pipefail
+: "${TARGET:?TARGET=speed|flow}"
+case "$TARGET" in speed|flow) ;; *) echo "ERROR unsupported TARGET=$TARGET"; exit 2;; esac
+SEED=${SEED:-10}
+[[ "$SEED" == "10" ]] || { echo "ERROR diagnostic seed fixed to 10"; exit 2; }
+ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
+if [[ "$(basename "$ROOT")" == "BackboneRetrievalCapacityDiagnostic" ]]; then ROOT="$(cd "$ROOT/.." && pwd)"; fi
+PROJ="$ROOT/BackboneRetrievalCapacityDiagnostic"
+ENVROOT=${TFP_ENV_ROOT:-/scratch/mh20/zw1165/envs/TFP}
+PYTHON="$ENVROOT/bin/python"
+PYTHON3="$ENVROOT/bin/python3"
+[[ -x "$PYTHON" ]] || { echo "ERROR Python not executable: $PYTHON"; exit 3; }
+export SPEED_LLM_RAG_ROOT="$ROOT" TRAFFIDENT_TARGET="$TARGET" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH="$PROJ:$ROOT/Backbone:$ROOT/Base_SupportBench:${PYTHONPATH:-}"
+export OMP_NUM_THREADS=${PBS_NCPUS:-12}
+export MKL_NUM_THREADS=${PBS_NCPUS:-12}
+LOGROOT="$ROOT/BackboneRetrievalCapacityDiagnostic_logs/$TARGET"; mkdir -p "$LOGROOT"
+STAMP=$(date +%Y%m%d_%H%M%S); JOBID=${PBS_JOBID:-local}
+LOG="$LOGROOT/BRCD.${TARGET}.formal.seed${SEED}.${JOBID}.${STAMP}.live.log"; touch "$LOG"
+cd "$PROJ"
+exec > >("$PYTHON3" -u "$PROJ/timestamp_stream.py" | tee -a "$LOG") 2>&1
+trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"' EXIT
+echo "START BRCD target=$TARGET seed=$SEED job=$JOBID host=$(hostname)"
+echo "ROOT=$ROOT PYTHON=$PYTHON"
+"$PYTHON" -V
+"$PYTHON" -u scripts/preflight.py --target "$TARGET"
+"$PYTHON" -u scripts/run_diagnostic.py --target "$TARGET" --run-stamp "$STAMP" --no-tee
+echo "FINISH BRCD target=$TARGET seed=$SEED"

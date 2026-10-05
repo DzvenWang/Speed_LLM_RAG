@@ -93,8 +93,8 @@ PatchSTG_Oracle_exps/
 Base_SupportBench_logs/
 Base_SupportBench_artifacts/
 
-Agent_PreSuRe_exps/
-Agent_PreSuRe_logs/
+BackboneRetrievalCapacityDiagnostic_logs/
+BackboneRetrievalCapacityDiagnostic_exps/
 
 
 model_cache/

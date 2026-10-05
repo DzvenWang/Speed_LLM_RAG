@@ -8,7 +8,8 @@ class AdapterContext:
     cache_root: Path
     exp_root: Path
     log_root: Path
-    frozen_backbone_json: Path
+    backbone_model: str | None = None
+    backbone_checkpoint: Path | None = None
 
 class OfficialAdapter:
     method = None

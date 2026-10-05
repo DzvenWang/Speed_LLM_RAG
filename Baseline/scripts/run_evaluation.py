@@ -10,6 +10,7 @@ GADI_ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseli
 ROOT=GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from baseline.utils import load_yaml
+from baseline.path_pointers import resolve_portable_pointer
 from baseline.runners.common import GinARDataset,ImputationDataset,RASTDataset,SARAFTensorDataset,build_time_marks,save_split_outputs,scale_stats,set_seed,require_gpu,simple_namespace
 from baseline.runners.ginar_runner import import_model as ginar_import,official_doubletransition
 from baseline.runners.imputeformer_runner import build_model as impute_build,forecast_val as impute_forecast
@@ -20,14 +21,15 @@ from baseline.runners.rast_runner import build_model as rast_build,load_store,re
 from baseline.runners.sprint_runner import forecast_split as sprint_forecast
 from baseline.runners.mogernn_runner import MoGERNNDataset,build_model as mogernn_build,predict as mogernn_predict
 from baseline.runners.remft_runner import ReMFTDataset,build_model as remft_build,predict as remft_predict,load_trainable_state_dict as remft_load
+from baseline.backbones.reference_backbone import build_reference_backbone, SUPPORTED_BACKBONES
 from baseline.backbones.patchstg_bridge import FrozenPatchSTG
-from baseline.backbones.frozen_backbone import build_frozen_backbone
+from baseline.retrieval_reference_controls import RAFTReferenceBackboneControl
 from baseline.run_identity import load_cache_identity, require_same_identity
 from baseline.shared_cache import cache_path
-from baseline.backbones.frozen_registry import sha256_file, load_frozen_backbone_registry
+from baseline.backbones.reference_backbone import sha256_file
 
 
-def _validate_formal_run(cfg, m, seed, run_dir: Path):
+def _validate_formal_run(cfg, m, seed, run_dir: Path, backbone_model: str | None = None):
     exp=Path(cfg['project']['exp_root'])
     expected=load_cache_identity(cache_path(cfg,'formal'),cfg['version'])
     d=Path(run_dir)
@@ -58,8 +60,10 @@ def _validate_formal_run(cfg, m, seed, run_dir: Path):
         raise RuntimeError(f'Formal run method mismatch: expected={m} got={sm.get("method")}')
     if int(sm.get('seed',-1))!=int(seed):
         raise RuntimeError(f'Formal run seed mismatch: expected={seed} got={sm.get("seed")}')
-    if str(sm.get('code_project_version',sm.get('project_version'))) != str(cfg['version']):
-        raise RuntimeError(f'Formal run was not produced by Baseline v{cfg["version"]}')
+    produced_version=str(sm.get('code_project_version',sm.get('project_version')))
+    allowed_versions={str(v) for v in cfg.get('compatible_formal_versions',[cfg['version']])}
+    if produced_version not in allowed_versions:
+        raise RuntimeError(f'Formal run version={produced_version} is incompatible; allowed={sorted(allowed_versions)}')
     if str(sm.get('status',''))!='COMPLETE':
         raise RuntimeError('Formal run status is not COMPLETE')
     if not bool(sm.get('selection_valid',True)):
@@ -68,34 +72,23 @@ def _validate_formal_run(cfg, m, seed, run_dir: Path):
     if not np.isfinite(score):
         raise RuntimeError('Formal run has non-finite validation MAE')
 
-    if cfg.get('methods',{}).get(m,{}).get('requires_frozen_backbone_for_final_forecast',False):
-        cm=json.loads((cache_path(cfg,'formal')/'cache_manifest.json').read_text())
-        con=cfg.get('frozen_backbone_contract',{})
-        fb=load_frozen_backbone_registry(
-            cfg['project']['frozen_backbone_json'],
-            expected_protocol_hash=cm['protocol_stage_hash'],
-            expected_time_feature_revision=cm['time_feature_revision'],
-            expected_time_feature_fingerprint=cm['time_feature_fingerprint'],
-            expected_time_feature_source=cm['time_feature_source'],
-            expected_dataset=cfg['experiment']['subgraph'],
-            expected_target=cfg['experiment']['target'],
-            expected_backbone_data_contract_revision=con.get('required_data_contract_revision','traffident_experiment_cache_v1'),
-            expected_shared_contract_version=con.get('required_shared_contract_version','1.2.1'),
-            expected_cache_schema_version=int(con.get('required_cache_schema_version',3)),
-            expected_protocol_version=con.get('required_protocol_version','2.1.0'),
-            expected_paired_group_id=con.get('required_paired_group_id'),
-            expected_metrics_revision=cfg['shared_contract']['metrics_revision'],
-            expected_prediction_contract_revision=cfg['shared_contract']['prediction_contract_revision'],
-        )
-        saved_model=sm.get('frozen_backbone_model')
-        saved_checkpoint=sm.get('frozen_backbone_checkpoint')
-        saved_seed=sm.get('frozen_backbone_reference_seed',-1)
-        if str(saved_model)!=str(fb['selected_model']):
-            raise RuntimeError(f'{m} seed={seed}: frozen Backbone model mismatch saved={saved_model} current={fb["selected_model"]}')
-        if str(saved_checkpoint)!=str(fb['reference_checkpoint']):
-            raise RuntimeError(f'{m} seed={seed}: frozen Backbone checkpoint mismatch')
-        if int(saved_seed)!=int(fb['reference_seed']):
-            raise RuntimeError(f'{m} seed={seed}: frozen Backbone reference seed mismatch')
+    if cfg.get('methods',{}).get(m,{}).get('requires_reference_backbone_for_final_forecast',False):
+        saved_model=str(sm.get('reference_backbone_model') or '')
+        saved_checkpoint=str(sm.get('reference_backbone_checkpoint') or '')
+        saved_sha=str(sm.get('reference_backbone_checkpoint_sha256') or '')
+        saved_seed=int(sm.get('reference_backbone_seed',-1))
+        if not saved_model or not saved_checkpoint or not saved_sha:
+            raise RuntimeError(f'{m} seed={seed}: Formal run missing reference Backbone provenance')
+        if backbone_model is not None and saved_model != str(backbone_model):
+            raise RuntimeError(f'{m} seed={seed}: reference Backbone mismatch saved={saved_model} requested={backbone_model}')
+        cp_ref=resolve_portable_pointer(saved_checkpoint,cfg['project']['root'])
+        if not cp_ref.is_file():
+            raise FileNotFoundError(cp_ref)
+        got_sha=sha256_file(cp_ref)
+        if got_sha != saved_sha:
+            raise RuntimeError(f'{m} seed={seed}: reference Backbone checkpoint SHA256 mismatch')
+    else:
+        saved_model=saved_checkpoint=saved_sha=None; saved_seed=None
 
     sel={
         'run_dir':str(d),
@@ -103,24 +96,32 @@ def _validate_formal_run(cfg, m, seed, run_dir: Path):
         'checkpoint_sha256':sha256_file(cp),
         'val_overall_MAE':score,
         'run_identity_hash':sm.get('run_identity_hash'),
-        'selection_mode':'direct_formal_run_no_baseline_freeze',
+        'selection_mode':'direct_formal_run',
+        'reference_backbone_model':saved_model,
+        'reference_backbone_checkpoint':saved_checkpoint,
+        'reference_backbone_checkpoint_sha256':saved_sha,
+        'reference_backbone_seed':saved_seed,
     }
     return sel,torch.load(cp,map_location='cpu',weights_only=False)
 
 
-def load_sel(cfg,m,seed,formal_run_dir=None):
+def load_sel(cfg,m,seed,formal_run_dir=None,backbone_model=None):
     """Resolve the completed Formal run directly; no Baseline freeze artifact is required."""
     exp=Path(cfg['project']['exp_root'])
     if formal_run_dir:
-        return _validate_formal_run(cfg,m,seed,Path(formal_run_dir))
+        return _validate_formal_run(cfg,m,seed,Path(formal_run_dir),backbone_model=backbone_model)
 
-    rr=exp/m/cfg['experiment']['subgraph']/'formal'
+    rr=exp/m
+    if cfg.get('methods',{}).get(m,{}).get('requires_reference_backbone_for_final_forecast',False):
+        if not backbone_model: raise RuntimeError(f'--backbone is required to resolve Formal run for {m}')
+        rr=rr/str(backbone_model)
+    rr=rr/cfg['experiment']['subgraph']/'formal'
     latest=rr/'LATEST_RUN.txt'
     candidates=[]
     if latest.exists():
         raw=latest.read_text().strip()
         if raw:
-            candidates.append(Path(raw))
+            candidates.append(resolve_portable_pointer(raw,cfg['project']['root'],pointer_parent=rr))
     if rr.exists():
         candidates.extend(sorted(rr.glob(f'*_seed{seed}'),reverse=True))
 
@@ -130,7 +131,7 @@ def load_sel(cfg,m,seed,formal_run_dir=None):
         if key in seen: continue
         seen.add(key)
         try:
-            return _validate_formal_run(cfg,m,seed,d)
+            return _validate_formal_run(cfg,m,seed,d,backbone_model=backbone_model)
         except Exception as e:
             errors.append(f'{d}: {type(e).__name__}: {e}')
     detail='\n'.join(errors[-5:])
@@ -144,11 +145,11 @@ def ginar(cfg,fc,ec,seed,device,ck,max_rows=None):
     return np.concatenate(out)*np.float32(std)+np.float32(mean)
 
 
-def impute(cfg,fc,ec,seed,device,ck,max_rows=None):
-    ds=ImputationDataset(ec,'test'); dl=DataLoader(ds,batch_size=int(cfg['runners']['ImputeFormer']['batch_size']),shuffle=False); m=impute_build(cfg,ds.x.shape[2]).to(device); m.load_state_dict(ck['model']); patch=build_frozen_backbone(cfg,device); return impute_forecast(m,dl,patch,device)
+def impute(cfg,fc,ec,seed,device,ck,sel,max_rows=None):
+    ds=ImputationDataset(ec,'test'); dl=DataLoader(ds,batch_size=int(cfg['runners']['ImputeFormer']['batch_size']),shuffle=False); m=impute_build(cfg,ds.x.shape[2]).to(device); m.load_state_dict(ck['model']); backbone=build_reference_backbone(cfg,device,model=sel['reference_backbone_model'],seed=int(sel['reference_backbone_seed']),checkpoint=sel['reference_backbone_checkpoint']); return impute_forecast(m,dl,backbone,device)
 
 
-def lrtc_tmcp(cfg,fc,ec,seed,device,ck,max_rows=None):
+def lrtc_tmcp(cfg,fc,ec,seed,device,ck,sel,max_rows=None):
     # LRTC-TMCP has no learned benchmark weights; best.pt is a provenance marker.
     expected=cfg.get('method_implementation_revisions',{}).get('LRTC-TMCP')
     if expected and str(ck.get('method_implementation_revision')) != str(expected):
@@ -156,8 +157,8 @@ def lrtc_tmcp(cfg,fc,ec,seed,device,ck,max_rows=None):
             f'LRTC-TMCP Formal run uses stale implementation revision '
             f'{ck.get("method_implementation_revision")!r}; expected {expected!r}. Rerun Formal.'
         )
-    patch=build_frozen_backbone(cfg,device)
-    raw,_info=lrtc_forecast(cfg,ec,'test',patch,device,smoke=False)
+    backbone=build_reference_backbone(cfg,device,model=sel['reference_backbone_model'],seed=int(sel['reference_backbone_seed']),checkpoint=sel['reference_backbone_checkpoint'])
+    raw,_info=lrtc_forecast(cfg,ec,'test',backbone,device,smoke=False)
     return raw
 
 
@@ -188,6 +189,59 @@ def rast(cfg,fc,ec,seed,device,ck,sel,max_rows=None):
     return raw
 
 
+
+def raft_reference(cfg,fc,ec,seed,device,ck,sel,max_rows=None):
+    txm,tym,_=build_time_marks(cfg,fc,'train')
+    qxm,qym,_=build_time_marks(cfg,ec,'test')
+    mem=SARAFTensorDataset(fc,'train',txm,tym,'full')
+    q=SARAFTensorDataset(ec,'test',qxm,qym,'obs',limit=max_rows)
+    c=cfg['runners']['RAFT']
+    Model=raft_import()
+    mc=simple_namespace(task_name='long_term_forecast',seq_len=12,pred_len=12,enc_in=388,n_period=int(c['n_period']),topm=int(c['topm']),gpu=0)
+    native=Model(mc).to(device)
+    rt=native.rt; rt.prepare_dataset(mem); span=24
+    rt.retrieve=MethodType(make_protocol_retrieve(mem.meta.window_start.astype(int).to_numpy(),mem.meta.window_start.astype(int).to_numpy(),q.meta.window_start.astype(int).to_numpy(),span),rt)
+    va=rt.retrieve_all(q,train=False,device=device)
+    native.retrieval_dict={'valid':va.to(device)}; del native.rt
+    native.load_state_dict(ck['model'],strict=True)
+    reference=build_reference_backbone(cfg,device,model=sel['reference_backbone_model'],seed=int(sel['reference_backbone_seed']),checkpoint=sel['reference_backbone_checkpoint'])
+    safe_residual = bool(ck.get('safe_residual', True))
+    residual_scale_init = float(ck.get('residual_scale_init', 0.0))
+    model=RAFTReferenceBackboneControl(
+        native, reference, safe_residual=safe_residual, residual_scale_init=residual_scale_init
+    ).to(device)
+    if ck.get('control_model') is not None:
+        model.load_state_dict(ck['control_model'], strict=True)
+    elif safe_residual and ck.get('residual_scale') is not None:
+        # Compatibility with any transitional checkpoint that persisted alpha but not
+        # the full control state.
+        with torch.no_grad():
+            model.residual_scale.fill_(float(ck['residual_scale']))
+    dl=DataLoader(q,batch_size=int(c['batch_size']),shuffle=False)
+    mean,std=scale_stats(fc); out=[]; model.eval()
+    with torch.no_grad():
+        for idx,x,_y,xm,_ym in dl:
+            out.append(model(x.float().to(device),xm.float().to(device),idx.long().to(device),mode='valid').cpu().numpy())
+    return np.concatenate(out)*np.float32(std)+np.float32(mean)
+
+
+def rast_matched(cfg,fc,ec,seed,device,ck,sel,variant='reference',max_rows=None):
+    ds=RASTDataset(ec,'test')
+    ds=Subset(ds,range(min(len(ds),max_rows))) if max_rows else ds
+    dl=DataLoader(ds,batch_size=int(cfg['runners']['RAST']['batch_size']),shuffle=False)
+    rd=Path(sel['run_dir'])
+    model_name = str(sel.get('reference_backbone_model') or ('PatchSTG' if variant == 'patchstg' else ''))
+    m=rast_build(
+        cfg,variant,seed,device,rd/'evaluation_database',
+        backbone_model=model_name,
+        backbone_checkpoint=sel.get('reference_backbone_checkpoint'),
+    )
+    m.load_state_dict(ck['model'], strict=True)
+    restore_store(m,load_store(rd/'retrieval_store_best.npz'))
+    mean,std=scale_stats(fc)
+    raw,_impact=rast_predict(m,dl,device,mean,std,int(ck['best_epoch']))
+    return raw
+
 def mogernn(cfg,fc,ec,seed,device,ck):
     ds=MoGERNNDataset(ec,'test'); dl=DataLoader(ds,batch_size=1,shuffle=False,num_workers=0); m=mogernn_build(cfg,device); m.load_state_dict(ck['model']); adj=torch.from_numpy(np.asarray(np.load(fc/'adjacency.npy'),np.float32)).to(device); mean,std=scale_stats(fc); eps=float(cfg['runners']['MoGERNN'].get('epsilon_for_observed_zero',1e-6)); return mogernn_predict(m,dl,adj,device,eps,mean,std,int(ck.get('best_epoch',0)))
 
@@ -210,8 +264,8 @@ def remft(cfg,fc,ec,seed,device,ck,max_rows=None):
 
 
 def main():
-    methods=['ImputeFormer','LRTC-TMCP','GinAR','RAFT','RAST','SARAF','ReMFT']
-    ap=argparse.ArgumentParser(); ap.add_argument('--method',choices=methods,required=True); ap.add_argument('--seed',type=int,required=True); ap.add_argument('--severity',type=int,choices=[20,40,60,90],required=True); ap.add_argument('--formal-run-dir',default=None); ap.add_argument('--lifecycle-checkpoint',default=None,help='Smoke-only checkpoint; bypass completed-Formal selection and write only under _lifecycle_smoke.'); ap.add_argument('--lifecycle-max-batches',type=int,default=2,help='Lifecycle smoke only: cap real inference to this many evaluation batches.'); a=ap.parse_args()
+    methods=['ImputeFormer','LRTC-TMCP','GinAR','RAFT','RAST','SARAF','ReMFT','RAFT-PatchSTG','RAFT-STLAformer','RAST-PatchSTG','RAST-STLAformer']
+    ap=argparse.ArgumentParser(); ap.add_argument('--method',choices=methods,required=True); ap.add_argument('--seed',type=int,required=True); ap.add_argument('--severity',type=int,choices=[20,40,60,90],required=True); ap.add_argument('--backbone',choices=SUPPORTED_BACKBONES); ap.add_argument('--formal-run-dir',default=None); ap.add_argument('--lifecycle-checkpoint',default=None,help='Smoke-only checkpoint; bypass completed-Formal selection and write only under _lifecycle_smoke.'); ap.add_argument('--lifecycle-max-batches',type=int,default=2,help='Lifecycle smoke only: cap real inference to this many evaluation batches.'); a=ap.parse_args()
     cfg=load_yaml(ROOT/'configs/baseline.yaml'); set_seed(a.seed); device=require_gpu(); exp=Path(cfg['project']['exp_root']); fc=cache_path(cfg,'formal'); ec=cache_path(cfg,'evaluation',a.severity)
     if a.lifecycle_checkpoint:
         cp=Path(a.lifecycle_checkpoint).resolve()
@@ -221,15 +275,27 @@ def main():
         sel={'run_dir':str(cp.parent),'checkpoint':str(cp),'checkpoint_sha256':sha256_file(cp),'selection_mode':'lifecycle_smoke'}
         print(f'LIFECYCLE_CHECKPOINT_RELOAD_PASS method={a.method} severity=s{a.severity} checkpoint={cp}',flush=True)
     else:
-        sel,ck=load_sel(cfg,a.method,a.seed,a.formal_run_dir)
+        sel,ck=load_sel(cfg,a.method,a.seed,a.formal_run_dir,backbone_model=a.backbone)
     fn={'GinAR':ginar,'ImputeFormer':impute,'LRTC-TMCP':lrtc_tmcp,'RAFT':raft,'SARAF':saraf,'ReMFT':remft}
     max_rows=None
     if a.lifecycle_checkpoint:
         bs=int(cfg['runners'][a.method].get('formal_eval_batch_size',cfg['runners'][a.method].get('batch_size',1)))
         max_rows=max(1,int(a.lifecycle_max_batches))*bs
         print(f'LIFECYCLE_INFERENCE_LIMIT method={a.method} severity=s{a.severity} max_batches={a.lifecycle_max_batches} max_rows={max_rows}',flush=True)
-    raw=rast(cfg,fc,ec,a.seed,device,ck,sel,max_rows=max_rows) if a.method=='RAST' else fn[a.method](cfg,fc,ec,a.seed,device,ck,max_rows=max_rows)
-    rd=(Path(sel['run_dir'])/'evaluation'/f's{a.severity}') if a.lifecycle_checkpoint else (exp/'evaluation'/a.method/cfg['experiment']['subgraph']/f'seed{a.seed}'/f's{a.severity}'); rd.mkdir(parents=True,exist_ok=True)
+    if a.method=='RAST': raw=rast(cfg,fc,ec,a.seed,device,ck,sel,max_rows=max_rows)
+    elif a.method=='RAST-STLAformer': raw=rast_matched(cfg,fc,ec,a.seed,device,ck,sel,variant='reference',max_rows=max_rows)
+    elif a.method=='RAST-PatchSTG': raw=rast_matched(cfg,fc,ec,a.seed,device,ck,sel,variant='patchstg',max_rows=max_rows)
+    elif a.method in ('RAFT-STLAformer','RAFT-PatchSTG'): raw=raft_reference(cfg,fc,ec,a.seed,device,ck,sel,max_rows=max_rows)
+    elif a.method=='ImputeFormer': raw=impute(cfg,fc,ec,a.seed,device,ck,sel,max_rows=max_rows)
+    elif a.method=='LRTC-TMCP': raw=lrtc_tmcp(cfg,fc,ec,a.seed,device,ck,sel,max_rows=max_rows)
+    else: raw=fn[a.method](cfg,fc,ec,a.seed,device,ck,max_rows=max_rows)
+    if a.lifecycle_checkpoint:
+        rd=Path(sel['run_dir'])/'evaluation'/f's{a.severity}'
+    else:
+        base=exp/'evaluation'/a.method
+        if sel.get('reference_backbone_model'): base=base/str(sel['reference_backbone_model'])
+        rd=base/cfg['experiment']['subgraph']/f'seed{a.seed}'/f's{a.severity}'
+    rd.mkdir(parents=True,exist_ok=True)
     if a.lifecycle_checkpoint:
         np.savez_compressed(rd/'test_predictions.smoke.npz',pred=np.asarray(raw,np.float32))
         sm={'method':a.method,'seed':int(a.seed),'split':'test','smoke_rows':int(raw.shape[0]),'prediction_shape':list(raw.shape),'formal_checkpoint':sel['checkpoint'],'formal_checkpoint_sha256':sel['checkpoint_sha256'],'test_access':'lifecycle_smoke_limited_inference','severity':int(a.severity),'protocol_name':ec.parent.parent.parent.name}

@@ -18,8 +18,7 @@ if not ROOT.exists():
     ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from baseline.backbones.patchstg_bridge import FrozenPatchSTG
-from baseline.backbones.frozen_backbone import build_frozen_backbone
+from baseline.backbones.reference_backbone import ReferenceBackbone, build_reference_backbone
 from baseline.compat.lrtc_tmcp import recover_batch
 from baseline.lrtc_causal_history import resolve_lrtc_canonical_history_source
 from baseline.runners.common import ImputationDataset, make_run_dir, require_gpu, save_val_outputs, set_seed, validate_stage
@@ -61,7 +60,7 @@ def _split_provenance(cache: Path, split: str, source) -> dict:
 
 def _complete_batch(
     cfg: dict,
-    patch: FrozenPatchSTG,
+    backbone: ReferenceBackbone,
     source,
     meta: pd.DataFrame,
     batch,
@@ -76,8 +75,8 @@ def _complete_batch(
     tod = tod.long().to(device)
     dow = dow.long().to(device)
 
-    mean = float(patch.mean)
-    std = float(patch.std)
+    mean = float(backbone.mean)
+    std = float(backbone.std)
     x_raw = x_norm * std + mean
 
     values = []
@@ -113,7 +112,7 @@ def _complete_batch(
         progress_prefix=progress_prefix,
     )
 
-    # Only the final/current query-day slice is passed to the same frozen PatchSTG.
+    # Only the final/current query-day slice is passed to the selected reference Backbone.
     comp_raw = recovered[:, :, -1, :].transpose(1, 2)        # [B,H,N]
     current_obs = obs.to(device)
     current_raw = x_raw.to(device)
@@ -128,7 +127,7 @@ def forecast_split(
     cfg: dict,
     cache: Path,
     split: str,
-    patch: FrozenPatchSTG,
+    backbone: ReferenceBackbone,
     device: torch.device,
     *,
     smoke: bool = False,
@@ -137,7 +136,7 @@ def forecast_split(
     ds = ImputationDataset(cache, split)
     rcfg = cfg['runners']['LRTC-TMCP']
     source = resolve_lrtc_canonical_history_source(
-        cfg, cache, split, mean=float(patch.mean), std=float(patch.std)
+        cfg, cache, split, mean=float(backbone.mean), std=float(backbone.std)
     )
     provenance = _split_provenance(cache, split, source)
     print('LRTC-TMCP INPUT CONTRACT', provenance, flush=True)
@@ -165,12 +164,12 @@ def forecast_split(
         )
         batch_t0 = time.time()
         comp, tod, dow, info, starts = _complete_batch(
-            cfg, patch, source, ds.meta, batch, device, smoke=smoke,
+            cfg, backbone, source, ds.meta, batch, device, smoke=smoke,
             progress_prefix=batch_label,
         )
-        pred = patch.predict_raw(comp, tod, dow)
+        pred = backbone.predict_raw(comp, tod, dow)
         if not torch.isfinite(pred).all():
-            raise RuntimeError('LRTC-TMCP -> PatchSTG produced non-finite prediction')
+            raise RuntimeError('LRTC-TMCP -> reference Backbone produced non-finite prediction')
         out.append(pred.cpu().numpy())
         infos.append(info)
         completed_queries += batch_size
@@ -201,6 +200,8 @@ def main():
     ap.add_argument('--stage', choices=['development', 'formal'], required=True)
     ap.add_argument('--seed', type=int, default=10)
     ap.add_argument('--smoke', action='store_true')
+    ap.add_argument('--backbone', required=True)
+    ap.add_argument('--backbone-checkpoint', default=None)
     a = ap.parse_args()
 
     cfg, cache = validate_stage(a.stage, 'LRTC-TMCP')
@@ -209,7 +210,7 @@ def main():
         raise SystemExit(f'LRTC-TMCP is deterministic; formal seed must be one of {allowed}')
     set_seed(a.seed)
     device = require_gpu()
-    patch = build_frozen_backbone(cfg, device)
+    backbone = build_reference_backbone(cfg, device, model=a.backbone, seed=int(cfg.get('reference_backbone',{}).get('seed',10)), checkpoint=a.backbone_checkpoint)
 
     vendor = ROOT / 'vendor' / 'LRTC-TMCP'
     for rel in ('lrtc-tmcp-demo.ipynb', 'utils.py'):
@@ -218,7 +219,7 @@ def main():
 
     if a.smoke:
         raw, infos, prov = forecast_split(
-            cfg, cache, 'val', patch, device, smoke=True, return_provenance=True
+            cfg, cache, 'val', backbone, device, smoke=True, return_provenance=True
         )
         print('LRTC-TMCP GPU SMOKE PASS', {
             'prediction_shape': tuple(raw.shape),
@@ -229,17 +230,18 @@ def main():
             'historical_days': prov['historical_days'],
             'context_days': prov['context_days'],
             'strict_future_isolation': prov['strict_future_isolation'],
-            'frozen_backbone_model': patch.registry.get('selected_model'),
-            'frozen_backbone_reference_seed': patch.reference_seed,
-            'frozen_backbone_checkpoint': str(patch.checkpoint),
+            'reference_backbone_model': backbone.model_name,
+            'reference_backbone_seed': backbone.reference_seed,
+            'reference_backbone_checkpoint': backbone.checkpoint_reference,
+            'reference_backbone_checkpoint_sha256': backbone.checkpoint_sha256,
         }, flush=True)
         return
 
     t0 = time.time()
     raw, infos, prov = forecast_split(
-        cfg, cache, 'val', patch, device, smoke=False, return_provenance=True
+        cfg, cache, 'val', backbone, device, smoke=False, return_provenance=True
     )
-    rd = make_run_dir(cfg, 'LRTC-TMCP', a.stage, a.seed)
+    rd = make_run_dir(cfg, 'LRTC-TMCP', a.stage, a.seed, backbone_model=backbone.model_name)
     marker = {
         'algorithm': 'LRTC-TMCP',
         'learned_parameters': False,
@@ -252,9 +254,10 @@ def main():
         'strict_future_isolation': True,
         'heldout_support_forbidden': True,
         'method_implementation_revision': cfg.get('method_implementation_revisions', {}).get('LRTC-TMCP'),
-        'frozen_backbone_model': patch.registry.get('selected_model'),
-        'frozen_backbone_reference_seed': patch.reference_seed,
-        'frozen_backbone_checkpoint': str(patch.checkpoint),
+        'reference_backbone_model': backbone.model_name,
+        'reference_backbone_seed': backbone.reference_seed,
+        'reference_backbone_checkpoint': backbone.checkpoint_reference,
+        'reference_backbone_checkpoint_sha256': backbone.checkpoint_sha256,
     }
     torch.save(marker, rd / 'best.pt')
     (rd / 'lrtc_input_provenance.json').write_text(json.dumps(prov, indent=2, sort_keys=True) + '\n')
@@ -287,9 +290,10 @@ def main():
         'mean_tmcp_seconds_per_batch': float(np.mean([x.elapsed_seconds for x in infos])) if infos else None,
         'tmcp_decomposition': str(cfg['runners']['LRTC-TMCP'].get('decomposition', 'gram_eigh')),
         'active_convergence': bool(cfg['runners']['LRTC-TMCP'].get('active_convergence', True)),
-        'frozen_backbone_model': patch.registry.get('selected_model'),
-        'frozen_backbone_reference_seed': patch.reference_seed,
-        'frozen_backbone_checkpoint': str(patch.checkpoint),
+        'reference_backbone_model': backbone.model_name,
+        'reference_backbone_seed': backbone.reference_seed,
+        'reference_backbone_checkpoint': backbone.checkpoint_reference,
+        'reference_backbone_checkpoint_sha256': backbone.checkpoint_sha256,
         'checkpoint_selection': 'none_deterministic_completion',
         'test_access': False,
     })

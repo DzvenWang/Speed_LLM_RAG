@@ -1,6 +1,6 @@
 # LRTC-TMCP / ReMFT correction
 
-This patch changes only LRTC-TMCP and ReMFT behavior. Project version remains 1.3.10 so completed results for unrelated baselines remain valid.
+This patch changes only LRTC-TMCP and ReMFT behavior. Integrated into Baseline v1.4.0; unrelated model definitions remain unchanged.
 
 ## LRTC-TMCP
 

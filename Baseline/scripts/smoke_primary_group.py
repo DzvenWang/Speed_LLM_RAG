@@ -14,7 +14,7 @@ PROJECT = ROOT.parent
 
 GROUPS = {
     "independent": ("GinAR", "RAFT", "RAST", "SARAF", "ReMFT"),
-    "frozen": ("ImputeFormer", "LRTC-TMCP"),
+    "reference": ("ImputeFormer", "LRTC-TMCP"),
 }
 TARGETS = ("speed", "flow")
 SEVERITIES = (20, 40, 60, 90)
@@ -98,13 +98,14 @@ def main():
     ap.add_argument("--group", choices=GROUPS, required=True)
     ap.add_argument("--seed", type=int, default=10)
     ap.add_argument("--continue-on-error", action="store_true")
+    ap.add_argument("--backbone", default="STLAformer")
     ap.add_argument("--skip-evaluation-preflight", action="store_true")
     a = ap.parse_args()
 
     methods = GROUPS[a.group]
     total = len(methods) * 2
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    tag = "Independent" if a.group == "independent" else "FrozenBackboneDependent"
+    tag = "Independent" if a.group == "independent" else "ReferenceBackboneDependent"
     log = PROJECT / "Baseline_logs" / "smoke_primary" / a.group / f"BaselineSmoke{tag}.{stamp}.log"
     tee = TimestampTee(log)
     old = sys.stdout
@@ -137,28 +138,20 @@ def main():
                 )
 
                 try:
-                    run([sys.executable, "scripts/preflight.py", "--stage", "formal", "--method", method], env, tee)
-                    run(
-                        [
-                            sys.executable,
-                            "scripts/preflight_formal.py",
-                            "--stage",
-                            "formal",
-                            "--method",
-                            method,
-                            "--seed",
-                            str(a.seed),
-                        ],
-                        env,
-                        tee,
-                    )
+                    pre=[sys.executable, "scripts/preflight.py", "--stage", "formal", "--method", method]
+                    if a.group == "reference": pre += ["--backbone", a.backbone]
+                    run(pre, env, tee)
+                    pf=[
+                        sys.executable,"scripts/preflight_formal.py","--stage","formal",
+                        "--method",method,"--seed",str(a.seed),
+                    ]
+                    if a.group == "reference": pf += ["--backbone", a.backbone]
+                    run(pf,env,tee)
                     if method == "RAST":
                         run([sys.executable, "scripts/check_rast_runtime.py"], env, tee)
                     if method == "ReMFT":
                         run([sys.executable, "scripts/check_remft_runtime.py"], env, tee)
-                    if a.group == "frozen":
-                        run([sys.executable, "scripts/validate_frozen_backbone.py"], env, tee)
-
+                    
                     cmd = [
                         sys.executable,
                         "-u",
@@ -171,40 +164,18 @@ def main():
                     ]
                     if method == "RAST":
                         cmd += ["--variant", "native"]
+                    if a.group == "reference":
+                        cmd += ["--backbone", a.backbone]
                     run(cmd, env, tee)
 
                     if not a.skip_evaluation_preflight:
                         for sev in SEVERITIES:
-                            run(
-                                [
-                                    sys.executable,
-                                    "scripts/preflight.py",
-                                    "--stage",
-                                    "evaluation",
-                                    "--method",
-                                    method,
-                                    "--severity",
-                                    str(sev),
-                                ],
-                                env,
-                                tee,
-                            )
-                            run(
-                                [
-                                    sys.executable,
-                                    "scripts/preflight_formal.py",
-                                    "--stage",
-                                    "evaluation",
-                                    "--method",
-                                    method,
-                                    "--seed",
-                                    str(a.seed),
-                                    "--severity",
-                                    str(sev),
-                                ],
-                                env,
-                                tee,
-                            )
+                            ep=[sys.executable,"scripts/preflight.py","--stage","evaluation","--method",method,"--severity",str(sev)]
+                            if a.group == "reference": ep += ["--backbone", a.backbone]
+                            run(ep,env,tee)
+                            ef=[sys.executable,"scripts/preflight_formal.py","--stage","evaluation","--method",method,"--seed",str(a.seed),"--severity",str(sev)]
+                            if a.group == "reference": ef += ["--backbone", a.backbone]
+                            run(ef,env,tee)
 
                     passed += 1
                     print(f"CASE PASS {label} seconds={time.time() - c0:.1f}")

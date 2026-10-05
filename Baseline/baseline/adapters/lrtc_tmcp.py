@@ -16,7 +16,7 @@ class LRTCTMCPAdapter(OfficialAdapter):
             'cross_query_information': 'train-archive-only same-slot support',
             'future_information': False,
             'observed_value_protection': True,
-            'downstream_forecaster': 'same frozen PatchSTG reference as ImputeFormer',
+            'downstream_forecaster': 'same explicitly selected reference Backbone as ImputeFormer',
         }
 
     def prepare_bridge(self):

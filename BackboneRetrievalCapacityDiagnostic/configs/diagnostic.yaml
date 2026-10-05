@@ -1,0 +1,34 @@
+version: 0.1.2
+project:
+  root: ${SPEED_LLM_RAG_ROOT}
+  diagnostic_root: ${SPEED_LLM_RAG_ROOT}/BackboneRetrievalCapacityDiagnostic
+  exp_root: ${SPEED_LLM_RAG_ROOT}/BackboneRetrievalCapacityDiagnostic_exps
+  log_root: ${SPEED_LLM_RAG_ROOT}/BackboneRetrievalCapacityDiagnostic_logs
+  backbone_root: ${SPEED_LLM_RAG_ROOT}/Backbone
+  backbone_exp_root: ${SPEED_LLM_RAG_ROOT}/Backbone_exps
+experiment:
+  dataset: TraffiDent_Net_06
+  seed: 10
+  targets: [speed, flow]
+  severities: [20, 40, 60, 90]
+  backbones: [STAEformer, HimNet, BigST, STDN, PatchSTG, STLAformer]
+  training_condition: s40
+retrieval:
+  # Same learned-free retriever for every backbone.
+  temporal_bins: 3
+  mask_weight: 0.25
+  tod_radius: 1
+  tod_slots: 288
+  match_day_type: true
+  k_grid: [1, 5, 10, 20, 50]
+  tau_grid: [0.25, 0.5, 1.0]
+  embedding_chunk_size: 2048
+  search_batch_queries: 64
+  aggregation_chunk_size: 24
+fusion:
+  # alpha=0 is essential: validation may decide retrieval is useless for a strong backbone.
+  alpha_grid: [0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.60, 0.70, 0.80, 0.90, 1.0]
+analysis:
+  oracle_k: 50
+  oracle_chunk_size: 8
+  bootstrap_samples: 1000

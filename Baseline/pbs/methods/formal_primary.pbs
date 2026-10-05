@@ -19,10 +19,22 @@ export PATH="$ENVROOT/bin:$PATH"
 : "${METHOD:?METHOD required}"
 : "${SEED:?SEED required}"
 case "$METHOD" in
-  ImputeFormer|LRTC-TMCP|GinAR|RAFT|RAST|SARAF|ReMFT) ;;
-  *) echo "METHOD=$METHOD is not a primary Baseline"; exit 2;;
+  ImputeFormer|LRTC-TMCP|GinAR|RAFT|RAST|SARAF|ReMFT|RAST-PatchSTG|RAST-STLAformer|RAFT-PatchSTG|RAFT-STLAformer) ;;
+  *) echo "METHOD=$METHOD is not supported by this Formal PBS"; exit 2;;
 esac
-case "$SEED" in 10) ;; *) echo "Formal v1.3.10 currently requires SEED=10"; exit 2;; esac
+case "$SEED" in 10) ;; *) echo "Formal v1.4.4 currently requires SEED=10"; exit 2;; esac
+if [[ "$METHOD" == "RAST-PatchSTG" || "$METHOD" == "RAFT-PatchSTG" ]]; then
+  BACKBONE="${BACKBONE:-PatchSTG}"
+fi
+if [[ "$METHOD" == "ImputeFormer" || "$METHOD" == "LRTC-TMCP" || "$METHOD" == "RAST-PatchSTG" || "$METHOD" == "RAST-STLAformer" || "$METHOD" == "RAFT-PatchSTG" || "$METHOD" == "RAFT-STLAformer" ]]; then
+  : "${BACKBONE:?BACKBONE required for $METHOD (e.g. STLAformer or PatchSTG)}"
+fi
+if [[ "$METHOD" == "RAST-STLAformer" || "$METHOD" == "RAFT-STLAformer" ]]; then
+  [[ "$BACKBONE" == "STLAformer" ]] || { echo "ERROR $METHOD requires BACKBONE=STLAformer"; exit 2; }
+fi
+if [[ "$METHOD" == "RAST-PatchSTG" || "$METHOD" == "RAFT-PatchSTG" ]]; then
+  [[ "$BACKBONE" == "PatchSTG" ]] || { echo "ERROR $METHOD requires BACKBONE=PatchSTG"; exit 2; }
+fi
 if [[ "$METHOD" == "LRTC-TMCP" && "$SEED" != "10" ]]; then
   echo "LRTC-TMCP is deterministic; only seed10 is required"; exit 2
 fi
@@ -32,28 +44,39 @@ baseline_install_exit_trap
 export PYTHONPATH="$ROOT:$PROJECT_ROOT/Base_SupportBench:${PYTHONPATH:-}"
 unset TRANSFORMERS_CACHE || true
 cd "$ROOT"
-echo "START Primary Formal v1.3.10 method=$METHOD target=$TRAFFIDENT_TARGET seed=$SEED"
+echo "START Formal v1.4.4 method=$METHOD target=$TRAFFIDENT_TARGET seed=$SEED"
 nvidia-smi
-"$PY" scripts/preflight.py --stage formal --method "$METHOD"
-"$PY" scripts/preflight_formal.py --method "$METHOD" --seed "$SEED" --stage formal
+if [[ "$METHOD" == "ImputeFormer" || "$METHOD" == "LRTC-TMCP" || "$METHOD" == "RAST-PatchSTG" || "$METHOD" == "RAST-STLAformer" || "$METHOD" == "RAFT-PatchSTG" || "$METHOD" == "RAFT-STLAformer" ]]; then
+  "$PY" scripts/preflight.py --stage formal --method "$METHOD" --backbone "$BACKBONE"
+  "$PY" scripts/preflight_formal.py --method "$METHOD" --seed "$SEED" --stage formal --backbone "$BACKBONE"
+else
+  "$PY" scripts/preflight.py --stage formal --method "$METHOD"
+  "$PY" scripts/preflight_formal.py --method "$METHOD" --seed "$SEED" --stage formal
+fi
 case "$METHOD" in
   ImputeFormer)
-    "$PY" scripts/validate_frozen_backbone.py
-    "$PY" -u baseline/runners/imputeformer_runner.py --stage formal --seed "$SEED";;
+    "$PY" -u baseline/runners/imputeformer_runner.py --stage formal --seed "$SEED" --backbone "$BACKBONE";;
   LRTC-TMCP)
-    "$PY" scripts/validate_frozen_backbone.py
-    "$PY" -u baseline/runners/lrtc_tmcp_runner.py --stage formal --seed "$SEED";;
+    "$PY" -u baseline/runners/lrtc_tmcp_runner.py --stage formal --seed "$SEED" --backbone "$BACKBONE";;
   GinAR) "$PY" -u baseline/runners/ginar_runner.py --stage formal --seed "$SEED";;
   RAFT) "$PY" -u baseline/runners/raft_runner.py --stage formal --seed "$SEED";;
   RAST) "$PY" scripts/check_rast_runtime.py; "$PY" -u baseline/runners/rast_runner.py --stage formal --seed "$SEED" --variant native;;
   SARAF) "$PY" -u baseline/runners/saraf_runner.py --stage formal --seed "$SEED";;
   ReMFT) "$PY" scripts/check_remft_runtime.py; "$PY" -u baseline/runners/remft_runner.py --stage formal --seed "$SEED";;
+  RAST-PatchSTG) "$PY" scripts/check_rast_runtime.py; "$PY" -u baseline/runners/rast_runner.py --stage formal --seed "$SEED" --variant patchstg --backbone "$BACKBONE";;
+  RAST-STLAformer) "$PY" scripts/check_rast_runtime.py; "$PY" -u baseline/runners/rast_runner.py --stage formal --seed "$SEED" --variant reference --backbone "$BACKBONE";;
+  RAFT-PatchSTG) "$PY" -u baseline/runners/retrieval_reference_control_runner.py --method RAFT-PatchSTG --stage formal --seed "$SEED" --backbone "$BACKBONE";;
+  RAFT-STLAformer) "$PY" -u baseline/runners/retrieval_reference_control_runner.py --method RAFT-STLAformer --stage formal --seed "$SEED" --backbone "$BACKBONE";;
 esac
 echo "PRIMARY FORMAL TRAINING PASS method=$METHOD seed=$SEED"
 
 AUTO_EVAL="${AUTO_EVAL:-1}"
 if [[ "$AUTO_EVAL" == "1" ]]; then
-  FORMAL_PARENT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline_exps/$TRAFFIDENT_TARGET/$METHOD/TraffiDent_Net_06/formal"
+  if [[ "$METHOD" == "ImputeFormer" || "$METHOD" == "LRTC-TMCP" || "$METHOD" == "RAST-PatchSTG" || "$METHOD" == "RAST-STLAformer" || "$METHOD" == "RAFT-PatchSTG" || "$METHOD" == "RAFT-STLAformer" ]]; then
+    FORMAL_PARENT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline_exps/$TRAFFIDENT_TARGET/$METHOD/$BACKBONE/TraffiDent_Net_06/formal"
+  else
+    FORMAL_PARENT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline_exps/$TRAFFIDENT_TARGET/$METHOD/TraffiDent_Net_06/formal"
+  fi
   FORMAL_RUN_DIR="$(ls -1dt "$FORMAL_PARENT"/*_seed"$SEED" 2>/dev/null | head -n 1 || true)"
   if [[ -z "$FORMAL_RUN_DIR" || ! -d "$FORMAL_RUN_DIR" || ! -f "$FORMAL_RUN_DIR/best.pt" || ! -f "$FORMAL_RUN_DIR/summary.json" ]]; then
     echo "ERROR invalid completed Formal run directory: $FORMAL_RUN_DIR"
@@ -62,7 +85,11 @@ if [[ "$AUTO_EVAL" == "1" ]]; then
   echo "AUTO_EVAL=1"
   echo "FORMAL_RUN_DIR=$FORMAL_RUN_DIR"
   echo "START DIRECT Core-5 EVALUATION method=$METHOD seed=$SEED severities=s20,s40,s60,s90"
-  "$PY" -u scripts/run_evaluations.py --method "$METHOD" --seed "$SEED" --formal-run-dir "$FORMAL_RUN_DIR"
+  if [[ "$METHOD" == "ImputeFormer" || "$METHOD" == "LRTC-TMCP" || "$METHOD" == "RAST-PatchSTG" || "$METHOD" == "RAST-STLAformer" || "$METHOD" == "RAFT-PatchSTG" || "$METHOD" == "RAFT-STLAformer" ]]; then
+    "$PY" -u scripts/run_evaluations.py --method "$METHOD" --seed "$SEED" --backbone "$BACKBONE" --formal-run-dir "$FORMAL_RUN_DIR"
+  else
+    "$PY" -u scripts/run_evaluations.py --method "$METHOD" --seed "$SEED" --formal-run-dir "$FORMAL_RUN_DIR"
+  fi
   echo "DIRECT CORE5 EVALUATION PASS method=$METHOD seed=$SEED"
 else
   echo "AUTO_EVAL=0; skipping post-Formal evaluation"

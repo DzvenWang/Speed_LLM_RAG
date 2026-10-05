@@ -30,9 +30,10 @@ from baseline.runners.common import (  # noqa: E402
     set_seed,
     validate_stage,
 )
-from baseline.backbones.patchstg_bridge import (  # noqa: E402
-    FrozenPatchSTG,
-    PatchSTGRASTBridge,
+from baseline.backbones.reference_backbone import (  # noqa: E402
+    build_reference_backbone,
+    ReferenceBackboneRASTBridge,
+    SUPPORTED_BACKBONES,
 )
 from baseline.compat.rast_optional_backbones import install_rast_native_import_shims  # noqa: E402
 from baseline.runners.retrieval_impact import (  # noqa: E402
@@ -57,7 +58,7 @@ def import_model():
     return RAST
 
 
-def build_model(cfg, variant, seed, device, db):
+def build_model(cfg, variant, seed, device, db, backbone_model=None, backbone_checkpoint=None):
     c = cfg['runners']['RAST']
     n_nodes = 388
     RAST = import_model()
@@ -78,12 +79,59 @@ def build_model(cfg, variant, seed, device, db):
         database_path=str(db),
         use_amp=bool(c['use_amp']),
     ).to(device)
-    if variant == 'patchstg':
-        frozen = FrozenPatchSTG(cfg, device)
-        model.backbone = PatchSTGRASTBridge(frozen)
-        model._patchstg_checkpoint = str(frozen.checkpoint)
-        model._patchstg_reference_seed = frozen.reference_seed
+    if variant in ('patchstg', 'reference'):
+        selected = 'PatchSTG' if variant == 'patchstg' else str(backbone_model or '')
+        if not selected:
+            raise RuntimeError('RAST reference variant requires --backbone')
+        reference = build_reference_backbone(
+            cfg, device, model=selected, seed=int(cfg.get('reference_backbone',{}).get('seed', seed)),
+            checkpoint=backbone_checkpoint,
+        )
+        model.backbone = ReferenceBackboneRASTBridge(reference)
+        model._reference_backbone_model = selected
+        model._reference_backbone_checkpoint = reference.checkpoint_reference
+        model._reference_backbone_checkpoint_sha256 = str(reference.checkpoint_sha256)
+        model._reference_backbone_seed = int(reference.reference_seed)
+        safe_residual = bool(c.get('reference_control_zero_init_residual_scale', True))
+        model._safe_residual = safe_residual
+        model._residual_scale_init = float(c.get('reference_control_residual_scale_init', 0.0))
+        if safe_residual:
+            # The RAST model has already been moved to ``device`` above, so create the
+            # compatibility scalar directly on that device. Native RAST is untouched.
+            model.reference_residual_scale = nn.Parameter(
+                torch.tensor(model._residual_scale_init, dtype=torch.float32, device=device)
+            )
     return model
+
+
+def _residual_scale_value(model) -> float | None:
+    alpha = getattr(model, 'reference_residual_scale', None)
+    if alpha is None:
+        return None
+    return float(alpha.detach().cpu().item())
+
+
+def _apply_matched_safe_residual(model, pred: torch.Tensor) -> torch.Tensor:
+    """Calibrate transplanted RAST fusion against the selected reference Backbone.
+
+    Matched-backbone variants use ``base + alpha * (rast_fused - base)`` with
+    zero-initialized learnable ``alpha``. Native RAST never enters this path.
+    """
+    if not bool(getattr(model, '_safe_residual', False)):
+        return pred
+    bridge = getattr(model, 'backbone', None)
+    base = getattr(bridge, 'last_prediction', None)
+    if base is None:
+        raise RuntimeError('RAST safe residual requested but reference Backbone prediction is unavailable')
+    if tuple(base.shape) != tuple(pred.shape):
+        raise RuntimeError(
+            f'RAST safe residual shape mismatch base={tuple(base.shape)} pred={tuple(pred.shape)}'
+        )
+    alpha = getattr(model, 'reference_residual_scale', None)
+    if alpha is None:
+        raise RuntimeError('RAST safe residual enabled without reference_residual_scale parameter')
+    correction = pred - base
+    return base + alpha.to(dtype=correction.dtype) * correction
 
 
 def snapshot_store(model):
@@ -147,14 +195,14 @@ def load_store(path):
 
 
 def _correction_stats(model, pred: torch.Tensor, valid: torch.Tensor) -> tuple[float, float, float, int] | None:
-    """Measure how much RAST changes the frozen PatchSTG prediction."""
+    """Measure how much RAST changes the selected reference-Backbone prediction."""
     bridge = getattr(model, 'backbone', None)
     base = getattr(bridge, 'last_prediction', None)
     if base is None:
         return None
     if tuple(base.shape) != tuple(pred.shape):
         raise RuntimeError(
-            f'RAST-PatchSTG correction contract failed: base={tuple(base.shape)} pred={tuple(pred.shape)}'
+            f'RAST-reference correction contract failed: base={tuple(base.shape)} pred={tuple(pred.shape)}'
         )
     corr = (pred.detach() - base.detach())
     mask = valid.bool()
@@ -191,6 +239,8 @@ def run_epoch(model, dl, device, ep, train, opt=None, max_batches=None, clip=5.0
                 opt.zero_grad(set_to_none=True)
             out = model(x, None, int(idx[0]) if len(idx) else 0, ep, train)
             pred = out['prediction'].squeeze(-1)
+            if getattr(model, '_safe_residual', False):
+                pred = _apply_matched_safe_residual(model, pred)
             if tuple(pred.shape) != tuple(y.shape):
                 raise RuntimeError(f'RAST output shape {tuple(pred.shape)} != target {tuple(y.shape)}')
             if not torch.isfinite(pred).all():
@@ -244,11 +294,11 @@ def run_epoch(model, dl, device, ep, train, opt=None, max_batches=None, clip=5.0
     return result
 
 
-def prewarm_patchstg_retrieval(model, train_loader, device, logical_epoch: int) -> dict:
+def prewarm_reference_retrieval(model, train_loader, device, logical_epoch: int) -> dict:
     """Populate RAST retrieval memory before the first optimizer update.
 
     Official RAST only populates the store when ``train=True`` and
-    ``epoch % update_interval == 0``.  With a strong frozen PatchSTG backbone,
+    ``epoch % update_interval == 0``.  With a strong reference backbone,
     optimizing for nine empty-retrieval epochs drives the residual correction
     toward zero before retrieval becomes available.  This warm-up performs one
     train-data forward under no_grad, preserving the official store update code
@@ -262,15 +312,15 @@ def prewarm_patchstg_retrieval(model, train_loader, device, logical_epoch: int) 
         out = model(x, None, int(idx[0]) if len(idx) else 0, logical_epoch, True)
         pred = out['prediction'].squeeze(-1)
         if not torch.isfinite(pred).all():
-            raise FloatingPointError('RAST-PatchSTG retrieval prewarm produced non-finite prediction')
+            raise FloatingPointError('RAST-reference retrieval prewarm produced non-finite prediction')
     after = retrieval_store_status(model)
     if not after['ready']:
         raise RuntimeError(
-            'RAST-PatchSTG retrieval-first warm-up failed to populate retrieval memory: '
+            'RAST-reference retrieval-first warm-up failed to populate retrieval memory: '
             + json.dumps({'before': before, 'after': after}, sort_keys=True)
         )
     print(
-        'RAST-PATCHSTG RETRIEVAL PREWARM PASS '
+        'RAST-REFERENCE RETRIEVAL PREWARM PASS '
         + json.dumps({'logical_epoch': int(logical_epoch), 'before': before, 'after': after}, sort_keys=True),
         flush=True,
     )
@@ -291,6 +341,8 @@ def predict(model, dl, device, mean, std, ep, collect_impact=False):
                 int(idx[0]) if len(idx) else 0,
                 ep, False,
             )['prediction'].squeeze(-1)
+            if getattr(model, '_safe_residual', False):
+                pred = _apply_matched_safe_residual(model, pred)
             if not torch.isfinite(pred).all():
                 raise FloatingPointError('RAST produced non-finite validation prediction')
             if collect_impact:
@@ -298,7 +350,7 @@ def predict(model, dl, device, mean, std, ep, collect_impact=False):
                 base = getattr(bridge, 'last_prediction', None)
                 if base is None:
                     raise RuntimeError(
-                        'RAST-PatchSTG diagnostics requested but frozen PatchSTG base prediction is unavailable'
+                        'RAST matched-backbone diagnostics requested but reference Backbone prediction is unavailable'
                     )
                 accumulate_impact(impact_stats, pred, base, y, valid)
             out.append(pred.cpu().numpy())
@@ -323,18 +375,23 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--stage', choices=['development', 'formal'], default='formal')
     ap.add_argument('--seed', type=int, required=True)
-    ap.add_argument('--variant', choices=['native', 'patchstg'], default='native')
+    ap.add_argument('--variant', choices=['native', 'patchstg', 'reference'], default='native')
+    ap.add_argument('--backbone', choices=SUPPORTED_BACKBONES)
+    ap.add_argument('--backbone-checkpoint', default=None)
     ap.add_argument('--smoke', action='store_true')
     args = ap.parse_args()
 
-    if args.variant == 'patchstg' and args.stage != 'formal':
-        raise SystemExit('RAST-PatchSTG controlled adaptation is formal-only')
+    if args.variant in ('patchstg','reference') and args.stage != 'formal':
+        raise SystemExit('RAST matched-backbone controlled adaptation is formal-only')
+    if args.variant == 'reference' and not args.backbone:
+        raise SystemExit('--backbone is required for --variant reference')
 
     cfg, cache = validate_stage(args.stage, 'RAST')
     set_seed(args.seed)
     device = require_gpu()
     c = cfg['runners']['RAST']
-    label = 'RAST' if args.variant == 'native' else 'RAST-PatchSTG'
+    selected_backbone = ('PatchSTG' if args.variant == 'patchstg' else (args.backbone if args.variant == 'reference' else None))
+    label = 'RAST' if args.variant == 'native' else f'RAST-{selected_backbone}'
 
     train_ds = RASTDataset(cache, 'train')
     val_ds = RASTDataset(cache, 'val')
@@ -350,7 +407,7 @@ def main():
 
     temp = Path(cfg['project']['exp_root']) / '_tmp_rast' / f'{label}_{args.seed}_{int(time.time())}'
     temp.mkdir(parents=True, exist_ok=True)
-    model = build_model(cfg, args.variant, args.seed, device, temp)
+    model = build_model(cfg, args.variant, args.seed, device, temp, backbone_model=selected_backbone, backbone_checkpoint=args.backbone_checkpoint)
     params = [p for p in model.parameters() if p.requires_grad]
     opt = torch.optim.Adam(
         params,
@@ -362,13 +419,13 @@ def main():
     retrieval_first = bool(c.get('patchstg_retrieval_first', True))
     prewarm_epoch = int(c['update_interval'])
     prewarm_status = None
-    if args.variant == 'patchstg' and retrieval_first:
-        prewarm_status = prewarm_patchstg_retrieval(
+    if args.variant != 'native' and retrieval_first:
+        prewarm_status = prewarm_reference_retrieval(
             model, train_loader, device, prewarm_epoch,
         )
 
     if args.smoke:
-        logical_epoch = prewarm_epoch if args.variant == 'patchstg' else 1
+        logical_epoch = prewarm_epoch if args.variant != 'native' else 1
         smoke = run_epoch(
             model, train_loader, device, logical_epoch, True, opt,
             max_batches=1, clip=clip,
@@ -376,22 +433,27 @@ def main():
         if not np.isfinite(smoke['mae']):
             raise RuntimeError(f'{label} smoke returned non-finite loss: {smoke}')
         store_status = retrieval_store_status(model)
-        if args.variant == 'patchstg':
+        if args.variant != 'native':
             if not store_status['ready']:
                 raise RuntimeError(
-                    'RAST-PatchSTG smoke did not populate retrieval memory: '
+                    'RAST matched-backbone smoke did not populate retrieval memory: '
                     + json.dumps(store_status, sort_keys=True)
                 )
             print(
-                'RAST-PATCHSTG GPU SMOKE PASS',
+                'RAST-REFERENCE GPU SMOKE PASS',
                 {
                     'loss': smoke['mae'],
                     'logical_epoch': logical_epoch,
                     'retrieval_store': store_status,
                     'correction_abs_mean': smoke['correction_abs_mean'],
                     'correction_rms': smoke['correction_rms'],
-                    'patchstg_reference_seed': getattr(model, '_patchstg_reference_seed', None),
-                    'patchstg_checkpoint': getattr(model, '_patchstg_checkpoint', None),
+                    'correction_max_abs': smoke['correction_max_abs'],
+                    'impact': smoke['impact'],
+                    'reference_backbone_model': getattr(model, '_reference_backbone_model', None),
+                    'reference_backbone_seed': getattr(model, '_reference_backbone_seed', None),
+                    'reference_backbone_checkpoint': getattr(model, '_reference_backbone_checkpoint', None),
+                    'safe_residual': bool(getattr(model, '_safe_residual', False)),
+                    'residual_scale': _residual_scale_value(model),
                 },
                 flush=True,
             )
@@ -410,15 +472,15 @@ def main():
     t0 = time.time()
     first_eligible_epoch = None
     min_delta = (
-        float(c.get('patchstg_min_delta', 1.0e-4))
-        if args.variant == 'patchstg'
+        float(c.get('reference_control_min_delta', 1.0e-8))
+        if args.variant != 'native'
         else float(c.get('min_delta', 1.0e-8))
     )
 
     for train_epoch in range(1, int(c['max_epochs']) + 1):
         logical_epoch = (
             prewarm_epoch + train_epoch - 1
-            if args.variant == 'patchstg' and retrieval_first
+            if args.variant != 'native' and retrieval_first
             else train_epoch
         )
         train_result = run_epoch(
@@ -428,7 +490,7 @@ def main():
             model, val_loader, device, logical_epoch, False, None, clip=clip,
         )
         store_status = retrieval_store_status(model)
-        checkpoint_eligible = (args.variant != 'patchstg' or store_status['ready'])
+        checkpoint_eligible = (args.variant == 'native' or store_status['ready'])
         if checkpoint_eligible and first_eligible_epoch is None:
             first_eligible_epoch = logical_epoch
 
@@ -445,7 +507,11 @@ def main():
             f'val_corr_rms={val_result["correction_rms"]} '
             f'val_helpful={None if val_result["impact"] is None else val_result["impact"]["helpful_fraction"]} '
             f'val_harmful={None if val_result["impact"] is None else val_result["impact"]["harmful_fraction"]} '
-            f'val_neutral={None if val_result["impact"] is None else val_result["impact"]["neutral_fraction"]}',
+            f'val_neutral={None if val_result["impact"] is None else val_result["impact"]["neutral_fraction"]} '
+            f'val_base_MAE={None if val_result["impact"] is None else val_result["impact"]["base_MAE_norm"]} '
+            f'val_final_MAE={None if val_result["impact"] is None else val_result["impact"]["final_MAE_norm"]} '
+            f'val_mean_abs_error_change={None if val_result["impact"] is None else val_result["impact"]["mean_abs_error_change_norm"]} '
+            f'residual_scale={_residual_scale_value(model)}',
             flush=True,
         )
 
@@ -478,9 +544,9 @@ def main():
     model.load_state_dict(state)
     restore_store(model, store)
     restored_status = retrieval_store_status(model)
-    if args.variant == 'patchstg' and not restored_status['ready']:
+    if args.variant != 'native' and not restored_status['ready']:
         raise RuntimeError(
-            'RAST-PatchSTG restored best checkpoint has empty retrieval memory: '
+            'RAST matched-backbone restored best checkpoint has empty retrieval memory: '
             + json.dumps(restored_status, sort_keys=True)
         )
     print(
@@ -493,10 +559,10 @@ def main():
     mean, std = scale_stats(cache)
     raw, final_impact = predict(
         model, val_loader, device, mean, std, best_logical_epoch,
-        collect_impact=(args.variant == 'patchstg'),
+        collect_impact=(args.variant != 'native'),
     )
-    run_dir = make_run_dir(cfg, label, args.stage, args.seed)
-    method_key = 'RAST' if args.variant == 'native' else 'RAST-PatchSTG'
+    run_dir = make_run_dir(cfg, label, args.stage, args.seed, backbone_model=selected_backbone if args.variant != 'native' else None)
+    method_key = 'RAST' if args.variant == 'native' else label
     torch.save(
         {
             'model': state,
@@ -505,8 +571,16 @@ def main():
             'best_val_mae_norm': best,
             'variant': args.variant,
             'method_implementation_revision': cfg.get('method_implementation_revisions', {}).get(method_key),
-            'best_epoch_val_impact': best_val_impact if args.variant == 'patchstg' else None,
-            'final_val_impact_vs_frozen_patchstg': final_impact if args.variant == 'patchstg' else None,
+            'reference_backbone_model': getattr(model, '_reference_backbone_model', None),
+            'reference_backbone_checkpoint': getattr(model, '_reference_backbone_checkpoint', None),
+            'reference_backbone_checkpoint_sha256': getattr(model, '_reference_backbone_checkpoint_sha256', None),
+            'reference_backbone_seed': getattr(model, '_reference_backbone_seed', None),
+            'safe_residual': bool(getattr(model, '_safe_residual', False)),
+            'residual_scale': _residual_scale_value(model),
+            'residual_scale_init': float(getattr(model, '_residual_scale_init', 0.0)),
+            'residual_formula': ('base + alpha * (rast_fused - base)' if getattr(model, '_safe_residual', False) else None),
+            'best_epoch_val_impact': best_val_impact if args.variant != 'native' else None,
+            'final_val_impact_vs_reference_backbone': final_impact if args.variant != 'native' else None,
         },
         run_dir / 'best.pt',
     )
@@ -531,20 +605,26 @@ def main():
             'selection_min_delta': min_delta,
             'first_checkpoint_eligible_epoch': first_eligible_epoch,
             'retrieval_store_best': restored_status,
-            'retrieval_first_warmup': bool(args.variant == 'patchstg' and retrieval_first),
-            'retrieval_prewarm_epoch': prewarm_epoch if args.variant == 'patchstg' else None,
+            'retrieval_first_warmup': bool(args.variant != 'native' and retrieval_first),
+            'retrieval_prewarm_epoch': prewarm_epoch if args.variant != 'native' else None,
             'retrieval_prewarm_store': prewarm_status,
-            'correction_diagnostics': 'final_prediction_minus_frozen_patchstg_on_valid_targets',
-            'best_epoch_val_impact': best_val_impact if args.variant == 'patchstg' else None,
-            'final_val_impact_vs_frozen_patchstg': final_impact if args.variant == 'patchstg' else None,
-            'impact_diagnostic_contract': 'matched_patchstg_helpful_harmful_v1',
+            'correction_diagnostics': 'final_prediction_minus_reference_backbone_on_valid_targets',
+            'best_epoch_val_impact': best_val_impact if args.variant != 'native' else None,
+            'final_val_impact_vs_reference_backbone': final_impact if args.variant != 'native' else None,
+            'impact_diagnostic_contract': 'matched_reference_backbone_helpful_harmful_v1',
             'test_access': False,
-            'patchstg_reference_seed': getattr(model, '_patchstg_reference_seed', None),
-            'patchstg_checkpoint': getattr(model, '_patchstg_checkpoint', None),
+            'reference_backbone_model': getattr(model, '_reference_backbone_model', None),
+            'reference_backbone_seed': getattr(model, '_reference_backbone_seed', None),
+            'reference_backbone_checkpoint': getattr(model, '_reference_backbone_checkpoint', None),
+            'reference_backbone_checkpoint_sha256': getattr(model, '_reference_backbone_checkpoint_sha256', None),
+            'safe_residual': bool(getattr(model, '_safe_residual', False)),
+            'residual_scale': _residual_scale_value(model),
+            'residual_scale_init': float(getattr(model, '_residual_scale_init', 0.0)),
+            'residual_formula': ('base + alpha * (rast_fused - base)' if getattr(model, '_safe_residual', False) else None),
         },
     )
-    if args.variant == 'patchstg':
-        with open(run_dir / 'rast_patchstg_impact.json', 'w') as f:
+    if args.variant != 'native':
+        with open(run_dir / 'rast_reference_backbone_impact.json', 'w') as f:
             json.dump(final_impact, f, indent=2, sort_keys=True)
             f.write('\n')
     print(
@@ -553,7 +633,7 @@ def main():
             {
                 'run_dir': str(run_dir),
                 'val': summary['val'],
-                'impact': final_impact if args.variant == 'patchstg' else None,
+                'impact': final_impact if args.variant != 'native' else None,
             },
             default=str,
         ),

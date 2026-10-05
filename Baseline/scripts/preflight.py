@@ -16,15 +16,21 @@ from baseline.shared_cache import shared_contract_config, protocol_name, EVALUAT
 from experiment_common.time_features import assert_resolved_time_features
 from experiment_common.constants import CONTRACT_VERSION,CACHE_SCHEMA_VERSION,DATA_CONTRACT_REVISION,TIME_FEATURE_REVISION,METRICS_REVISION,PREDICTION_CONTRACT_REVISION
 from shared_protocol.consumer import load_frozen_stage
-from baseline.backbones.frozen_registry import load_frozen_backbone_registry
+from baseline.backbones.reference_backbone import resolve_reference_checkpoint, SUPPORTED_BACKBONES
 
 ap=argparse.ArgumentParser()
 ap.add_argument('--stage',choices=['development','formal','evaluation'],default='development')
 ap.add_argument('--method',default=None)
 ap.add_argument('--severity',type=int,choices=EVALUATION_SEVERITIES)
+ap.add_argument('--backbone',choices=SUPPORTED_BACKBONES)
+ap.add_argument('--backbone-checkpoint',default=None)
 a=ap.parse_args()
 if a.stage=='evaluation' and a.severity is None: raise SystemExit('--severity is required for evaluation')
 cfg=load_yaml(ROOT/'configs/baseline.yaml')
+if a.method in ('RAST-STLAformer','RAFT-STLAformer') and a.backbone != 'STLAformer':
+    raise SystemExit(f'{a.method} requires --backbone STLAformer')
+if a.method in ('RAST-PatchSTG','RAFT-PatchSTG') and a.backbone != 'PatchSTG':
+    raise SystemExit(f'{a.method} requires --backbone PatchSTG')
 print(f"Baseline preflight v{cfg['version']} stage={a.stage}"+(f" severity=s{a.severity}" if a.severity else '')+(f" method={a.method}" if a.method else ''))
 failed=False
 for p in [ROOT,COMMON,Path(cfg['project']['protocol_root']),Path(cfg['project']['protocol_artifact_root']),Path(cfg['project']['supportbench_project']),Path(cfg['project']['benchmark_root']),Path(cfg['project']['backbone_root'])]:
@@ -49,12 +55,13 @@ except Exception as e: print('FAIL shared contract',repr(e)); failed=True; sc=No
 # A method-scoped Formal preflight must validate only the official source it
 # actually executes.  Requiring every primary/secondary vendor repository made
 # an unrelated missing source (e.g. LEAF) block GinAR/RAFT/etc.
-source_names = [a.method] if a.method else list(ORDER)
+source_alias={'RAST-PatchSTG':'RAST','RAST-STLAformer':'RAST','RAFT-PatchSTG':'RAFT','RAFT-STLAformer':'RAFT','SARAF-PatchSTG':'SARAF'}
+source_names = [source_alias.get(a.method,a.method)] if a.method else list(ORDER)
 try:
     if a.method:
         subprocess.check_call([cfg['project']['python'], str(ROOT/'scripts/source_lock.py'), 'verify-one',
                                '--root', str(ROOT), '--sources', str(ROOT/'configs/official_sources.yaml'),
-                               '--name', a.method])
+                               '--name', source_alias.get(a.method,a.method)])
     else:
         subprocess.check_call([cfg['project']['python'], str(ROOT/'scripts/source_lock.py'), 'verify',
                                '--root', str(ROOT), '--sources', str(ROOT/'configs/official_sources.yaml')])
@@ -78,21 +85,26 @@ try:
     pm,_=load_frozen_stage(cfg['project']['protocol_artifact_root'],cfg['experiment']['subgraph'],pname,a.stage)
     print('PASS frozen Protocol',pname,a.stage,pm['stage_hash'])
 except Exception as e: print('FAIL Protocol',a.stage,repr(e)); failed=True; pm=None
-need_patch=False
+need_reference=False
 if a.method:
     mc=cfg.get('methods',{}).get(a.method)
-    if mc is None: print('FAIL unknown method',a.method); failed=True
-    else: need_patch=bool(mc.get('requires_frozen_backbone_for_final_forecast',False))
-fb=Path(cfg['project']['frozen_backbone_json'])
-if need_patch or fb.exists():
-    try:
-        fpm,_=load_frozen_stage(cfg['project']['protocol_artifact_root'],cfg['experiment']['subgraph'],cfg['protocol']['shared_protocol_name'],'formal'); con=cfg['frozen_backbone_contract']
-        obj=load_frozen_backbone_registry(fb,expected_protocol_hash=fpm['stage_hash'],expected_time_feature_revision=cfg['shared_contract']['time_feature_revision'],expected_time_feature_fingerprint=(tf['fingerprint'] if tf else None),expected_time_feature_source=(tf['source'] if tf else None),expected_dataset=cfg['experiment']['subgraph'],expected_target=cfg['experiment']['target'],expected_backbone_data_contract_revision=con['required_data_contract_revision'],expected_shared_contract_version=con['required_shared_contract_version'],expected_cache_schema_version=con['required_cache_schema_version'],expected_protocol_version=con['required_protocol_version'],expected_paired_group_id=con['required_paired_group_id'],expected_metrics_revision=cfg['shared_contract']['metrics_revision'],expected_prediction_contract_revision=cfg['shared_contract']['prediction_contract_revision'])
-        print('PASS frozen Backbone',obj['selected_model'],'reference',obj['reference_checkpoint'])
-    except Exception as e:
-        if need_patch: print('FAIL frozen Backbone',repr(e)); failed=True
-        else: print('INFO frozen Backbone not ready yet:',repr(e))
+    if mc is None:
+        print('FAIL unknown method',a.method); failed=True
+    else:
+        need_reference=bool(mc.get('requires_reference_backbone_for_final_forecast',False))
+if need_reference:
+    if not a.backbone:
+        print('FAIL reference Backbone: --backbone is required for',a.method); failed=True
+    else:
+        try:
+            cp,ck=resolve_reference_checkpoint(
+                cfg,a.backbone,seed=int(cfg.get('reference_backbone',{}).get('seed',10)),
+                checkpoint=a.backbone_checkpoint,
+            )
+            print('PASS reference Backbone',a.backbone,'checkpoint',cp,'sha256 validated at load')
+        except Exception as e:
+            print('FAIL reference Backbone',repr(e)); failed=True
 if a.stage=='evaluation':
-    print('PASS Baseline evaluation policy direct_after_completed_formal_run (no FORMAL_SELECTION/FROZEN_BASELINE_PROTOCOL required)')
+    print('PASS Baseline evaluation policy direct_after_completed_formal_run (no FORMAL_SELECTION/global Backbone freeze required)')
 if failed: raise SystemExit(2)
 print('PREFLIGHT PASS')

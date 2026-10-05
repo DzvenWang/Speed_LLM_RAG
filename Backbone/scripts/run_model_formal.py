@@ -7,6 +7,7 @@ from backbone.model_runner import MODELS as GENERIC_MODELS, train_model, smoke_m
 from backbone.runner import train_patchstg, smoke_patchstg
 from backbone.shared_cache import cache_path, validate_shared_cache
 from backbone.utils import load_yaml, log
+from backbone.path_pointers import portable_project_path
 from supportbench.dataset import SupportBench
 
 MODELS = (*GENERIC_MODELS[:4], 'PatchSTG', *GENERIC_MODELS[4:])
@@ -38,10 +39,10 @@ def _enable_local_live_log(cfg, model, target, seed, stamp, smoke):
 
 
 def main():
-    ap=argparse.ArgumentParser(description='User-selected single-model Formal runner; Formal training auto-evaluates s20/s40/s60/s90 and never auto-freezes.')
+    ap=argparse.ArgumentParser(description='User-selected single-model Formal runner; Formal training auto-evaluates s20/s40/s60/s90 and publishes a latest-checkpoint pointer.')
     ap.add_argument('--model',required=True,choices=MODELS); ap.add_argument('--target',choices=['speed','flow']); ap.add_argument('--seed',type=int,default=10); ap.add_argument('--run-stamp')
     ap.add_argument('--config',default=str(ROOT/'configs/backbone.yaml')); ap.add_argument('--recipes',default=str(ROOT/'configs/model_recipes.yaml'))
-    ap.add_argument('--smoke',action='store_true',help='Run bounded real-Formal training smoke; smoke controller handles bounded evaluation; never freezes')
+    ap.add_argument('--smoke',action='store_true',help='Run bounded real-Formal training smoke; smoke controller handles bounded evaluation')
     ap.add_argument('--smoke-train-batches',type=int,default=2); ap.add_argument('--smoke-val-batches',type=int,default=1)
     a=ap.parse_args()
     config_path=Path(a.config).expanduser()
@@ -88,5 +89,12 @@ def main():
     cmd=[sys.executable,'-u',str(ROOT/'scripts/post_training_evaluate.py'),'--model',a.model,'--checkpoint',str(ck.resolve()),'--seed',str(a.seed),'--run-stamp',stamp,'--config',str(config_path)]
     subprocess.check_call(cmd,cwd=ROOT)
     print(f'AUTO_EVAL_PASS model={a.model} target={target} severities=20,40,60,90',flush=True)
-    print('FREEZE_STATUS=NOT_FROZEN user_must_run_freeze_checkpoint.py_explicitly',flush=True)
+    formal_root=Path(cfg['project']['exp_root'])/a.model/cfg['experiment']['subgraph']/'formal'
+    formal_root.mkdir(parents=True,exist_ok=True)
+    project_root=Path(cfg['project']['root']).expanduser().resolve()
+    run_ptr=portable_project_path(run,project_root)
+    ck_ptr=portable_project_path(ck,project_root)
+    (formal_root/'LATEST_RUN.txt').write_text(run_ptr+'\n',encoding='utf-8')
+    (formal_root/'LATEST_CHECKPOINT.txt').write_text(ck_ptr+'\n',encoding='utf-8')
+    print(f'LATEST_BACKBONE_POINTER model={a.model} run={run_ptr} checkpoint={ck_ptr}',flush=True)
 if __name__=='__main__': main()

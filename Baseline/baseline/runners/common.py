@@ -12,6 +12,7 @@ from torch.utils.data import Dataset
 
 from baseline.evaluation import evaluate_prediction_file
 from baseline.run_identity import build_run_manifest, write_run_manifest
+from baseline.path_pointers import portable_project_path
 from baseline.shared_cache import cache_path, shared_contract_config
 from baseline.utils import load_yaml, write_json
 
@@ -57,9 +58,12 @@ def validate_stage(stage: str, method: str) -> tuple[dict, Path]:
     return cfg, cache
 
 
-def make_run_dir(cfg: dict, method: str, stage: str, seed: int) -> Path:
+def make_run_dir(cfg: dict, method: str, stage: str, seed: int, backbone_model: str | None = None) -> Path:
     stamp = time.strftime('%Y%m%d_%H%M%S')
-    p = Path(cfg['project']['exp_root']) / method / cfg['experiment']['subgraph'] / stage / f'{stamp}_seed{seed}'
+    base = Path(cfg['project']['exp_root']) / method
+    if backbone_model:
+        base = base / str(backbone_model)
+    p = base / cfg['experiment']['subgraph'] / stage / f'{stamp}_seed{seed}'
     p.mkdir(parents=True, exist_ok=False)
     return p
 
@@ -114,7 +118,8 @@ def save_val_outputs(cfg: dict, cache: Path, run_dir: Path, pred_raw: np.ndarray
         'selection_valid': bool(extra_summary.get('selection_valid', True)),
     }
     write_json(run_dir / 'summary.json', summary)
-    latest = run_dir.parent / 'LATEST_RUN.txt'; latest.write_text(str(run_dir) + '\n')
+    latest = run_dir.parent / 'LATEST_RUN.txt'
+    latest.write_text(portable_project_path(run_dir,cfg['project']['root']) + '\n',encoding='utf-8')
     return summary
 
 

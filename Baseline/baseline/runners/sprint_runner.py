@@ -25,7 +25,7 @@ if not SUPPORTBENCH_PROJECT.exists():
 if SUPPORTBENCH_PROJECT.exists() and str(SUPPORTBENCH_PROJECT) not in sys.path:
     sys.path.insert(0, str(SUPPORTBENCH_PROJECT))
 
-from baseline.backbones.patchstg_bridge import FrozenPatchSTG
+from baseline.backbones.reference_backbone import ReferenceBackbone, build_reference_backbone
 from baseline.runners.common import (
     ImputationDataset,
     make_run_dir,
@@ -101,7 +101,7 @@ def sprint_impute_query(
     Context is ``D previous days at the same H12 clock-aligned segment + current H12``.
     Every historical interval ends strictly before ``window_start``. The current row
     contains only benchmark-observed cells. No P12 target/future and no later-day data
-    are available to SPRINT. Only the imputed current H12 is sent to frozen PatchSTG.
+    are available to SPRINT. Only the imputed current H12 is sent to the selected reference Backbone.
     """
     c = cfg['runners']['SPRINT']
     x_norm = np.asarray(x_norm, np.float32)
@@ -170,7 +170,7 @@ def forecast_split(
     cfg: dict,
     cache: Path,
     split: str,
-    patch: FrozenPatchSTG,
+    backbone: ReferenceBackbone,
     device: torch.device,
     *,
     smoke: bool = False,
@@ -184,7 +184,7 @@ def forecast_split(
     limit = min(len(ds), 1 if smoke else len(ds))
     completed, tods, dows = [], [], []
     outputs = []
-    bs = int(cfg['runners']['SPRINT'].get('patchstg_batch_size', 32))
+    bs = int(cfg['runners']['SPRINT'].get('reference_backbone_batch_size', 32))
 
     def flush():
         if not completed:
@@ -193,9 +193,9 @@ def forecast_split(
         tod = torch.from_numpy(np.stack(tods)).long().to(device)
         dow = torch.from_numpy(np.stack(dows)).long().to(device)
         with torch.no_grad():
-            pred = patch.predict_raw(x, tod, dow)
+            pred = backbone.predict_raw(x, tod, dow)
         if not torch.isfinite(pred).all():
-            raise RuntimeError('SPRINT -> frozen PatchSTG produced non-finite predictions')
+            raise RuntimeError('SPRINT -> reference Backbone produced non-finite predictions')
         outputs.append(pred.cpu().numpy().astype(np.float32))
         completed.clear(); tods.clear(); dows.clear()
 
@@ -219,11 +219,13 @@ def main():
     ap.add_argument('--stage', choices=['development', 'formal'], default='development')
     ap.add_argument('--seed', type=int, required=True)
     ap.add_argument('--smoke', action='store_true')
+    ap.add_argument('--backbone', required=True)
+    ap.add_argument('--backbone-checkpoint', default=None)
     a = ap.parse_args()
     cfg, cache = validate_stage(a.stage, 'SPRINT')
     set_seed(a.seed)
     device = require_gpu()
-    patch = FrozenPatchSTG(cfg, device)
+    backbone = build_reference_backbone(cfg, device, model=a.backbone, seed=int(cfg.get('reference_backbone',{}).get('seed',10)), checkpoint=a.backbone_checkpoint)
     c = cfg['runners']['SPRINT']
     impute_fn = import_sprint()
     native = sprint_vendor_defaults(impute_fn)
@@ -248,19 +250,20 @@ def main():
     }, flush=True)
     t0 = time.time()
     raw = forecast_split(
-        cfg, cache, 'val', patch, device, smoke=a.smoke, impute_fn=impute_fn
+        cfg, cache, 'val', backbone, device, smoke=a.smoke, impute_fn=impute_fn
     )
     if a.smoke:
         exp = (1, int(cfg['experiment']['horizon']), np.load(cache / 'val_x_obs_norm.npy', mmap_mode='r').shape[2])
         if tuple(raw.shape) != exp:
             raise RuntimeError(f'SPRINT smoke prediction shape {raw.shape} != {exp}')
-        print('SPRINT CAUSAL HISTORY -> FROZEN PATCHSTG GPU SMOKE PASS', {
+        print('SPRINT CAUSAL HISTORY -> REFERENCE BACKBONE GPU SMOKE PASS', {
             'shape': raw.shape,
-            'patchstg_reference_seed': patch.reference_seed,
+            'reference_backbone_model': backbone.model_name,
+            'reference_backbone_seed': backbone.reference_seed,
         }, flush=True)
         return
 
-    rd = make_run_dir(cfg, 'SPRINT', a.stage, a.seed)
+    rd = make_run_dir(cfg, 'SPRINT', a.stage, a.seed, backbone_model=backbone.model_name)
     context_label = f"{int(c['historical_days'])}past_days_plus_current_xH{int(cfg['experiment']['history'])}"
     ck = {
         'method': 'SPRINT', 'seed': int(a.seed), 'best_epoch': 0,
@@ -270,8 +273,10 @@ def main():
         'historical_days': int(c['historical_days']),
         'day_steps': int(c['day_steps']),
         'vendor_algorithm_defaults': native,
-        'patchstg_reference_seed': patch.reference_seed,
-        'patchstg_checkpoint': str(patch.checkpoint),
+        'reference_backbone_model': backbone.model_name,
+            'reference_backbone_seed': backbone.reference_seed,
+        'reference_backbone_checkpoint': backbone.checkpoint_reference,
+        'reference_backbone_checkpoint_sha256': backbone.checkpoint_sha256,
     }
     torch.save(ck, rd / 'best.pt')
     sm = save_val_outputs(cfg, cache, rd, raw, 'SPRINT', a.seed, a.stage, {
@@ -286,10 +291,12 @@ def main():
         'input_matching_note': 'specialized comparator with additional causal historical-day context; not strict H12 input-matched main-table baseline',
         'sprint_historical_days': int(c['historical_days']),
         'sprint_day_steps': int(c['day_steps']),
-        'downstream_forecaster': 'Frozen PatchSTG v1.1.7 reference checkpoint',
-        'patchstg_reference_seed': patch.reference_seed,
-        'patchstg_checkpoint': str(patch.checkpoint),
-        'checkpoint_selection': 'no learned benchmark checkpoint; SPRINT internal reconstruction validation; downstream PatchSTG frozen',
+        'downstream_forecaster': f'{backbone.model_name} reference checkpoint',
+        'reference_backbone_model': backbone.model_name,
+            'reference_backbone_seed': backbone.reference_seed,
+        'reference_backbone_checkpoint': backbone.checkpoint_reference,
+        'reference_backbone_checkpoint_sha256': backbone.checkpoint_sha256,
+        'checkpoint_selection': 'no learned benchmark checkpoint; SPRINT internal reconstruction validation; downstream reference Backbone fixed for this run',
         'vendor_algorithm_defaults': native,
         'algorithm_policy': 'pinned_vendor_native_defaults',
         'test_access': False,

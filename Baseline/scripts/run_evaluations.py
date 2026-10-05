@@ -28,6 +28,7 @@ def main():
     ap.add_argument('--method',required=True)
     ap.add_argument('--seed',type=int,required=True)
     ap.add_argument('--formal-run-dir',default=None)
+    ap.add_argument('--backbone',default=None)
     a=ap.parse_args()
     cfg=load_yaml(ROOT/'configs/baseline.yaml')
     py=cfg['project']['python']
@@ -36,12 +37,19 @@ def main():
     scenario_rows=[]
     for sev in [int(x) for x in cfg['experiment'].get('evaluation_severities',EVALUATION_SEVERITIES)]:
         print(f'========== EVALUATION s{sev} START method={a.method} seed={a.seed} ==========',flush=True)
-        subprocess.check_call([py,str(ROOT/'scripts/preflight.py'),'--stage','evaluation','--method',a.method,'--severity',str(sev)])
-        subprocess.check_call([py,str(ROOT/'scripts/preflight_formal.py'),'--method',a.method,'--seed',str(a.seed),'--stage','evaluation','--severity',str(sev)])
+        cmd_pre=[py,str(ROOT/'scripts/preflight.py'),'--stage','evaluation','--method',a.method,'--severity',str(sev)]
+        if a.backbone: cmd_pre += ['--backbone',a.backbone]
+        subprocess.check_call(cmd_pre)
+        cmd_pf=[py,str(ROOT/'scripts/preflight_formal.py'),'--method',a.method,'--seed',str(a.seed),'--stage','evaluation','--severity',str(sev)]
+        if a.backbone: cmd_pf += ['--backbone',a.backbone]
+        subprocess.check_call(cmd_pf)
         cmd=[py,'-u',str(ROOT/'scripts/run_evaluation.py'),'--method',a.method,'--seed',str(a.seed),'--severity',str(sev)]
+        if a.backbone: cmd += ['--backbone',a.backbone]
         if a.formal_run_dir: cmd += ['--formal-run-dir',str(a.formal_run_dir)]
         subprocess.check_call(cmd)
-        rd=exp/'evaluation'/a.method/cfg['experiment']['subgraph']/f'seed{a.seed}'/f's{sev}'
+        base=exp/'evaluation'/a.method
+        if a.backbone: base=base/a.backbone
+        rd=base/cfg['experiment']['subgraph']/f'seed{a.seed}'/f's{sev}'
         mf=rd/'test_metrics.csv'
         if not mf.exists():
             raise FileNotFoundError(mf)
@@ -67,7 +75,9 @@ def main():
                 'H3_MAE':r['H3_overall_MAE'],'H6_MAE':r['H6_overall_MAE'],'H12_MAE':r['H12_overall_MAE'],
             })
         print(f'========== EVALUATION s{sev} PASS ==========',flush=True)
-    out=exp/'evaluation'/a.method/cfg['experiment']['subgraph']/f'seed{a.seed}'
+    base=exp/'evaluation'/a.method
+    if a.backbone: base=base/a.backbone
+    out=base/cfg['experiment']['subgraph']/f'seed{a.seed}'
     sevdf=pd.DataFrame(severity_rows)
     scdf=pd.DataFrame(scenario_rows)
     sevdf.to_csv(out/'severity_summary.csv',index=False)

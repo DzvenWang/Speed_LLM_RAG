@@ -1,4 +1,10 @@
-version: 1.3.10
+version: 1.4.4
+compatible_formal_versions:
+- 1.4.0
+- 1.4.1
+- 1.4.2
+- 1.4.3
+- 1.4.4
 project:
   root: ${SPEED_LLM_RAG_ROOT}
   baseline_root: ${SPEED_LLM_RAG_ROOT}/Baseline
@@ -9,7 +15,6 @@ project:
   support_artifact_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench_artifacts
   backbone_root: ${SPEED_LLM_RAG_ROOT}/Backbone
   backbone_exp_root: ${SPEED_LLM_RAG_ROOT}/Backbone_exps
-  frozen_backbone_json: ${SPEED_LLM_RAG_ROOT}/Backbone_exps/${TRAFFIDENT_TARGET}/FROZEN_BACKBONE.json
   python: python
   leaf_python: python
   protocol_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench
@@ -35,6 +40,18 @@ experiment:
   - 40
   - 60
   - 90
+reference_backbone:
+  selection_mode: explicit_model_direct_checkpoint_resolution
+  seed: 10
+  supported_models:
+  - STAEformer
+  - HimNet
+  - BigST
+  - STDN
+  - PatchSTG
+  - STLAformer
+  checkpoint_override_env: BASELINE_BACKBONE_CHECKPOINT
+
 protocol:
   official_source_policy: exact_commit_or_first_run_resolved_commit_then_tree_sha256_lock
   test_selection_policy: direct_multiseverity_evaluation_after_completed_formal_run_no_baseline_freeze
@@ -43,20 +60,19 @@ protocol:
   retrieval_memory_signal: full_train_history
   retrieval_query_signal: incomplete_query_history
   current_query_future_allowed_at_inference: false
-  same_frozen_backbone_for_imputation_and_matched_rag: true
+  same_reference_backbone_for_reconstruction_and_matched_rag: true
   cache_fingerprint_required: true
   retrieval_audit_required: true
   shared_protocol_name: base_core5_${TRAFFIDENT_TARGET}_s40
   shared_protocol_version: 2.1.0
-  consumer_policy: frozen_shared_protocol_only
+  consumer_policy: shared_protocol_only
   no_local_sampling: true
-  frozen_backbone_required_for:
+  reference_backbone_required_for:
   - ImputeFormer
   - LRTC-TMCP
   - SPRINT
-  - RAST-PatchSTG
-  - RAFT-PatchSTG
-  - SARAF-PatchSTG
+  - RAST-STLAformer
+  - RAFT-STLAformer
   paired_group_id: TraffiDent_Net_06_base_core5_${TRAFFIDENT_TARGET}_multiseverity_v1
   evaluation_protocol_names:
     20: base_core5_${TRAFFIDENT_TARGET}_s20
@@ -94,16 +110,18 @@ baseline_story:
   - LEAF
   - LEAF-Qwen1.5B
   - RAST-PatchSTG
+  - RAST-STLAformer
   - RAFT-PatchSTG
+  - RAFT-STLAformer
   - SARAF-PatchSTG
 methods:
   ImputeFormer:
     enabled: true
     table_group: main
     priority: 1
-    formal_track: reconstruction_then_same_frozen_backbone
+    formal_track: reconstruction_then_selected_reference_backbone
     stage_now: development_then_formal_from_clean_slate
-    requires_frozen_backbone_for_final_forecast: true
+    requires_reference_backbone_for_final_forecast: true
     primary_experiment: true
   GinAR:
     enabled: true
@@ -111,7 +129,7 @@ methods:
     priority: 3
     formal_track: end_to_end_variable_missing_forecasting
     stage_now: formal_stability_probe_then_development_then_formal
-    requires_frozen_backbone_for_final_forecast: false
+    requires_reference_backbone_for_final_forecast: false
     primary_experiment: true
   RAFT:
     enabled: true
@@ -119,7 +137,7 @@ methods:
     priority: 4
     formal_track: generic_retrieval_external_val_only_runner_train_memory_only
     stage_now: development_then_formal_from_clean_slate
-    requires_frozen_backbone_for_final_forecast: false
+    requires_reference_backbone_for_final_forecast: false
     primary_experiment: true
   RAST:
     enabled: true
@@ -127,7 +145,7 @@ methods:
     priority: 5
     formal_track: traffic_rag_native_external_val_only_runner
     stage_now: development_then_formal_from_clean_slate
-    requires_frozen_backbone_for_final_forecast: false
+    requires_reference_backbone_for_final_forecast: false
     primary_experiment: true
   SARAF:
     enabled: true
@@ -135,7 +153,7 @@ methods:
     priority: 6
     formal_track: stationarity_aware_retrieval_external_val_only_runner_train_memory_only
     stage_now: development_then_formal_from_clean_slate
-    requires_frozen_backbone_for_final_forecast: false
+    requires_reference_backbone_for_final_forecast: false
     primary_experiment: true
   LEAF:
     enabled: true
@@ -143,7 +161,7 @@ methods:
     priority: 7
     formal_track: llm_framework_reference
     stage_now: qwen15_predict_select_supervise_ready
-    requires_frozen_backbone_for_final_forecast: false
+    requires_reference_backbone_for_final_forecast: false
     primary_experiment: false
   LEAF-Qwen1.5B:
     enabled: true
@@ -151,7 +169,7 @@ methods:
     priority: 7
     formal_track: leaf_qwen15_predict_select_supervise_adaptation
     stage_now: development_ready_after_leaf_branches
-    requires_frozen_backbone_for_final_forecast: false
+    requires_reference_backbone_for_final_forecast: false
     primary_experiment: false
   SLPF:
     enabled: true
@@ -159,15 +177,35 @@ methods:
     priority: 9
     formal_track: matched_fixed_partial_sensing_subtrack
     stage_now: official_native_subtrack_bridge_and_smoke
-    requires_frozen_backbone_for_final_forecast: false
+    requires_reference_backbone_for_final_forecast: false
     primary_experiment: false
   RAST-PatchSTG:
     enabled: true
     table_group: secondary
     priority: 11
-    formal_track: traffic_rag_matched_frozen_patchstg_controlled_adaptation
+    formal_track: traffic_rag_matched_patchstg_reference_controlled_adaptation
     stage_now: formal_seed10_ready
-    requires_frozen_backbone_for_final_forecast: true
+    requires_reference_backbone_for_final_forecast: true
+    primary_experiment: false
+    formal_seeds:
+    - 10
+  RAST-STLAformer:
+    enabled: true
+    table_group: secondary
+    priority: 11
+    formal_track: traffic_rag_matched_stlaformer_reference_controlled_adaptation
+    stage_now: formal_seed10_ready
+    requires_reference_backbone_for_final_forecast: true
+    primary_experiment: false
+    formal_seeds:
+    - 10
+  RAFT-STLAformer:
+    enabled: true
+    table_group: secondary
+    priority: 12
+    formal_track: raft_retrieval_matched_stlaformer_reference_control
+    stage_now: formal_seed10_ready
+    requires_reference_backbone_for_final_forecast: true
     primary_experiment: false
     formal_seeds:
     - 10
@@ -175,9 +213,9 @@ methods:
     enabled: true
     table_group: secondary
     priority: 2
-    formal_track: causal_historical_day_sprint_imputation_then_same_frozen_backbone
+    formal_track: causal_historical_day_sprint_imputation_then_selected_reference_backbone
     stage_now: development_runner_causal_history_vendor_native_pending_smoke
-    requires_frozen_backbone_for_final_forecast: true
+    requires_reference_backbone_for_final_forecast: true
     primary_experiment: false
   MoGERNN:
     enabled: true
@@ -185,7 +223,7 @@ methods:
     priority: 10
     formal_track: official_mogernn_dynamic_view_batch1_adaptation
     stage_now: development_pending_inference_contract_check
-    requires_frozen_backbone_for_final_forecast: false
+    requires_reference_backbone_for_final_forecast: false
     primary_experiment: false
   ReMFT:
     enabled: true
@@ -193,15 +231,15 @@ methods:
     priority: 7
     formal_track: official_remft_native96_incomplete_sensing_external_val_only
     stage_now: native96_runtime_contract_then_rerun_development_and_formal
-    requires_frozen_backbone_for_final_forecast: false
+    requires_reference_backbone_for_final_forecast: false
     primary_experiment: true
   LRTC-TMCP:
     enabled: true
     table_group: main
     priority: 2
-    formal_track: causal_multiday_lrtc_tmcp_imputation_then_same_frozen_backbone
+    formal_track: causal_multiday_lrtc_tmcp_imputation_then_selected_reference_backbone
     stage_now: causal_multiday_contract_smoke_then_rerun_development_and_formal_seed10
-    requires_frozen_backbone_for_final_forecast: true
+    requires_reference_backbone_for_final_forecast: true
     deterministic: true
     formal_seeds:
     - 10
@@ -210,9 +248,9 @@ methods:
     enabled: true
     table_group: secondary
     priority: 12
-    formal_track: raft_retrieval_matched_frozen_patchstg_control
+    formal_track: raft_retrieval_matched_patchstg_reference_control
     stage_now: formal_seed10_ready
-    requires_frozen_backbone_for_final_forecast: true
+    requires_reference_backbone_for_final_forecast: true
     primary_experiment: false
     formal_seeds:
     - 10
@@ -220,9 +258,9 @@ methods:
     enabled: true
     table_group: secondary
     priority: 13
-    formal_track: saraf_retrieval_matched_frozen_patchstg_control
+    formal_track: saraf_retrieval_matched_patchstg_reference_control
     stage_now: formal_seed10_ready
-    requires_frozen_backbone_for_final_forecast: true
+    requires_reference_backbone_for_final_forecast: false
     primary_experiment: false
     formal_seeds:
     - 10
@@ -234,6 +272,11 @@ runners:
     patience: 10
     n_period: 3
     topm: 20
+    # Matched-backbone controls only (PatchSTG/STLAformer). Start exactly from
+    # the selected reference forecast and learn how much native RAFT fusion to admit.
+    # Native RAFT is unchanged.
+    reference_control_zero_init_residual_scale: true
+    reference_control_residual_scale_init: 0.0
   GinAR:
     model_variant: model1
     batch_size: 16
@@ -312,6 +355,10 @@ runners:
     top_k: 3
     use_amp: false
     min_delta: 1.0e-08
+    # Matched-backbone controls only (PatchSTG/STLAformer). Native RAST is unchanged.
+    reference_control_zero_init_residual_scale: true
+    reference_control_residual_scale_init: 0.0
+    reference_control_min_delta: 1.0e-08
   LEAF:
     batch_size: 16
     max_epochs: 80
@@ -350,7 +397,7 @@ runners:
     day_steps: 288
     canonical_target_match_mae_max: 0.05
     canonical_valid_agreement_min: 0.9999
-    patchstg_batch_size: 32
+    reference_backbone_batch_size: 32
   MoGERNN:
     batch_size: 1
     max_epochs: 50
@@ -420,7 +467,7 @@ runners:
     strict_h12_only: false
     use_raw_speed_space: true
     historical_days: 28
-    support_policy: frozen_train_archive_same_slot
+    support_policy: fixed_train_archive_same_slot
     heldout_support_forbidden: true
     day_steps: 288
     canonical_target_match_mae_max: 0.05
@@ -445,10 +492,9 @@ evaluation:
   require_formal_selection: true
   require_frozen_protocol: true
   save_predictions: true
-frozen_backbone_contract:
+reference_backbone_contract:
   owner: Backbone
-  minimum_schema_version: 5
-  use_reference_checkpoint_for_all_baseline_seeds: true
+  use_same_reference_checkpoint_within_one_formal_run_and_its_evaluations: true
   require_checkpoint_sha256: true
   require_protocol_hash_match: true
   require_time_feature_fingerprint_match: true
@@ -489,11 +535,15 @@ secondary_methods:
 - LEAF
 - LEAF-Qwen1.5B
 - RAST-PatchSTG
+- RAST-STLAformer
 - RAFT-PatchSTG
+- RAFT-STLAformer
 - SARAF-PatchSTG
 method_implementation_revisions:
   ReMFT: remft_native96_sensingmatched_prefix_checkpointdepth_r4
   LRTC-TMCP: lrtc_train_archive_support28_r2
-  RAFT-PatchSTG: raft_native_retrieval_fusion_frozen_patchstg_directpath_r1
-  SARAF-PatchSTG: saraf_native_retrieval_fusion_frozen_patchstg_directpath_r1
-  RAST-PatchSTG: rast_native_retrieval_fusion_frozen_patchstg_backbone_r1
+  RAFT-PatchSTG: raft_native_retrieval_fusion_patchstg_zero_init_residual_r2
+  SARAF-PatchSTG: saraf_native_retrieval_fusion_patchstg_reference_directpath_r1
+  RAST-PatchSTG: rast_native_retrieval_fusion_patchstg_zero_init_residual_r2
+  RAST-STLAformer: rast_native_retrieval_fusion_stlaformer_zero_init_residual_r3
+  RAFT-STLAformer: raft_native_retrieval_fusion_stlaformer_zero_init_residual_r2
