@@ -150,6 +150,12 @@ def impute(cfg,fc,ec,seed,device,ck,max_rows=None):
 
 def lrtc_tmcp(cfg,fc,ec,seed,device,ck,max_rows=None):
     # LRTC-TMCP has no learned benchmark weights; best.pt is a provenance marker.
+    expected=cfg.get('method_implementation_revisions',{}).get('LRTC-TMCP')
+    if expected and str(ck.get('method_implementation_revision')) != str(expected):
+        raise RuntimeError(
+            f'LRTC-TMCP Formal run uses stale implementation revision '
+            f'{ck.get("method_implementation_revision")!r}; expected {expected!r}. Rerun Formal.'
+        )
     patch=build_frozen_backbone(cfg,device)
     raw,_info=lrtc_forecast(cfg,ec,'test',patch,device,smoke=False)
     return raw
@@ -187,7 +193,20 @@ def mogernn(cfg,fc,ec,seed,device,ck):
 
 
 def remft(cfg,fc,ec,seed,device,ck,max_rows=None):
-    c=cfg['runners']['ReMFT']; ds=ReMFTDataset(ec,'test'); ds=Subset(ds,range(min(len(ds),max_rows))) if max_rows else ds; dl=DataLoader(ds,batch_size=int(c.get('formal_eval_batch_size',c['batch_size'])),shuffle=False,num_workers=0); m=remft_build(cfg,device); remft_load(m,ck['model']); mean,std=scale_stats(fc); use_amp=bool(c.get('formal_use_amp',True)); return remft_predict(m,dl,device,mean,std,use_amp=use_amp)
+    c=cfg['runners']['ReMFT']
+    expected=cfg.get('method_implementation_revisions',{}).get('ReMFT')
+    if expected and str(ck.get('method_implementation_revision')) != str(expected):
+        raise RuntimeError(
+            f'ReMFT Formal run uses stale implementation revision '
+            f'{ck.get("method_implementation_revision")!r}; expected {expected!r}. Rerun Formal.'
+        )
+    mean,std=scale_stats(fc)
+    ds=ReMFTDataset(cfg,ec,'test',mean=mean,std=std)
+    ds=Subset(ds,range(min(len(ds),max_rows))) if max_rows else ds
+    dl=DataLoader(ds,batch_size=int(c.get('formal_eval_batch_size',c['batch_size'])),shuffle=False,num_workers=0)
+    m=remft_build(cfg,device); remft_load(m,ck['model'])
+    use_amp=bool(c.get('formal_use_amp',True))
+    return remft_predict(m,dl,device,mean,std,use_amp=use_amp)
 
 
 def main():

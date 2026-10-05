@@ -54,18 +54,18 @@ from baseline.runners.remft_runner import load_official_namespace, build_phi
 cfg=yaml.safe_load((ROOT/'configs/baseline.yaml').read_text())
 ns=load_official_namespace()
 phi=build_phi(ns,cfg).cpu().eval()
-H=int(cfg['experiment']['history'])
+H=int(cfg['runners']['ReMFT'].get('native_seq_len',96))
 with torch.no_grad():
     x=torch.randn(2,8,H,dtype=torch.float32)
     y=phi(x)
 if tuple(y.shape) != tuple(x.shape):
-    raise RuntimeError(f'ReMFT PHI-12 shape contract failed: input={tuple(x.shape)} output={tuple(y.shape)}')
+    raise RuntimeError(f'ReMFT PHI-96 shape contract failed: input={tuple(x.shape)} output={tuple(y.shape)}')
 if not torch.isfinite(y).all():
-    raise RuntimeError('ReMFT PHI-12 produced non-finite output')
+    raise RuntimeError('ReMFT PHI-96 produced non-finite output')
 if int(phi.mixing_multi_scale_season.seq_len) != H:
-    raise RuntimeError('ReMFT season mixer did not adopt benchmark history length')
+    raise RuntimeError('ReMFT season mixer is not at native history length')
 if int(phi.mixing_multi_scale_trend.seq_len) != H:
-    raise RuntimeError('ReMFT trend mixer did not adopt benchmark history length')
-print('PASS ReMFT PHI-12 construction/forward',tuple(y.shape))
+    raise RuntimeError('ReMFT trend mixer is not at native history length')
+print('PASS ReMFT PHI-96 native construction/forward',tuple(y.shape))
 print('INFO full runtime LLM checkpoint-depth/frozen contract is enforced by remft_runner.py')
 print('REMFT RUNTIME PASS')

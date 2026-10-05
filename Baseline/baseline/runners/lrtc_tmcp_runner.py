@@ -45,12 +45,17 @@ def _split_provenance(cache: Path, split: str, source) -> dict:
         'history_observed_file_sha256': _sha256_file(cache / f'{split}_history_observed.npy'),
         'canonical_target_path': str(source.target_path),
         'canonical_valid_path': str(source.valid_path),
+        'support_days': int(source.historical_days),
         'historical_days': int(source.historical_days),
         'context_days': int(source.context_days),
         'day_steps': int(source.day_steps),
         'history_intervals': int(source.history),
-        'tensor_layout': 'nodes_x_causal_days_x_query_slots',
+        'train_start': int(source.train_start),
+        'train_end_exclusive': int(source.train_end_exclusive),
+        'support_policy': str(source.support_policy),
+        'tensor_layout': 'nodes_x_support_days_x_query_slots',
         'strict_future_isolation': True,
+        'heldout_support_forbidden': True,
     }
 
 
@@ -240,9 +245,13 @@ def main():
         'learned_parameters': False,
         'deterministic': True,
         'official_source': 'vendor/LRTC-TMCP/lrtc-tmcp-demo.ipynb',
-        'tensor_layout': 'nodes_x_causal_days_x_query_slots',
+        'tensor_layout': 'nodes_x_support_days_x_query_slots',
+        'support_days': int(prov['support_days']),
         'historical_days': int(prov['historical_days']),
+        'support_policy': prov['support_policy'],
         'strict_future_isolation': True,
+        'heldout_support_forbidden': True,
+        'method_implementation_revision': cfg.get('method_implementation_revisions', {}).get('LRTC-TMCP'),
         'frozen_backbone_model': patch.registry.get('selected_model'),
         'frozen_backbone_reference_seed': patch.reference_seed,
         'frozen_backbone_checkpoint': str(patch.checkpoint),
@@ -256,12 +265,18 @@ def main():
         'official_equation_source': 'vendor/LRTC-TMCP/lrtc-tmcp-demo.ipynb::svt_TMCP,recover_data',
         'compatibility_implementation': 'baseline/compat/lrtc_tmcp.py::recover_batch',
         'input_contract': (
-            f"{prov['historical_days']} complete causal historical day-aligned H12 slices + "
-            'current incomplete H12; no query future; observed current cells protected'
+            f"{prov['support_days']} complete same-slot H12 support slices from frozen Train only + "
+            'current incomplete H12; no held-out support; no query future; observed current cells protected'
         ),
         'tensor_layout': prov['tensor_layout'],
+        'support_days': int(prov['support_days']),
         'historical_days': int(prov['historical_days']),
         'context_days': int(prov['context_days']),
+        'support_policy': prov['support_policy'],
+        'support_train_start': int(prov['train_start']),
+        'support_train_end_exclusive': int(prov['train_end_exclusive']),
+        'heldout_support_forbidden': True,
+        'method_implementation_revision': cfg.get('method_implementation_revisions', {}).get('LRTC-TMCP'),
         'input_provenance_file': str(rd / 'lrtc_input_provenance.json'),
         'query_window_start_sha256': prov['query_window_start_sha256'],
         'causal_context_start_sha256': prov['causal_context_start_sha256'],

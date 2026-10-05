@@ -191,8 +191,8 @@ methods:
     enabled: true
     table_group: main
     priority: 7
-    formal_track: official_remft_architecture_12step_external_val_only_adaptation
-    stage_now: runtime_contract_then_development_then_formal
+    formal_track: official_remft_native96_incomplete_sensing_external_val_only
+    stage_now: native96_runtime_contract_then_rerun_development_and_formal
     requires_frozen_backbone_for_final_forecast: false
     primary_experiment: true
   LRTC-TMCP:
@@ -384,8 +384,11 @@ runners:
     patience: 5
     gradient_accumulation_steps: 24
     gradient_clip: 5.0
-    patch_len: 4
-    stride: 2
+    native_seq_len: 96
+    benchmark_query_history: 12
+    native_prefix_policy: same_view_prefix_rematerialization_plus_exact_benchmark_tail
+    patch_len: 16
+    stride: 8
     phi_layers: 5
     down_sampling_window: 2
     down_sampling_layers: 2
@@ -395,14 +398,13 @@ runners:
     require_exact_llm_checkpoint_architecture: true
     effective_batch_size: 24
     development_use_amp: false
-    formal_batch_size: 8
-    formal_eval_batch_size: 8
+    formal_batch_size: 1
+    formal_eval_batch_size: 1
     formal_use_amp: true
-    formal_reference_development_best_epoch: 18
-    formal_reference_development_train_rows: 12000
+    formal_budget_policy: fixed_optimizer_updates
     formal_max_optimizer_updates: 9000
     data_loader_workers: 2
-    formal_gradient_accumulation_steps: 3
+    formal_gradient_accumulation_steps: 24
   LRTC-TMCP:
     batch_size: 64
     rho: 1.0e-05
@@ -414,10 +416,12 @@ runners:
     max_iter: 200
     smoke_max_iter: 3
     protect_observed_values: true
-    tensor_layout: nodes_x_causal_days_x_query_slots
+    tensor_layout: nodes_x_support_days_x_query_slots
     strict_h12_only: false
     use_raw_speed_space: true
     historical_days: 28
+    support_policy: frozen_train_archive_same_slot
+    heldout_support_forbidden: true
     day_steps: 288
     canonical_target_match_mae_max: 0.05
     canonical_valid_agreement_min: 0.9999
@@ -488,7 +492,8 @@ secondary_methods:
 - RAFT-PatchSTG
 - SARAF-PatchSTG
 method_implementation_revisions:
-  ReMFT: remft_phi12_checkpointdepth_amp_batch8_updatebudget_r3
+  ReMFT: remft_native96_sensingmatched_prefix_checkpointdepth_r4
+  LRTC-TMCP: lrtc_train_archive_support28_r2
   RAFT-PatchSTG: raft_native_retrieval_fusion_frozen_patchstg_directpath_r1
   SARAF-PatchSTG: saraf_native_retrieval_fusion_frozen_patchstg_directpath_r1
   RAST-PatchSTG: rast_native_retrieval_fusion_frozen_patchstg_backbone_r1

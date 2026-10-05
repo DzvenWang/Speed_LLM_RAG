@@ -8,13 +8,14 @@ collapses the day mode and is therefore not a faithful compatibility adapter.
 
 This module resolves the canonical raw-target/raw-valid timeline from
 SupportBench using only currently observed benchmark cells for source auditing,
-then constructs a strictly causal same-slot multi-day tensor for each query:
+then constructs a train-archive-only same-slot multi-day tensor for each query:
 
-    [N, historical_days + 1, H]
+    [N, support_days + 1, H]
 
-All historical slices are at least one full day before the current query.  The
-final/current slice contains only the incomplete benchmark H-step history.
-No future target value is ever read.
+The support slices are selected only from the frozen chronological training
+archive and are strictly earlier than the current query.  Validation/test-period
+ground truth is never used as external support.  The final/current slice contains
+only the incomplete benchmark H-step history.  No query future value is read.
 """
 
 from dataclasses import dataclass
@@ -70,6 +71,9 @@ class LRTCCanonicalHistory:
     day_steps: int
     observed_match_mae: float
     raw_valid_agreement: float
+    train_start: int
+    train_end_exclusive: int
+    support_policy: str = 'frozen_train_archive_same_slot'
 
     @property
     def context_days(self) -> int:
@@ -87,18 +91,37 @@ class LRTCCanonicalHistory:
         ).astype(bool)
 
     def starts_for_query(self, window_start: int) -> list[int]:
+        """Return support starts from the frozen training archive only.
+
+        LRTC-TMCP is allowed to keep its native multi-day tensor structure.  The
+        fairness constraint is on information availability, not on forcing the
+        tensor down to H=12: all *external* complete support slices must come from
+        the chronological training interval.  We therefore select the latest
+        ``historical_days`` training starts with the same within-day slot as the
+        current query.  Every support H-step slice must fit fully inside Train and
+        finish before the query begins.
+        """
         st = int(window_start)
-        historical = [st - self.day_steps * k for k in range(self.historical_days, 0, -1)]
-        if not historical or historical[0] < 0:
+        slot = st % self.day_steps
+        first = int(self.train_start) + ((slot - int(self.train_start)) % self.day_steps)
+        last = min(int(self.train_end_exclusive) - self.history, st - self.history)
+        if last < first:
+            candidates = []
+        else:
+            # Align the last candidate to the same within-day slot.
+            last -= (last - slot) % self.day_steps
+            candidates = list(range(first, last + 1, self.day_steps)) if last >= first else []
+        if len(candidates) < self.historical_days:
             raise RuntimeError(
-                f'LRTC-TMCP requires {self.historical_days} complete causal historical days, '
-                f'but window_start={st} gives earliest_start={historical[0] if historical else None}'
+                'LRTC-TMCP frozen-train support archive does not contain enough same-slot days: '
+                f'query_start={st} available={len(candidates)} required={self.historical_days} '
+                f'train=[{self.train_start},{self.train_end_exclusive}) slot={slot}'
             )
-        # Historical H-step slices must finish no later than the current query start.
+        historical = candidates[-self.historical_days:]
+        if any(s < self.train_start or s + self.history > self.train_end_exclusive for s in historical):
+            raise RuntimeError('LRTC-TMCP support escaped the frozen training interval')
         if any(s + self.history > st for s in historical):
-            raise RuntimeError(
-                f'LRTC-TMCP causal history violation: starts={historical[-3:]}, current_start={st}'
-            )
+            raise RuntimeError('LRTC-TMCP support is not strictly causal')
         return historical + [st]
 
     def build_tensor(
@@ -109,9 +132,9 @@ class LRTCCanonicalHistory:
     ) -> tuple[np.ndarray, np.ndarray, list[int]]:
         """Build one [N,D,H] sparse tensor + observed mask.
 
-        The previous ``historical_days`` slices come from the canonical sensor
-        timeline. The final slice is the current incomplete benchmark H-step
-        history, so artificially hidden current cells remain unavailable.
+        The previous ``historical_days`` slices come from the complete frozen
+        training archive only. The final slice is the current incomplete benchmark
+        H-step history, so artificially hidden current cells remain unavailable.
         """
         current_raw = np.asarray(current_raw, dtype=np.float32)
         current_observed = np.asarray(current_observed).astype(bool)
@@ -206,6 +229,23 @@ def resolve_lrtc_canonical_history_source(
     core_dir = sg_dir / 'core'
     if not core_dir.exists():
         raise FileNotFoundError(f'LRTC canonical SupportBench core directory not found: {core_dir}')
+    split_manifest_path = sg_dir / 'splits' / 'split_manifest.json'
+    if not split_manifest_path.exists():
+        raise FileNotFoundError(
+            f'LRTC frozen-train support policy requires split manifest: {split_manifest_path}'
+        )
+    import json
+    split_manifest = json.loads(split_manifest_path.read_text())
+    train_range = split_manifest.get('splits', {}).get('train')
+    if not isinstance(train_range, dict):
+        raise RuntimeError('LRTC split manifest does not define chronological train range')
+    train_start = int(train_range['start'])
+    train_end_exclusive = int(train_range['end_exclusive'])
+    if train_end_exclusive - train_start < historical_days * day_steps + H:
+        raise RuntimeError(
+            'LRTC frozen training archive is too short for requested support_days: '
+            f'train=[{train_start},{train_end_exclusive}) support_days={historical_days}'
+        )
 
     probes = _probe_indices(M)
     target_scores: list[tuple[float, Path, np.ndarray, int | None]] = []
@@ -279,15 +319,19 @@ def resolve_lrtc_canonical_history_source(
         day_steps=day_steps,
         observed_match_mae=float(target_mae),
         raw_valid_agreement=float(valid_agree),
+        train_start=train_start,
+        train_end_exclusive=train_end_exclusive,
     )
     print('LRTC-TMCP CANONICAL HISTORY SOURCE', {
         'target_path': str(target_path), 'target_channel': target_ch,
         'observed_match_mae': target_mae,
         'valid_path': str(valid_path), 'valid_channel': valid_ch,
         'raw_valid_agreement': valid_agree,
-        'historical_days': historical_days, 'context_days': source.context_days,
+        'support_days': historical_days, 'context_days': source.context_days,
         'day_steps': day_steps, 'history_intervals': H,
-        'tensor_layout': 'nodes_x_causal_days_x_query_slots',
-        'causality': 'historical slices strictly earlier; current hidden and every P12 future unavailable',
+        'train_start': train_start, 'train_end_exclusive': train_end_exclusive,
+        'support_policy': source.support_policy,
+        'tensor_layout': 'nodes_x_support_days_x_query_slots',
+        'causality': 'complete support is train-archive-only and strictly earlier; current hidden and every P12 future unavailable',
     }, flush=True)
     return source

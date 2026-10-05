@@ -79,3 +79,10 @@ Every line emitted by the primary smoke driver and every captured child-process 
 - Project/runtime version records are synchronized to v1.3.10, including `VERSION`, `configs/baseline.yaml`, preflight output (via config version), and Primary Formal PBS lifecycle labels.
 - No model architecture, hyperparameter, dataset split, protocol, cache, or metric definition is changed.
 
+
+
+## LRTC-TMCP / ReMFT information-contract correction (2026-10-05)
+
+- **LRTC-TMCP** keeps its multi-day location × day × within-day tensor. Its 28 complete support days are now selected **only from the frozen chronological Train archive**, at the same within-day slot and strictly before the query. Validation/test hidden ground truth is never used as external support. The current H12 slice remains the exact incomplete benchmark query and observed cells are immutable.
+- **ReMFT** now retains the official notebook's native **H96 → P12** working scale with `patch_len=16` and `stride=8`. The final H12 is reused exactly from the shared benchmark cache. The extra causal H84 prefix is re-materialized under the same sensing view family/severity and exposes only observed cells, so native context is restored without granting complete held-out states.
+- No other Baseline implementation or hyperparameter block is changed by this correction.

@@ -11,6 +11,7 @@ from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
@@ -21,6 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from baseline.remft_runtime import bind_remft_bert_env, resolve_remft_bert_path
+from baseline.remft_native_history import resolve_remft_native_source
 
 from baseline.runners.common import (
     make_run_dir,
@@ -34,20 +36,64 @@ from baseline.runners.common import (
 
 
 class ReMFTDataset(Dataset):
-    def __init__(self, cache: Path, split: str):
-        self.x = np.load(cache / f'{split}_x_obs_norm.npy', mmap_mode='r')
-        self.y = np.load(cache / f'{split}_y_norm.npy', mmap_mode='r')
-        self.valid = np.load(cache / f'{split}_future_valid.npy', mmap_mode='r')
+    """ReMFT native H96 input over the shared benchmark query.
+
+    The final benchmark H12 is loaded verbatim from ``*_x_obs_norm.npy``.  Only
+    the additional 84 causal steps are materialized locally, under the same
+    sensing view family/severity.  This restores the native ReMFT receptive field
+    without granting complete held-out states.
+    """
+
+    def __init__(self, cfg: dict, cache: Path, split: str, *, mean: float, std: float):
+        self.cache = Path(cache)
+        self.split = str(split)
+        self.tail = np.load(self.cache / f'{split}_x_obs_norm.npy', mmap_mode='r')
+        self.y = np.load(self.cache / f'{split}_y_norm.npy', mmap_mode='r')
+        self.valid = np.load(self.cache / f'{split}_future_valid.npy', mmap_mode='r')
+        self.meta = pd.read_csv(self.cache / f'{split}_manifest.csv')
+        self.source = resolve_remft_native_source(cfg, mean=mean, std=std)
+        self.nodes = int(self.tail.shape[2])
+        if self.nodes != self.source.nodes:
+            raise RuntimeError(f'ReMFT node mismatch cache={self.nodes} canonical={self.source.nodes}')
+        if int(self.tail.shape[1]) != int(cfg['experiment']['history']):
+            raise RuntimeError('ReMFT benchmark tail is not H12')
+        if len(self.meta) != len(self.tail):
+            raise RuntimeError('ReMFT manifest/cache row mismatch')
+
+        starts = self.meta.window_start.astype(int).to_numpy()
+        eligible = np.flatnonzero(starts >= self.source.prefix_len).astype(np.int64)
+        if self.split != 'train' and len(eligible) != len(starts):
+            raise RuntimeError(
+                f'ReMFT native H96 would drop {len(starts)-len(eligible)} {self.split} queries; '
+                'evaluation/validation alignment must remain exact'
+            )
+        self.indices = eligible if self.split == 'train' else np.arange(len(starts), dtype=np.int64)
+        self.dropped_insufficient_history = int(len(starts) - len(self.indices))
+        self.input_contract = {
+            'native_seq_len': int(self.source.native_history),
+            'benchmark_tail_len': int(self.source.benchmark_history),
+            'prefix_len': int(self.source.prefix_len),
+            'prefix_policy': 'same_view_prefix_rematerialization_plus_exact_benchmark_tail',
+            'train_rows_dropped_for_insufficient_prefix': self.dropped_insufficient_history,
+            'heldout_hidden_values_exposed': False,
+        }
 
     def __len__(self):
-        return int(self.x.shape[0])
+        return int(len(self.indices))
 
     def __getitem__(self, i):
+        qi = int(self.indices[int(i)])
+        row = self.meta.iloc[qi]
+        x, _audit = self.source.build(
+            window_start=int(row.window_start),
+            view_id=str(row.view_id),
+            tail_x_obs_norm=np.asarray(self.tail[qi], dtype=np.float32),
+        )
         # Official ReMFT convention is [sensor, time].
         return (
-            np.array(self.x[i].T, np.float32, copy=True),
-            np.array(self.y[i].T, np.float32, copy=True),
-            np.array(self.valid[i].T, np.uint8, copy=True),
+            np.array(x.T, np.float32, copy=True),
+            np.array(self.y[qi].T, np.float32, copy=True),
+            np.array(self.valid[qi].T, np.uint8, copy=True),
         )
 
 
@@ -93,20 +139,19 @@ def load_official_namespace() -> dict:
 
 
 def build_phi(ns: dict, cfg: dict) -> nn.Module:
-    """Build official PHI for H=12 without altering the PHI mechanism."""
+    """Build the official PHI at its native 96-step working scale."""
     c = cfg['runners']['ReMFT']
-    H = int(cfg['experiment']['history'])
+    H = int(c.get('native_seq_len', 96))
     ds_window = int(c['down_sampling_window'])
     ds_layers = int(c['down_sampling_layers'])
+    if H != 96:
+        raise RuntimeError(f'ReMFT main-track correction requires native_seq_len=96, got {H}')
     scale = ds_window ** ds_layers
     if H % scale != 0:
         raise ValueError(
-            f'ReMFT history={H} must be divisible by '
+            f'ReMFT native history={H} must be divisible by '
             f'down_sampling_window**down_sampling_layers={scale}'
         )
-
-    Season = ns['MultiScaleSeasonMixing']
-    Trend = ns['MultiScaleTrendMixing']
     PHI = ns['PHI']
     phi = PHI(
         seq_len=H,
@@ -114,26 +159,21 @@ def build_phi(ns: dict, cfg: dict) -> nn.Module:
         c=ds_window,
         layers=int(c['phi_layers']),
     )
-    # The official PHI constructor hard-codes the mixer defaults at seq_len=96.
-    # Recreate only those two official mixer instances at the benchmark H=12.
-    phi.mixing_multi_scale_season = Season(
-        seq_len=H,
-        down_sampling_window=ds_window,
-        down_sampling_layers=ds_layers,
-    )
-    phi.mixing_multi_scale_trend = Trend(
-        seq_len=H,
-        down_sampling_window=ds_window,
-        down_sampling_layers=ds_layers,
-    )
+    # Official PHI constructs both multi-scale mixers with default seq_len=96.
+    # At the restored native H96 scale they are already correct; do not rebuild
+    # or reshape the architecture as the former H12 adapter did.
+    if int(phi.mixing_multi_scale_season.seq_len) != H:
+        raise RuntimeError('ReMFT official season mixer is not at native seq_len=96')
+    if int(phi.mixing_multi_scale_trend.seq_len) != H:
+        raise RuntimeError('ReMFT official trend mixer is not at native seq_len=96')
     return phi
 
 
-class ReMFT12(nn.Module):
+class ReMFT96(nn.Module):
     def __init__(self, cfg: dict):
         super().__init__()
         c = cfg['runners']['ReMFT']
-        H = int(cfg['experiment']['history'])
+        H = int(c.get('native_seq_len', 96))
         P = int(cfg['experiment']['horizon'])
         ns = load_official_namespace()
         self.phi = build_phi(ns, cfg)
@@ -147,7 +187,7 @@ class ReMFT12(nn.Module):
             )
 
     def forward(self, x):
-        # Preserve the original ReMFT path: incomplete history -> PHI -> llmodel.
+        # Native ReMFT path: incomplete H96 history -> PHI -> frozen-BERT reprogramming.
         return self.llmodel(self.phi(x))
 
 
@@ -236,7 +276,7 @@ def build_model(cfg: dict, device: torch.device):
     repo = ROOT / 'vendor/ReMFT'
     bert = bind_remft_bert_env(ROOT)
     print(f'REMFT BERT PATH {bert}', flush=True)
-    m = ReMFT12(cfg)
+    m = ReMFT96(cfg)
     m._depth_normalization = normalize_bert_depth_to_checkpoint(m)
 
     # The official notebook uses device_map='auto'. Keep BERT where the official
@@ -308,23 +348,10 @@ def resolve_training_plan(c: dict, stage: str, train_rows: int) -> dict:
         env_budget = os.getenv('REMFT_FORMAL_MAX_UPDATES')
         max_updates = int(env_budget if env_budget is not None else cfg_budget) if (env_budget is not None or cfg_budget is not None) else None
         if max_updates is None or max_updates <= 0:
-            raise RuntimeError(
-                'ReMFT Formal requires a frozen formal_max_optimizer_updates selected from Development'
-            )
-        ref_epoch = int(c.get('formal_reference_development_best_epoch', 0))
-        ref_rows = int(c.get('formal_reference_development_train_rows', 0))
-        if ref_epoch <= 0 or ref_rows <= 0:
-            raise RuntimeError(
-                'ReMFT Formal requires formal_reference_development_best_epoch and '
-                'formal_reference_development_train_rows for update-budget provenance'
-            )
-        expected_budget = math.ceil(ref_rows / effective) * ref_epoch
-        if env_budget is None and max_updates != expected_budget:
-            raise RuntimeError(
-                f'ReMFT formal_max_optimizer_updates={max_updates} does not match '
-                f'Development-derived budget={expected_budget} '
-                f'(rows={ref_rows}, effective_batch={effective}, best_epoch={ref_epoch})'
-            )
+            raise RuntimeError('ReMFT Formal requires a positive fixed formal_max_optimizer_updates')
+        budget_policy = str(c.get('formal_budget_policy', 'fixed_optimizer_updates'))
+        if budget_policy != 'fixed_optimizer_updates':
+            raise RuntimeError(f'Unsupported ReMFT formal_budget_policy={budget_policy!r}')
 
     workers = int(c.get('data_loader_workers', 2))
     plan = {
@@ -336,6 +363,7 @@ def resolve_training_plan(c: dict, stage: str, train_rows: int) -> dict:
         'gradient_accumulation_steps': accum,
         'use_amp': use_amp,
         'max_optimizer_updates': max_updates,
+        'formal_budget_policy': str(c.get('formal_budget_policy', 'fixed_optimizer_updates')) if stage == 'formal' else None,
         'data_loader_workers': workers,
     }
     print('REMFT TRAINING PLAN ' + json.dumps(plan, sort_keys=True), flush=True)
@@ -478,8 +506,13 @@ def main():
     device = require_gpu()
     c = cfg['runners']['ReMFT']
 
-    tr = ReMFTDataset(cache, 'train')
-    va = ReMFTDataset(cache, 'val')
+    mean, std = scale_stats(cache)
+    tr = ReMFTDataset(cfg, cache, 'train', mean=mean, std=std)
+    va = ReMFTDataset(cfg, cache, 'val', mean=mean, std=std)
+    print('REMFT NATIVE INPUT CONTRACT ' + json.dumps({
+        'train': tr.input_contract,
+        'val': va.input_contract,
+    }, sort_keys=True), flush=True)
     plan = resolve_training_plan(c, a.stage, len(tr))
     trl = _loader(tr, plan['micro_batch_size'], True, plan['data_loader_workers'])
     val = _loader(va, plan['eval_batch_size'], False, plan['data_loader_workers'])
@@ -518,7 +551,7 @@ def main():
         )
         if step_meta['skipped']:
             raise RuntimeError('ReMFT smoke AMP step overflowed; retry smoke or lower smoke batch')
-        exp = (plan['micro_batch_size'], tr.x.shape[2], int(cfg['experiment']['horizon']))
+        exp = (int(x.shape[0]), tr.nodes, int(cfg['experiment']['horizon']))
         if tuple(p.shape) != exp or not torch.isfinite(p).all():
             raise RuntimeError(f'ReMFT smoke shape {tuple(p.shape)} != {exp}')
         print(
@@ -531,7 +564,7 @@ def main():
             },
             flush=True,
         )
-        _save_lifecycle_smoke_checkpoint({'model': trainable_state_dict(model), 'best_epoch':1, 'checkpoint_format':'trainable_state_only_v1', 'lifecycle_smoke':True})
+        _save_lifecycle_smoke_checkpoint({'model': trainable_state_dict(model), 'best_epoch':1, 'checkpoint_format':'trainable_state_only_v1', 'lifecycle_smoke':True, 'method_implementation_revision': cfg.get('method_implementation_revisions', {}).get('ReMFT')})
         return
 
     best = float('inf')
@@ -644,7 +677,6 @@ def main():
         raise RuntimeError('ReMFT produced no checkpoint')
 
     load_trainable_state_dict(model, state)
-    mean, std = scale_stats(cache)
     raw = predict(model, val, device, mean, std, use_amp=use_amp)
     rd = make_run_dir(cfg, 'ReMFT', a.stage, a.seed)
     checkpoint = {
@@ -652,7 +684,8 @@ def main():
         'checkpoint_format': 'trainable_state_only_v1',
         'best_epoch': be,
         'best_val_mse_norm': best,
-        'history': int(cfg['experiment']['history']),
+        'history': int(c.get('native_seq_len', 96)),
+        'benchmark_query_history': int(cfg['experiment']['history']),
         'horizon': int(cfg['experiment']['horizon']),
         'method_implementation_revision': cfg.get('method_implementation_revisions', {}).get('ReMFT'),
         'llm_contract': getattr(model, '_llm_contract', {}),
@@ -683,11 +716,13 @@ def main():
             'training_plan': plan,
             'official_architecture': 'vendor/ReMFT/run.ipynb architecture cells through Model definition',
             'adaptation': (
-                'official PHI + frozen BERT reprogramming; seq_len 96->12 via '
-                'post-construction official mixer instances; checkpoint-consistent BERT depth; '
-                'incomplete history fed directly; no stock data/train/test cells executed'
+                'official native H96 PHI + patch_len16/stride8 frozen-BERT reprogramming; '
+                'extra causal H84 prefix is re-materialized under the same sensing view while '
+                'the final benchmark H12 is reused exactly; no held-out hidden values are exposed; '
+                'no stock data/train/test cells executed'
             ),
-            'table_group': 'llm_specific',
+            'native_input_contract': va.input_contract,
+            'table_group': cfg.get('methods', {}).get('ReMFT', {}).get('table_group', 'main'),
             'checkpoint_selection': 'Val masked MSE only',
             'llm_contract': getattr(model, '_llm_contract', {}),
             'depth_normalization': getattr(model, '_depth_normalization', {}),
