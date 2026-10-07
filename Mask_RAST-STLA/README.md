@@ -50,3 +50,15 @@ python -u Mask_RAST-STLA\scripts\train.py --target speed --seed 10 --smoke
 ```
 
 For flow, replace `speed` with `flow`.
+
+
+## v1.1 Gadi throughput profile
+- Formal batch size: **32**.
+- DataLoader: 4 workers, pinned memory, persistent workers, prefetch=2. Smoke keeps workers=0 for portability.
+- Full training complete-history repository is preloaded to the V100 when possible; OOM automatically falls back to CPU mmap.
+- Temporal and spatial retrieved histories are encoded in one memory-encoder call.
+- Latent-store refresh batch size is **256** (was 64); refresh time is logged separately.
+- PBS keeps **ncpus=12 per V100** as required on Gadi gpuvolta.
+- Each formal job writes a sibling `*.gpu.csv` sampled every 30 seconds. `history.csv` and `EPOCH` logs include samples/s and peak CUDA memory.
+- Optional runtime overrides: `--batch-size N --num-workers N`.
+- `runtime.amp` remains false, so v1.1 changes throughput rather than numerical precision.

@@ -1,45 +1,32 @@
-# FARE v0.2.0
+# FARE v0.2.3
 
-**FARE: Failure-Adaptive Restoration Experts for Traffic Forecasting under Incomplete Sensing**
+**Failure-Adaptive Restoration Experts for Traffic Forecasting under Incomplete Sensing**
 
-This is the full-strength expert version. Unlike v0.1.0, there are no heuristic placeholder experts and no Top-32 missing-node selection. Every expert estimates every `artificial_missing` cell.
-
-## What changed from v0.1.0
-
-- Removed linear-interpolation Temporal expert.
-- Removed neighbour-average Graph expert.
-- Removed single-window rank-4 SVD Low-Rank expert.
-- Removed nearest-history-copy Retrieval expert.
-- Added a trained graph-temporal Context expert with frozen-STLA forecast loss.
-- Added causal 28-day TMCP-style Structural tensor completion.
-- Added learned Context-embedding retrieval, target-aware Top-K candidate reranking, support fusion and confidence gating.
-- Added a Backbone-Aware expert conditioned on the frozen STLAformer forecast.
-- Added both Expert Oracle and Safe Oracle.
-- Added resumable deterministic artifacts; formal runs reuse existing checkpoints/index unless `--force` is supplied.
+v0.2.3 addresses the failure exposed by the v0.2.2 smoke: prediction-control gates stayed near their conservative initialization and Retrieval's listwise rank loss stayed near the random/uniform baseline. The four expert architectures are unchanged. The learning mechanism is changed to **two-stage restoration/control training with explicit counterfactual forecast-utility supervision**.
 
 ## Runtime dependencies
 
-The repository root must contain:
+Only `Base_SupportBench + Backbone`. `Baseline` is comparison-only. No previous FARE code or artifacts are runtime dependencies.
 
-```text
-Speed_LLM_RAG/
-  Base_SupportBench/
-  Backbone/
-  FARE/
-```
+## What changed in v0.2.3
 
-Baseline is not a runtime dependency.
+- **Stage A — Restoration capability**: Context, Retrieval and Backbone-Aware train their raw dense restoration while the prediction-control head is frozen.
+- **Stage B — Prediction control**: the restoration backbone is frozen; each neural expert learns its cell-wise control gate from offline counterfactual alpha labels.
+- For every formal train/val label query, frozen STLAformer evaluates `alpha in {0,.25,.5,.75,1}` and labels the alpha with maximum downstream forecast utility. Evaluation truth is never used.
+- Gate bias is initialized from the mean training alpha label instead of always starting at `sigmoid(-3)=0.047`.
+- Retrieval candidate learning uses **pairwise utility ranking**. Candidate utility magnitude no longer gets flattened by a softmax temperature. Pairwise random logistic loss is `ln(2)=0.6931`, random accuracy is `0.5`.
+- Structural TMCP remains a full causal 28-day expert with validation-only intervention calibration.
 
-## 1. Engineering smoke
+All experts still produce a dense raw estimate for every `artificial_missing` cell. Observed and original-invalid cells remain immutable.
 
-Smoke uses the **same full architectures**, but only a small training subset, 2 epochs and a smaller retrieval index. Its metric values are not research results; it is only for runtime validation.
-
-PowerShell:
+## Smoke
 
 ```powershell
 cd C:\Users\zwan0652\ResearchProgram\Speed_LLM_RAG
 conda activate TFP
 $env:SPEED_LLM_RAG_ROOT = (Get-Location).Path
+$env:SEED = "10"
+$env:TRAFFIDENT_TARGET = "speed"
 
 New-Item -ItemType Directory -Force -Path "FARE_logs\speed" | Out-Null
 $ts = Get-Date -Format "yyyyMMdd_HHmmss"
@@ -47,87 +34,56 @@ $ts = Get-Date -Format "yyyyMMdd_HHmmss"
 python -u FARE\scripts\run_pipeline.py `
     --target speed `
     --smoke 2>&1 |
-    Tee-Object -FilePath "FARE_logs\speed\FARE.v0.2.speed.smoke.$ts.live.log"
+    Tee-Object -FilePath "FARE_logs\speed\FARE.v0.2.3.speed.smoke.$ts.live.log"
 ```
 
-Expected high-level stages:
+Expected new diagnostics include:
 
 ```text
-FARE_PREFLIGHT_PASS
-CONTEXT_EPOCH ...
-TRAIN_CONTEXT_PASS ...
-RETRIEVAL_EMBED ...
-BUILD_RETRIEVAL_INDEX_PASS ...
-RETRIEVAL_EPOCH ...
-TRAIN_RETRIEVAL_PASS ...
-BACKBONE_AWARE_EPOCH ...
-TRAIN_BACKBONE_AWARE_PASS ...
-FULL_STRENGTH_SUMMARY ...
-FULL_STRENGTH_EXPERT_PASS ...
-FARE_V02_PIPELINE_PASS
+CONTEXT_RESTORER_EPOCH ... raw_gain=...
+CONTEXT_ALPHA_UTILITY ...
+CONTEXT_CONTROL_INIT mean_alpha=... bias=...
+CONTEXT_CONTROL_EPOCH ... gate=... alpha_mae=...
+RETRIEVAL_RESTORER_EPOCH ... rank=... rank_acc=... val_rank_acc=...
+RETRIEVAL_ALPHA_UTILITY ...
+RETRIEVAL_CONTROL_INIT mean_alpha=... bias=...
+RETRIEVAL_CONTROL_EPOCH ... control_gate=... alpha_mae=... rank_acc=...
+BACKBONE_AWARE_RESTORER_EPOCH ...
+BACKBONE_AWARE_ALPHA_UTILITY ...
+BACKBONE_AWARE_CONTROL_EPOCH ...
+STRUCTURAL_CALIBRATION_PASS alpha=...
+CONTROLLED_EXPERT_SUMMARY ...
+FARE_V023_PIPELINE_PASS
 ```
 
-## 2. Formal full-strength training
+Smoke uses the same model architecture and objectives but fewer rows/epochs. It is an engineering/learning-mechanism diagnostic, not a paper result.
 
-This uses all formal train/val rows, early stopping, the 50k chronological retrieval memory and full TMCP settings.
+## Formal training on Gadi/V100
 
 ```powershell
-New-Item -ItemType Directory -Force -Path "FARE_logs\speed" | Out-Null
 $ts = Get-Date -Format "yyyyMMdd_HHmmss"
-
 python -u FARE\scripts\run_pipeline.py `
     --target speed `
     --stage train 2>&1 |
-    Tee-Object -FilePath "FARE_logs\speed\FARE.v0.2.speed.train.$ts.live.log"
+    Tee-Object -FilePath "FARE_logs\speed\FARE.v0.2.3.speed.train.$ts.live.log"
 ```
 
-Artifacts are saved under:
-
-```text
-FARE_artifacts/speed/TraffiDent_Net_06/v0.2/formal/
-  context/best.pt
-  retrieval_index/
-  retrieval/best.pt
-  backbone_aware/best.pt
-```
-
-If a stage has completed, rerunning `--stage train` reuses it. Use `--force` only when intentionally rebuilding.
-
-## 3. First research diagnostic
-
-After full training, evaluate s40 and s90. The default is 100 balanced queries per severity.
+Then evaluate s40+s90:
 
 ```powershell
 $ts = Get-Date -Format "yyyyMMdd_HHmmss"
 python -u FARE\scripts\run_pipeline.py `
     --target speed `
     --stage eval 2>&1 |
-    Tee-Object -FilePath "FARE_logs\speed\FARE.v0.2.speed.eval.s40_s90.$ts.live.log"
+    Tee-Object -FilePath "FARE_logs\speed\FARE.v0.2.3.speed.eval.$ts.live.log"
 ```
 
-Or a single severity:
+Artifacts are isolated under `FARE_artifacts/<target>/TraffiDent_Net_06/v0.2.3/{smoke|formal}/`.
 
-```powershell
-python -u FARE\scripts\run_pipeline.py --target speed --stage eval --severity 90 --max-rows 100
-```
+## Leakage contract
 
-## Decision gate before any Router
-
-Do **not** build a learned MoE router merely because the code runs. Continue to routing only if full-strength diagnostics show real complementarity. The most important fields are:
-
-- `best_single_gain_percent`
-- `safe_oracle_gain_percent`
-- `safe_oracle_over_best_single_pp`
-- `safe_oracle_routes`
-- per-family expert gains
-
-A useful target is a best single expert around or above 2% and Safe-Oracle headroom materially above that (preferably another ~2 percentage points or more), with at least two experts winning on meaningful subsets/failure families. If Safe Oracle collapses to one expert, make that expert the main method instead of forcing MoE.
-
-## Scientific safety / leakage contract
-
-- External history for Structural and Retrieval comes from the chronological train interval only.
-- Retrieval candidates must finish before the current query begins.
-- `x_full_norm` is used as a training label or evaluation diagnostic only.
-- `y_norm/y_raw` are used for training/validation objectives or evaluation only.
-- Evaluation expert inference never receives hidden history truth or future truth.
-- Only `artificial_missing` cells may be modified.
+- Structural and Retrieval external support is chronological formal-train only.
+- Retrieval support windows finish before the current query.
+- `x_full` / future `y` are permitted only for formal train/val supervision and final evaluation diagnostics.
+- Counterfactual alpha labels and Retrieval utility labels are built only from formal train/val.
+- Evaluation truth never enters expert inference, gate prediction, Retrieval ranking, or Structural calibration.

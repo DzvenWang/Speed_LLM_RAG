@@ -1,10 +1,12 @@
 {
   "project": "FARE",
-  "version": "0.2.0",
+  "version": "0.2.3",
   "title": "Failure-Adaptive Restoration Experts for Traffic Forecasting under Incomplete Sensing",
   "runtime_dependencies": ["Base_SupportBench", "Backbone"],
   "comparison_only": ["Baseline"],
   "forbidden_dependencies": ["prior FARE artifacts", "STLA_DASR", "Support_Oracle"],
-  "experts": ["context", "structural_tmcp", "learned_retrieval", "backbone_aware"],
-  "router": false
+  "experts": ["context", "structural_tmcp", "forecast_utility_retrieval", "backbone_aware"],
+  "router": false,
+  "training": "two_stage_restoration_then_counterfactual_utility_control",
+  "retrieval_ranking": "pairwise_downstream_forecast_utility"
 }

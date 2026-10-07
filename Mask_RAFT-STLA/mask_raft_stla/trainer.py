@@ -7,11 +7,13 @@ from torch.utils.data import DataLoader
 from .data import SupportSplit, RetrievalCache
 from .stla import load_pretrained_stla, MaskAwareSTLAformer
 from .model import MaskRAFTSTLA
-from .evaluation import metrics, summarize_by_family, save_summary
+from .evaluation import metrics, save_summary
 
 
 def seed_all(seed):
-    import random; random.seed(seed); np.random.seed(seed); torch.manual_seed(seed); torch.cuda.manual_seed_all(seed); torch.backends.cudnn.deterministic=True; torch.backends.cudnn.benchmark=False
+    import random
+    random.seed(seed); np.random.seed(seed); torch.manual_seed(seed); torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic=True; torch.backends.cudnn.benchmark=False
 
 def _phase(epoch,cfg):
     if epoch<=int(cfg['training']['warmup_epochs']): return 'warmup'
@@ -35,12 +37,40 @@ def _loss_raw(pred_norm,y_raw,valid,mean,std,kind='huber'):
 def _batch_to_device(batch,device):
     return {k:(v.to(device,non_blocking=True) if torch.is_tensor(v) else v) for k,v in batch.items()}
 
+def _make_loader(ds,batch_size,shuffle,cfg,smoke=False):
+    workers=0 if smoke else int(cfg['runtime'].get('num_workers',0))
+    pin=bool(cfg['runtime'].get('pin_memory',True)) and torch.cuda.is_available()
+    kw=dict(batch_size=int(batch_size),shuffle=shuffle,num_workers=workers,pin_memory=pin)
+    if workers>0:
+        kw['persistent_workers']=bool(cfg['runtime'].get('persistent_workers',True))
+        kw['prefetch_factor']=int(cfg['runtime'].get('prefetch_factor',2))
+    return DataLoader(ds,**kw)
+
+def _prepare_memory_y(cache,device,cfg):
+    arr=np.load(Path(cache)/'train_y_norm.npy',mmap_mode='r')
+    if device.type=='cuda' and bool(cfg['runtime'].get('preload_retrieval_memory_gpu',True)):
+        try:
+            t=torch.from_numpy(np.array(arr,np.float32,copy=True)).to(device)
+            gb=t.numel()*t.element_size()/1024**3
+            print(f'RETRIEVAL_MEMORY_GPU rows={t.shape[0]} size_gb={gb:.3f}',flush=True)
+            return t
+        except RuntimeError as e:
+            if 'out of memory' not in str(e).lower(): raise
+            print(f'RETRIEVAL_MEMORY_GPU_FALLBACK reason={str(e).splitlines()[0]}',flush=True)
+            torch.cuda.empty_cache()
+    print('RETRIEVAL_MEMORY_CPU_MMAP',flush=True)
+    return arr
+
 def run_epoch(model,loader,rcache,memory_y,device,mean,std,cfg,opt=None,epoch=1):
     train=opt is not None; model.train(train); total=aux=gatev=0.; nrow=0
     ctx=torch.enable_grad() if train else torch.no_grad()
     with ctx:
         for bi,b in enumerate(loader,1):
-            idx=b['index'].numpy() if torch.is_tensor(b['index']) else np.asarray(b['index']); ev,conf=rcache.batch_evidence(idx,memory_y,cfg['retrieval']['temperature']); b=_batch_to_device(b,device); ev=ev.to(device); conf=conf.to(device)
+            idx=b['index'].numpy() if torch.is_tensor(b['index']) else np.asarray(b['index'])
+            ev,conf=rcache.batch_evidence(idx,memory_y,cfg['retrieval']['temperature'])
+            b=_batch_to_device(b,device)
+            if not ev.is_cuda: ev=ev.to(device,non_blocking=True)
+            if not conf.is_cuda: conf=conf.to(device,non_blocking=True)
             if train: opt.zero_grad(set_to_none=True)
             out=model(b['x'].float(),b['mask'].float(),b['tod'].long(),b['dow'].long(),ev.float(),conf.float())
             main=_loss_raw(out['prediction'],b['y_raw'].float(),b['future_valid'],mean,std,cfg['training']['forecast_loss'])
@@ -49,7 +79,8 @@ def run_epoch(model,loader,rcache,memory_y,device,mean,std,cfg,opt=None,epoch=1)
             if train:
                 loss.backward(); nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad],float(cfg['training']['grad_clip'])); opt.step()
             bs=b['x'].shape[0]; total+=float(main.detach())*bs; aux+=float(raux.detach())*bs; gatev+=float(greg.detach())*bs; nrow+=bs
-            if train and bi%int(cfg['runtime']['print_every'])==0: print(f'epoch={epoch:03d} batch={bi:05d}/{len(loader):05d} main={total/nrow:.6f} retr={aux/nrow:.6f} gate={gatev/nrow:.4f}',flush=True)
+            if train and bi%int(cfg['runtime']['print_every'])==0:
+                print(f'epoch={epoch:03d} batch={bi:05d}/{len(loader):05d} main={total/nrow:.6f} retr={aux/nrow:.6f} gate={gatev/nrow:.4f}',flush=True)
     return {'forecast_loss':total/max(nrow,1),'retrieval_loss':aux/max(nrow,1),'gate_mean':gatev/max(nrow,1)}
 
 def predict(model,loader,rcache,memory_y,device,mean,std,temperature=0.10):
@@ -57,17 +88,29 @@ def predict(model,loader,rcache,memory_y,device,mean,std,temperature=0.10):
     with torch.no_grad():
         for b in loader:
             idx=b['index'].numpy() if torch.is_tensor(b['index']) else np.asarray(b['index']); ev,conf=rcache.batch_evidence(idx,memory_y,temperature); b=_batch_to_device(b,device)
-            o=model(b['x'].float(),b['mask'].float(),b['tod'].long(),b['dow'].long(),ev.to(device).float(),conf.to(device).float()); preds.append((o['prediction']*std+mean).cpu().numpy()); ys.append(b['y_raw'].cpu().numpy()); valids.append(b['future_valid'].cpu().numpy()); directs.append(b['direct_mask'].cpu().numpy()); gates.append(o['gate'].mean().item())
+            if not ev.is_cuda: ev=ev.to(device,non_blocking=True)
+            if not conf.is_cuda: conf=conf.to(device,non_blocking=True)
+            o=model(b['x'].float(),b['mask'].float(),b['tod'].long(),b['dow'].long(),ev.float(),conf.float()); preds.append((o['prediction']*std+mean).cpu().numpy()); ys.append(b['y_raw'].cpu().numpy()); valids.append(b['future_valid'].cpu().numpy()); directs.append(b['direct_mask'].cpu().numpy()); gates.append(o['gate'].mean().item())
     return np.concatenate(preds),np.concatenate(ys),np.concatenate(valids),np.concatenate(directs),float(np.mean(gates))
 
 def train(cfg,cache,ckpt,retrieval_train,retrieval_val,run_dir,smoke=False):
     seed_all(int(cfg['experiment']['seed'])); device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu'); model,base_ck=build_model(cfg,ckpt,device); mean=float(base_ck['mean']); std=float(base_ck['std'])
-    limit=32 if smoke else None; tr=SupportSplit(cache,'train',limit); va=SupportSplit(cache,'val',limit); memory_y=np.load(Path(cache)/'train_y_norm.npy',mmap_mode='r'); rt=RetrievalCache(retrieval_train); rv=RetrievalCache(retrieval_val)
-    bs=min(int(cfg['training']['batch_size']),16 if not smoke else 4); dl=lambda ds,sh:DataLoader(ds,batch_size=bs,shuffle=sh,num_workers=int(cfg['runtime']['num_workers']),pin_memory=torch.cuda.is_available())
-    trl,val=dl(tr,True),dl(va,False); opt=make_optimizer(model,cfg); best=float('inf'); best_state=None; best_ep=0; stale=0; history=[]; maxep=2 if smoke else int(cfg['training']['max_epochs'])
+    limit=32 if smoke else None; tr=SupportSplit(cache,'train',limit); va=SupportSplit(cache,'val',limit); memory_y=_prepare_memory_y(cache,device,cfg); rt=RetrievalCache(retrieval_train); rv=RetrievalCache(retrieval_val)
+    if torch.is_tensor(memory_y) and memory_y.is_cuda: rt.to(device); rv.to(device)
+    # v1.1: no hidden formal cap at 16. YAML/CLI batch size is authoritative.
+    bs=4 if smoke else int(cfg['training']['batch_size'])
+    trl=_make_loader(tr,bs,True,cfg,smoke); val=_make_loader(va,bs,False,cfg,smoke)
+    print(f'RUNTIME batch_size={bs} train_batches={len(trl)} val_batches={len(val)} num_workers={0 if smoke else int(cfg["runtime"].get("num_workers",0))} pin_memory={bool(cfg["runtime"].get("pin_memory",True))}',flush=True)
+    opt=make_optimizer(model,cfg); best=float('inf'); best_state=None; best_ep=0; stale=0; history=[]; maxep=2 if smoke else int(cfg['training']['max_epochs'])
     for ep in range(1,maxep+1):
-        phase=_phase(ep,cfg); model.set_train_phase(phase,int(cfg['training']['partial_last_layers'])); t=time.time(); a=run_epoch(model,trl,rt,memory_y,device,mean,std,cfg,opt,ep); v=run_epoch(model,val,rv,memory_y,device,mean,std,cfg,None,ep)
-        rec={'epoch':ep,'phase':phase,**{f'train_{k}':x for k,x in a.items()},**{f'val_{k}':x for k,x in v.items()},'seconds':time.time()-t}; history.append(rec); print('EPOCH '+json.dumps(rec),flush=True)
+        phase=_phase(ep,cfg); model.set_train_phase(phase,int(cfg['training']['partial_last_layers']))
+        if device.type=='cuda': torch.cuda.reset_peak_memory_stats(device); torch.cuda.synchronize(device)
+        t=time.time(); a=run_epoch(model,trl,rt,memory_y,device,mean,std,cfg,opt,ep); v=run_epoch(model,val,rv,memory_y,device,mean,std,cfg,None,ep)
+        if device.type=='cuda': torch.cuda.synchronize(device)
+        elapsed=time.time()-t; throughput=(len(tr)+len(va))/max(elapsed,1e-9)
+        rec={'epoch':ep,'phase':phase,**{f'train_{k}':x for k,x in a.items()},**{f'val_{k}':x for k,x in v.items()},'seconds':elapsed,'samples_per_sec':throughput}
+        if device.type=='cuda': rec.update({'gpu_peak_allocated_gb':torch.cuda.max_memory_allocated(device)/1024**3,'gpu_peak_reserved_gb':torch.cuda.max_memory_reserved(device)/1024**3})
+        history.append(rec); print('EPOCH '+json.dumps(rec),flush=True)
         score=v['forecast_loss']
         if score<best-float(cfg['training']['min_delta']): best=score;best_ep=ep;stale=0;best_state=copy.deepcopy({k:v.detach().cpu() for k,v in model.state_dict().items()})
         else:

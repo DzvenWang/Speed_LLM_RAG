@@ -43,3 +43,13 @@ python -u Mask_RAFT-STLA\scripts\train.py --target speed --seed 10 --smoke
 ```
 
 For flow, replace `speed` with `flow`.
+
+
+## v1.1 Gadi throughput profile
+- Formal batch size: **64** (the previous hidden `min(...,16)` cap has been removed).
+- DataLoader: 4 workers, pinned memory, persistent workers, prefetch=2. Smoke keeps workers=0 for portability.
+- Full training future memory is preloaded to the V100 when possible; OOM automatically falls back to CPU mmap.
+- PBS keeps **ncpus=12 per V100** as required on Gadi gpuvolta.
+- Each formal job writes a sibling `*.gpu.csv` sampled every 30 seconds. `history.csv` and `EPOCH` logs include samples/s and peak CUDA memory.
+- Optional runtime overrides: `--batch-size N --num-workers N`.
+- `runtime.amp` remains false, so v1.1 changes throughput rather than numerical precision.

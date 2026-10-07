@@ -1,12 +1,16 @@
 # Smoke
-New-Item -ItemType Directory -Force -Path "FARE_logs\speed" | Out-Null
-$ts = Get-Date -Format "yyyyMMdd_HHmmss"
-python -u FARE\scripts\run_pipeline.py --target speed --smoke 2>&1 | Tee-Object -FilePath "FARE_logs\speed\FARE.v0.2.speed.smoke.$ts.live.log"
+python -u FARE\scripts\run_pipeline.py --target speed --smoke
 
 # Formal train (resumable)
-$ts = Get-Date -Format "yyyyMMdd_HHmmss"
-python -u FARE\scripts\run_pipeline.py --target speed --stage train 2>&1 | Tee-Object -FilePath "FARE_logs\speed\FARE.v0.2.speed.train.$ts.live.log"
+python -u FARE\scripts\run_pipeline.py --target speed --stage train
 
-# Formal s40+s90 diagnostic
-$ts = Get-Date -Format "yyyyMMdd_HHmmss"
-python -u FARE\scripts\run_pipeline.py --target speed --stage eval 2>&1 | Tee-Object -FilePath "FARE_logs\speed\FARE.v0.2.speed.eval.$ts.live.log"
+# Formal eval s40+s90
+python -u FARE\scripts\run_pipeline.py --target speed --stage eval
+
+# Individual stages
+python -u FARE\scripts\run_pipeline.py --target speed --stage context
+python -u FARE\scripts\run_pipeline.py --target speed --stage index
+python -u FARE\scripts\run_pipeline.py --target speed --stage retrieval_utility
+python -u FARE\scripts\run_pipeline.py --target speed --stage retrieval
+python -u FARE\scripts\run_pipeline.py --target speed --stage backbone_aware
+python -u FARE\scripts\run_pipeline.py --target speed --stage structural_calibration

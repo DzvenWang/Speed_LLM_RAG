@@ -12,7 +12,9 @@ set -euo pipefail
 cd "${PBS_O_WORKDIR}"
 export SPEED_LLM_RAG_ROOT="${PBS_O_WORKDIR}"
 export PYTHONUNBUFFERED=1
+export SEED="${SEED:-10}"
 TARGET="${TARGET:-speed}"
+export TRAFFIDENT_TARGET="${TARGET}"
 mkdir -p "FARE_logs/${TARGET}"
 python -u FARE/scripts/run_pipeline.py --target "${TARGET}" --stage train
 python -u FARE/scripts/run_pipeline.py --target "${TARGET}" --stage eval

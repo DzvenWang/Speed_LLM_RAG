@@ -1,4 +1,4 @@
-version: 1.0.0
+version: 1.1.0
 project:
   root: ${SPEED_LLM_RAG_ROOT}
   backbone_root: ${SPEED_LLM_RAG_ROOT}/Backbone
@@ -23,8 +23,8 @@ retrieval:
   top_k: 20
   temperature: 0.10
   coverage_gamma: 0.5
-  query_batch_size: 64
-  memory_chunk_size: 1024
+  query_batch_size: 128
+  memory_chunk_size: 2048
   overlap_exclusion: true
   min_valid_features: 8
 model:
@@ -34,8 +34,8 @@ model:
   dropout: 0.10
   gate_bias: -2.0
 training:
-  batch_size: 16
-  fallback_batch_sizes: [8, 4]
+  batch_size: 64
+  fallback_batch_sizes: [32, 16, 8]
   max_epochs: 80
   patience: 20
   warmup_epochs: 10
@@ -50,6 +50,11 @@ training:
   gate_reg_weight: 0.0005
   min_delta: 0.00000001
 runtime:
-  num_workers: 0
+  num_workers: 4
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 2
+  preload_retrieval_memory_gpu: true
+  gpu_monitor_interval_sec: 30
   amp: false
   print_every: 100

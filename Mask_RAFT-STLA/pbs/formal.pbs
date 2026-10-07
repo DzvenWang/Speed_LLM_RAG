@@ -37,7 +37,20 @@ echo "ROOT=$ROOT PYTHON=$PYTHON" | tee -a "$LOG"
 "$PYTHON" -V 2>&1 | tee -a "$LOG"
 nvidia-smi 2>&1 | tee -a "$LOG" || true
 
+# Gadi gpuvolta allocation requires 12 CPUs per V100; keep ncpus=12.
+GPU_LOG="${LOG%.live.log}.gpu.csv"
+GPU_MON_PID=""
+if command -v nvidia-smi >/dev/null 2>&1; then
+  nvidia-smi --query-gpu=timestamp,index,name,utilization.gpu,utilization.memory,memory.used,memory.total,power.draw --format=csv -l 30 > "$GPU_LOG" 2>&1 &
+  GPU_MON_PID=$!
+fi
+cleanup_gpu_monitor() {
+  if [[ -n "${GPU_MON_PID:-}" ]]; then kill "$GPU_MON_PID" 2>/dev/null || true; wait "$GPU_MON_PID" 2>/dev/null || true; fi
+}
+trap cleanup_gpu_monitor EXIT
+
 "$PYTHON" -u Mask_RAFT-STLA/scripts/preflight.py --target "$TARGET" 2>&1 | tee -a "$LOG"
+echo "PERF_CONFIG project=Mask_RAFT-STLA ncpus=12" | tee -a "$LOG"
 "$PYTHON" -u Mask_RAFT-STLA/scripts/train.py --target "$TARGET" --seed "$SEED" --run-stamp "$STAMP" 2>&1 | tee -a "$LOG"
 
 echo "FINISH model=Mask_RAFT-STLA target=$TARGET seed=$SEED" | tee -a "$LOG"

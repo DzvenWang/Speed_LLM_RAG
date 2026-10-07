@@ -1,20 +1,22 @@
 # Changelog
 
-## 0.2.1
-- Memory-safe learned retrieval indexing for local GPUs and V100-class accelerators.
-- Automatic VRAM-aware embedding micro-batch selection; CUDA OOM halves batch and retries without changing model capacity.
-- Retrieval embeddings are streamed directly to a NumPy memmap instead of accumulated in RAM.
-- Candidate-assignment embedding uses the same adaptive micro-batching.
-- Keeps the v0.2.0 model/checkpoint schema and `v0.2/<run_mode>` artifact paths so completed Context checkpoints remain reusable.
+## 0.2.3
+- Kept the full-strength four expert architectures unchanged.
+- Split Context, Retrieval and Backbone-Aware training into Stage A raw restoration and Stage B prediction control.
+- Added formal train/val counterfactual alpha-utility labels over `[0,.25,.5,.75,1]`.
+- Added explicit alpha supervision for the query mean of each cell-wise prediction-control gate.
+- Gate bias is initialized from the training alpha distribution instead of a fixed conservative bias.
+- Replaced Retrieval listwise softmax utility targets with pairwise utility ranking; logs pairwise loss and accuracy against random references (`ln2`, `0.5`).
+- Removed the control-gate sparsity penalty that made `g=0` an attractive local optimum.
+- Preserved causal/train-only support and all evaluation leakage constraints.
+- Artifact namespace moved to `v0.2.3`.
 
-# Changelog
+## 0.2.2
+- Separated dense raw restoration from forecast intervention control.
+- Added baseline-relative no-harm control and candidate downstream utility labels.
+
+## 0.2.1
+- Adaptive CUDA micro-batching and streaming memmaps for Retrieval index construction.
 
 ## 0.2.0
-- Replaced all v0.1 heuristic placeholders with full-strength experts.
-- Added trainable graph-temporal Context restoration optimized by reconstruction + frozen-STLA forecast loss.
-- Added causal multi-day TMCP-style Structural restoration using 28 train-only same-slot support days.
-- Added learned Context-embedding retrieval index, causal Top-K search, target-aware candidate reranking, support fusion and conservative learned retrieval gating.
-- Added STLA-forecast-conditioned Backbone-Aware residual restoration.
-- Added safe initialization for Retrieval and Backbone-Aware refinements.
-- Added Expert Oracle and Safe Oracle diagnostics.
-- Added resumable artifact lifecycle and strict dependency/leakage policies.
+- Full-strength Context / Structural / Retrieval / Backbone-Aware experts.
