@@ -8,11 +8,36 @@
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -j oe
 set -euo pipefail
-cd "$PBS_O_WORKDIR"
-source ~/miniconda3/etc/profile.d/conda.sh
-conda activate TFP
-export SPEED_LLM_RAG_ROOT="${SPEED_LLM_RAG_ROOT:-$PBS_O_WORKDIR}"
-export TRAFFIDENT_TARGET="${TRAFFIDENT_TARGET:-speed}"
-mkdir -p "Mask_RAST-STLA_logs/$TRAFFIDENT_TARGET"
+
+TARGET=${TARGET:-${TRAFFIDENT_TARGET:-speed}}
+SEED=${SEED:-10}
+case "$TARGET" in speed|flow) ;; *) echo "ERROR TARGET=$TARGET (expected speed|flow)"; exit 2;; esac
+[[ "$SEED" == "10" ]] || { echo "ERROR Formal seed fixed to 10"; exit 2; }
+
+ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
+ENVROOT=${TFP_ENV_ROOT:-/scratch/mh20/zw1165/envs/TFP}
+PYTHON="$ENVROOT/bin/python"
+[[ -x "$PYTHON" ]] || { echo "ERROR Python not executable: $PYTHON"; exit 3; }
+
+export SPEED_LLM_RAG_ROOT="$ROOT"
+export TRAFFIDENT_TARGET="$TARGET"
+export PYTHONUNBUFFERED=1
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH="$ROOT/Mask_RAST-STLA:$ROOT/Base_SupportBench:${PYTHONPATH:-}"
+export PATH="$ENVROOT/bin:$PATH"
+
+cd "$ROOT"
+mkdir -p "Mask_RAST-STLA_logs/$TARGET"
 STAMP=$(date +%Y%m%d_%H%M%S)
-python -u Mask_RAST-STLA/scripts/train.py --target "$TRAFFIDENT_TARGET" --seed 10 --run-stamp "$STAMP" 2>&1 | tee "Mask_RAST-STLA_logs/$TRAFFIDENT_TARGET/Mask_RAST-STLA.${TRAFFIDENT_TARGET}.formal.seed10.${STAMP}.live.log"
+JOBID=${PBS_JOBID:-local}
+LOG="Mask_RAST-STLA_logs/$TARGET/Mask_RAST-STLA.${TARGET}.formal.seed${SEED}.${JOBID}.${STAMP}.live.log"
+
+echo "START model=Mask_RAST-STLA target=$TARGET seed=$SEED job=$JOBID host=$(hostname)" | tee -a "$LOG"
+echo "ROOT=$ROOT PYTHON=$PYTHON" | tee -a "$LOG"
+"$PYTHON" -V 2>&1 | tee -a "$LOG"
+nvidia-smi 2>&1 | tee -a "$LOG" || true
+
+"$PYTHON" -u Mask_RAST-STLA/scripts/preflight.py --target "$TARGET" 2>&1 | tee -a "$LOG"
+"$PYTHON" -u Mask_RAST-STLA/scripts/train.py --target "$TARGET" --seed "$SEED" --run-stamp "$STAMP" 2>&1 | tee -a "$LOG"
+
+echo "FINISH model=Mask_RAST-STLA target=$TARGET seed=$SEED" | tee -a "$LOG"
