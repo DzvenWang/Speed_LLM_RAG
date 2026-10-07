@@ -32,10 +32,24 @@ STAMP=$(date +%Y%m%d_%H%M%S)
 JOBID=${PBS_JOBID:-local}
 LOG="Mask_RAST-STLA_logs/$TARGET/Mask_RAST-STLA.${TARGET}.formal.seed${SEED}.${JOBID}.${STAMP}.live.log"
 
-echo "START model=Mask_RAST-STLA target=$TARGET seed=$SEED job=$JOBID host=$(hostname)" | tee -a "$LOG"
-echo "ROOT=$ROOT PYTHON=$PYTHON" | tee -a "$LOG"
-"$PYTHON" -V 2>&1 | tee -a "$LOG"
-nvidia-smi 2>&1 | tee -a "$LOG" || true
+# Prefix every line written to the main live log, including Python warnings/errors
+# and multi-line external command output. This keeps one canonical timestamp format.
+timestamp_stream() {
+  awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush(); }'
+}
+log_line() {
+  printf '%s\n' "$*" | timestamp_stream | tee -a "$LOG"
+}
+run_logged() {
+  "$@" 2>&1 | timestamp_stream | tee -a "$LOG"
+  local rc=${PIPESTATUS[0]}
+  return "$rc"
+}
+
+log_line "START model=Mask_RAST-STLA target=$TARGET seed=$SEED job=$JOBID host=$(hostname)"
+log_line "ROOT=$ROOT PYTHON=$PYTHON"
+run_logged "$PYTHON" -V
+run_logged nvidia-smi || true
 
 # Gadi gpuvolta allocation requires 12 CPUs per V100; keep ncpus=12.
 GPU_LOG="${LOG%.live.log}.gpu.csv"
@@ -49,8 +63,8 @@ cleanup_gpu_monitor() {
 }
 trap cleanup_gpu_monitor EXIT
 
-"$PYTHON" -u Mask_RAST-STLA/scripts/preflight.py --target "$TARGET" 2>&1 | tee -a "$LOG"
-echo "PERF_CONFIG project=Mask_RAST-STLA ncpus=12" | tee -a "$LOG"
-"$PYTHON" -u Mask_RAST-STLA/scripts/train.py --target "$TARGET" --seed "$SEED" --run-stamp "$STAMP" 2>&1 | tee -a "$LOG"
+run_logged "$PYTHON" -u Mask_RAST-STLA/scripts/preflight.py --target "$TARGET"
+log_line "PERF_CONFIG project=Mask_RAST-STLA ncpus=12"
+run_logged "$PYTHON" -u Mask_RAST-STLA/scripts/train.py --target "$TARGET" --seed "$SEED" --run-stamp "$STAMP"
 
-echo "FINISH model=Mask_RAST-STLA target=$TARGET seed=$SEED" | tee -a "$LOG"
+log_line "FINISH model=Mask_RAST-STLA target=$TARGET seed=$SEED"

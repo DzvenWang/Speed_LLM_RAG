@@ -207,7 +207,7 @@ def _val_context(model,loader,bb,ctx,use_raw=False,alpha_targets=None):
         if not use_raw and torch.any(b['artificial']): gates.append(float(info['gate'][b['artificial']].mean()))
         if alpha_targets is not None:
             rows=b['row'].detach().cpu().numpy().astype(np.int64); ta=torch.from_numpy(np.asarray(alpha_targets[rows],np.float32).copy()).to(ctx.device); amae.append(float((query_gate_mean(info['gate'],b['artificial'])-ta).abs().mean()))
-    return {'rec':rs/max(rn,1),'forecast':fs/max(fn,1),'baseline':bs/max(bn,1),'harmful_rate':harmful/max(nq,1),'gate':float(np.mean(gates)) if gates else 1.0 if use_raw else 0.,'alpha_mae':float(np.mean(amae)) if amae else float('nan')}
+    return {'rec':rs/max(rn,1),'forecast':fs/max(fn,1),'baseline':bs/max(bn,1),'harmful_rate':harmful/max(nq,1),'gate':float(np.mean(gates)) if gates else 1.0 if use_raw else 0.,'alpha_mae':float(np.mean(amae)) if amae else None}
 
 
 def train_context(ctx,smoke=False):
@@ -338,7 +338,7 @@ def _val_retrieval(model,loader,context,index,bb,ctx,assignments,use_raw=False,u
             uu=torch.from_numpy(np.asarray(utility_labels[rows],np.float32).copy()).to(ctx.device); rl,ra,_=pairwise_utility_ranking_loss(info['query_candidate_scores'],uu,torch.isfinite(uu),float(c['pairwise_min_utility_gap'])); rloss.append(float(rl)); racc.append(float(ra))
         if alpha_targets is not None:
             ta=torch.from_numpy(np.asarray(alpha_targets[rows],np.float32).copy()).to(ctx.device); amae.append(float((query_gate_mean(info['control_gate'],b['artificial'])-ta).abs().mean()))
-    return {'rec':rs/max(rn,1),'forecast':fs/max(fn,1),'baseline':bs/max(bn,1),'harmful_rate':harmful/max(nq,1),'control_gate':float(np.mean(cg)) if cg else 1.0 if use_raw else 0.,'support_gate':float(np.mean(sg)) if sg else 0.,'rank_loss':float(np.mean(rloss)) if rloss else float('nan'),'rank_acc':float(np.mean(racc)) if racc else float('nan'),'alpha_mae':float(np.mean(amae)) if amae else float('nan')}
+    return {'rec':rs/max(rn,1),'forecast':fs/max(fn,1),'baseline':bs/max(bn,1),'harmful_rate':harmful/max(nq,1),'control_gate':float(np.mean(cg)) if cg else 1.0 if use_raw else 0.,'support_gate':float(np.mean(sg)) if sg else 0.,'rank_loss':float(np.mean(rloss)) if rloss else float('nan'),'rank_acc':float(np.mean(racc)) if racc else float('nan'),'alpha_mae':float(np.mean(amae)) if amae else None}
 
 
 def train_retrieval(ctx,smoke=False):
@@ -390,7 +390,7 @@ def _val_backbone_aware(model,loader,context,bb,ctx,use_raw=False,alpha_targets=
         if torch.any(b['artificial']): gates.append(float(info['gate'][b['artificial']].mean()))
         if alpha_targets is not None:
             rows=b['row'].detach().cpu().numpy().astype(np.int64); ta=torch.from_numpy(np.asarray(alpha_targets[rows],np.float32).copy()).to(ctx.device); amae.append(float((query_gate_mean(info['gate'],b['artificial'])-ta).abs().mean()))
-    return {'rec':rs/max(rn,1),'forecast':fs/max(fn,1),'baseline':bs/max(bn,1),'harmful_rate':harmful/max(nq,1),'gate':float(np.mean(gates)) if gates else 1.0 if use_raw else 0.,'alpha_mae':float(np.mean(amae)) if amae else float('nan')}
+    return {'rec':rs/max(rn,1),'forecast':fs/max(fn,1),'baseline':bs/max(bn,1),'harmful_rate':harmful/max(nq,1),'gate':float(np.mean(gates)) if gates else 1.0 if use_raw else 0.,'alpha_mae':float(np.mean(amae)) if amae else None}
 
 
 def train_backbone_aware(ctx,smoke=False):

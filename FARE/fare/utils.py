@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import math
 from datetime import datetime
 from pathlib import Path
 
@@ -22,11 +23,32 @@ def seed_all(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
+def _json_safe(obj):
+    """Recursively convert NumPy scalars and non-finite floats to strict-JSON values.
+
+    Diagnostic metrics may be undefined in stages where the corresponding labels are
+    intentionally unavailable (for example alpha_mae during restorer-only training).
+    Those values are represented as null rather than NaN so artifact writing can never
+    abort a completed training stage.
+    """
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, np.generic):
+        obj = obj.item()
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    return obj
+
+
 def write_json(path: str | Path, obj) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    with p.open("w", encoding="utf-8") as f:
-        json.dump(obj, f, indent=2, sort_keys=True, allow_nan=False)
+    tmp = p.with_suffix(p.suffix + ".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(_json_safe(obj), f, indent=2, sort_keys=True, allow_nan=False)
+    tmp.replace(p)
 
 
 def sha256_file(path: str | Path) -> str:

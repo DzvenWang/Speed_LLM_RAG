@@ -62,3 +62,7 @@ For flow, replace `speed` with `flow`.
 - Each formal job writes a sibling `*.gpu.csv` sampled every 30 seconds. `history.csv` and `EPOCH` logs include samples/s and peak CUDA memory.
 - Optional runtime overrides: `--batch-size N --num-workers N`.
 - `runtime.amp` remains false, so v1.1 changes throughput rather than numerical precision.
+
+
+### Timestamped formal logs (v1.1.1)
+Every line in the Gadi formal `.live.log` is prefixed with `[YYYY-MM-DD HH:MM:SS]`. The timestamping is applied at the PBS output pipeline so third-party warnings and multi-line command output are covered as well.
