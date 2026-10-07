@@ -96,6 +96,28 @@ Base_SupportBench_artifacts/
 BackboneRetrievalCapacityDiagnostic_logs/
 BackboneRetrievalCapacityDiagnostic_exps/
 
+Residual_Support_Oracle_exps/
+Residual_Support_Oracle_logs/
+
+STLA_DASR_artifacts/
+STLA_DASR_exps/
+STLA_DASR_logs/
+
+Support_Restoration_Oracle_exps/
+Support_Restoration_Oracle_logs/
+
+FARE_artifacts/
+FARE_exps/
+FARE_logs/
+
+
+Mask_RAFT-STLA_cache/
+Mask_RAFT-STLA_exps/
+Mask_RAFT-STLA_logs/
+
+Mask_RAST-STLA_cache/
+Mask_RAST-STLA_exps/
+Mask_RAST-STLA_logs/
 
 model_cache/
 

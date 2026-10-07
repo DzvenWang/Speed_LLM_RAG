@@ -1,0 +1,18 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=48:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+set -euo pipefail
+cd "$PBS_O_WORKDIR"
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate TFP
+export SPEED_LLM_RAG_ROOT="${SPEED_LLM_RAG_ROOT:-$PBS_O_WORKDIR}"
+export TRAFFIDENT_TARGET="${TRAFFIDENT_TARGET:-speed}"
+mkdir -p "Mask_RAFT-STLA_logs/$TRAFFIDENT_TARGET"
+STAMP=$(date +%Y%m%d_%H%M%S)
+python -u Mask_RAFT-STLA/scripts/train.py --target "$TRAFFIDENT_TARGET" --seed 10 --run-stamp "$STAMP" 2>&1 | tee "Mask_RAFT-STLA_logs/$TRAFFIDENT_TARGET/Mask_RAFT-STLA.${TRAFFIDENT_TARGET}.formal.seed10.${STAMP}.live.log"

@@ -1,0 +1,60 @@
+version: 1.0.0
+project:
+  root: ${SPEED_LLM_RAG_ROOT}
+  backbone_root: ${SPEED_LLM_RAG_ROOT}/Backbone
+  supportbench_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench
+  exp_root: ${SPEED_LLM_RAG_ROOT}/Mask_RAST-STLA_exps/${TRAFFIDENT_TARGET}
+  log_root: ${SPEED_LLM_RAG_ROOT}/Mask_RAST-STLA_logs/${TRAFFIDENT_TARGET}
+  store_root: ${SPEED_LLM_RAG_ROOT}/Mask_RAST-STLA_store/${TRAFFIDENT_TARGET}
+experiment:
+  dataset: TraffiDent_Net_06
+  target: ${TRAFFIDENT_TARGET}
+  seed: 10
+  history: 12
+  horizon: 12
+  severities: [20, 40, 60, 90]
+backbone:
+  model: STLAformer
+  checkpoint_env: MASK_RAST_STLA_BACKBONE_CHECKPOINT
+  reference_seed: 10
+encoder:
+  temporal_dim: 64
+  spatial_dim: 64
+  query_dim: 128
+  retrieval_dim: 128
+  spatial_heads: 4
+  dropout: 0.10
+retrieval:
+  top_k: 3
+  temperature: 0.10
+  store_refresh_epochs: 5
+  store_batch_size: 64
+  overlap_exclusion: true
+model:
+  fusion_hidden: 96
+  latent_gate_dim: 8
+  dropout: 0.10
+  forecast_gate_bias: -2.0
+  latent_gate_bias: -1.0
+training:
+  batch_size: 12
+  fallback_batch_sizes: [8, 4]
+  max_epochs: 80
+  patience: 20
+  warmup_epochs: 10
+  partial_epochs: 35
+  partial_last_layers: 2
+  lr_new: 0.0008
+  lr_backbone: 0.00005
+  weight_decay: 0.0001
+  grad_clip: 5.0
+  forecast_loss: huber
+  alignment_weight: 0.10
+  retrieval_aux_weight: 0.15
+  gate_reg_weight: 0.0005
+  alignment_temperature: 0.10
+  min_delta: 0.00000001
+runtime:
+  num_workers: 0
+  amp: false
+  print_every: 100

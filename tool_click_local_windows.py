@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 # ======================
 
 CLICK_INTERVAL = 10      # 每 10 秒点击一次
-RUN_HOURS = 48            # 运行几个小时
+RUN_HOURS = 6            # 运行几个小时
 START_DELAY = 5          # 启动后等待 5 秒，方便切换窗口
 
 
