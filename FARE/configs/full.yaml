@@ -1,0 +1,64 @@
+version: 1.0.3
+experiment:
+  dataset: TraffiDent_Net_06
+  target: speed
+  seed: 10
+  history: 12
+  horizon: 12
+  severities: [20, 40, 60, 90]
+  max_train_rows: null
+  max_val_rows: null
+model:
+  hidden: 64
+backbone:
+  injection_layers: [4, 5]  # zero-based STLAformer attention-block indices
+  initialized_from_official_checkpoint: true
+graph:
+  target_region_size: 24
+  max_anchors: 32
+retrieval:
+  key_dim: 128
+  coarse_topk: 64
+  topk: 8
+  match_on_observed_anchors_only: true
+  exclude_overlapping_history_forecast: true
+memory:
+  max_rows: 50000
+  latent_compression_dim: 32
+  resident_device: cuda
+innovation:
+  memory_dim: 32
+  rank: 16
+  heads: 4
+loss:
+  retrieval: 0.4
+  state: 0.1
+  innovation: 0.03
+  direct: 0.5
+  tail: 0.03
+  gate: 0.0005
+training:
+  batch_size: 8
+  num_workers: 0
+  grad_clip: 5.0
+  weight_decay: 0.0001
+  new_lr: 0.0001
+  partial_backbone_lr: 0.00001
+  full_backbone_lr: 0.000005
+  patience: 12
+  min_phase_epochs: 5
+  phase_epochs:
+    retrieval: 20
+    recovery: 20
+    injection: 35
+    partial: 20
+    full: 20
+  oof_folds: 3
+  oof_candidate_epochs: 5
+  oof_controller_epochs: 10
+  oof_nodes_per_window: 32
+  oof_time_gap: 24
+evaluation:
+  save_stage_predictions: false
+  save_final_predictions: true
+  auto_test: false

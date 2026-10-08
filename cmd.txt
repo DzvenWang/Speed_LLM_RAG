@@ -1,0 +1,24 @@
+
+
+
+cd /scratch/mh20/zw1165/Speed_LLM_RAG
+
+zip -r Mask_RAST-STLA_exps.zip Mask_RAST-STLA_exps \
+  -x "*.pt" "*.pth" "*.ckpt" "*.npz" "*.npy" \
+     "*.pkl" "*.pickle" "*.bin" "*.safetensors" \
+     "*/__pycache__/*" "*.pyc"
+
+zip -r Mask_RAFT-STLA_exps.zip Mask_RAFT-STLA_exps \
+  -x "*.pt" "*.pth" "*.ckpt" "*.npz" "*.npy" \
+     "*.pkl" "*.pickle" "*.bin" "*.safetensors" \
+     "*/__pycache__/*" "*.pyc"
+
+zip -r Backbone_exps.zip Backbone_exps \
+  -x "*.pt" "*.pth" "*.ckpt" "*.npz" "*.npy" \
+     "*.pkl" "*.pickle" "*.bin" "*.safetensors" \
+     "*/__pycache__/*" "*.pyc"
+
+zip -r Baseline_exps.zip Baseline_exps \
+  -x "*.pt" "*.pth" "*.ckpt" "*.npz" "*.npy" \
+     "*.pkl" "*.pickle" "*.bin" "*.safetensors" \
+     "*/__pycache__/*" "*.pyc"

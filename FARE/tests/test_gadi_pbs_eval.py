@@ -1,0 +1,65 @@
+"""Execute PBS shell wrappers locally with a fake prediction CLI, not Gadi."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+
+PBS_DIR=Path(__file__).resolve().parents[1]/'pbs'
+FAKE_CLI='''import json,os,sys
+from pathlib import Path
+out=Path(os.environ['FARE_FAKE_PBS_MARKER'])
+with out.open('a') as f:
+ f.write(json.dumps(sys.argv[1:])+'\\n')
+print('FARE_EVALUATE_PASS' if Path(sys.argv[0]).name=='evaluate.py' else 'FARE_TRAIN_PASS')
+'''
+
+
+def test_run():
+    with tempfile.TemporaryDirectory() as tmp:
+        root=Path(tmp)
+        scripts=root/'FARE'/'scripts';scripts.mkdir(parents=True)
+        for filename in ('evaluate.py','train.py'):
+            (scripts/filename).write_text(FAKE_CLI)
+        home=root/'fakehome';home.mkdir()
+        (home/'.bashrc').write_text('conda(){ :; }\n')
+        run=root/'FARE_exps'/'speed'/'TraffiDent_Net_06'/'formal'/'test_seed10'
+        run.mkdir(parents=True)
+        ck=run/'candidate_best.pt';ck.write_bytes(b'fake')
+        (run/'best.pt').write_bytes(b'fake')
+        marker=root/'calls.jsonl'
+        env=dict(os.environ, HOME=str(home), SPEED_LLM_RAG_ROOT=str(root),
+                 FARE_FAKE_PBS_MARKER=str(marker), PBS_JOBID='9876.gadi-pbs',
+                 DATASET='TraffiDent_Net_06', TARGET='speed')
+        e=dict(env,RUN_DIR=str(run),CHECKPOINT_KIND='candidate', EVAL_KIND='auto',
+               SPLIT='test',SEVERITIES='20:40:60:90')
+        result=subprocess.run(['bash',str(PBS_DIR/'evaluate.pbs')],env=e,capture_output=True,text=True)
+        assert result.returncode==0,(result.stdout,result.stderr)
+        args=json.loads(marker.read_text().splitlines()[-1])
+        assert args[args.index('--checkpoint')+1]==str(ck)
+        assert args[args.index('--output')+1]==str(run/'evaluation_candidate')
+        assert args[args.index('--severities')+1:]==['20','40','60','90']
+        assert 'FARE_GADI_EVALUATE_DONE' in result.stdout
+        e=dict(env,CHECKPOINT=str(run/'best.pt'),EVAL_KIND='manual', SPLIT='val')
+        result=subprocess.run(['bash',str(PBS_DIR/'evaluate.pbs')],env=e,capture_output=True,text=True)
+        assert result.returncode==0,(result.stdout,result.stderr)
+        args=json.loads(marker.read_text().splitlines()[-1])
+        assert args[args.index('--split')+1]=='val'
+        assert '--severities' not in args
+        assert '/manual_evaluation/' in args[args.index('--output')+1]
+        e=dict(env,CHECKPOINT=str(run/'missing.pt'))
+        result=subprocess.run(['bash',str(PBS_DIR/'evaluate.pbs')],env=e,capture_output=True,text=True)
+        assert result.returncode!=0
+        e=dict(env,RUN_DIR=str(run),AUTO_EVALUATE='1')
+        result=subprocess.run(['bash',str(PBS_DIR/'train_formal.pbs')],env=e,capture_output=True,text=True)
+        assert result.returncode==0,(result.stdout,result.stderr)
+        args=json.loads(marker.read_text().splitlines()[-1])
+        assert '--auto-evaluate' in args
+        e['AUTO_EVALUATE']='0'
+        result=subprocess.run(['bash',str(PBS_DIR/'train_formal.pbs')],env=e,capture_output=True,text=True)
+        assert result.returncode==0,(result.stdout,result.stderr)
+        args=json.loads(marker.read_text().splitlines()[-1])
+        assert '--auto-evaluate' not in args
+        print('FARE_GADI_PBS_EVALUATE_TEST_PASS: auto candidate, manual val, missing ckpt, direct train auto option')
+
+if __name__=='__main__':test_run()

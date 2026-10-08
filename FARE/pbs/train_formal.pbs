@@ -1,0 +1,35 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12,ngpus=1,mem=32GB,walltime=48:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -N FARE_train
+set -euo pipefail
+cd "${SPEED_LLM_RAG_ROOT:-$PBS_O_WORKDIR}"
+source ~/.bashrc || true
+if ! type conda &>/dev/null; then
+    source "$HOME/miniconda3/etc/profile.d/conda.sh" 2>/dev/null || true
+fi
+conda activate TFP
+export PYTHONUNBUFFERED=1
+export OMP_NUM_THREADS="${NCPUS:-12}"
+DATASET="${DATASET:-TraffiDent_Net_06}"
+TARGET="${TARGET:-speed}"
+SEED="${SEED:-10}"
+# Direct qsub: auto-evaluate candidate_best.pt inside this job by default.
+# Recommended login-node submit_gadi.py: sets this to 0 and queues an
+# independent Evaluate PBS job with afterok dependency (avoids walltime loss).
+AUTO_EVALUATE="${AUTO_EVALUATE:-1}"
+mkdir -p "FARE_logs/${TARGET}/${DATASET}"
+STAMP=$(date '+%Y%m%d_%H%M%S')
+JOB="${PBS_JOBID:-manual}"
+LOG="FARE_logs/${TARGET}/${DATASET}/FARE.${TARGET}.${DATASET}.seed${SEED}.${JOB}.${STAMP}.train.live.log"
+cmd=(python -u FARE/scripts/train.py --dataset "$DATASET" --target "$TARGET" --seed "$SEED")
+if [[ -n "${RUN_DIR:-}" ]]; then cmd+=(--run-dir "$RUN_DIR"); fi
+if [[ -n "${BACKBONE_CHECKPOINT:-}" ]]; then cmd+=(--backbone-checkpoint "$BACKBONE_CHECKPOINT"); fi
+if [[ "$AUTO_EVALUATE" == "1" ]]; then cmd+=(--auto-evaluate); fi
+printf 'FARE_GADI_TRAIN_START dataset=%s target=%s seed=%s auto_evaluate=%s run_dir=%s\n' \
+    "$DATASET" "$TARGET" "$SEED" "$AUTO_EVALUATE" "${RUN_DIR:-auto}" | tee -a "$LOG"
+"${cmd[@]}" "$@" 2>&1 | awk '{print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush()}' | tee -a "$LOG"
+printf 'FARE_GADI_TRAIN_DONE dataset=%s target=%s\n' "$DATASET" "$TARGET" | tee -a "$LOG"

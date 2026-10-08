@@ -1,1 +1,2 @@
-__version__ = "0.2.4"
+"""FARE: failure-aware retrieval and predictive representation recovery."""
+__version__ = '1.0.2'

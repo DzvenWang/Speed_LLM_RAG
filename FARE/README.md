@@ -1,47 +1,241 @@
-# FARE v0.2.4
+> **v1.0.3 Gadi Auto/Manual Evaluate:** Gadi formal training defaults to post-train s20/s40/s60/s90 testing. Prefer `scripts/submit_gadi.py train`, which queues independent `afterok` Evaluate jobs. Manual `scripts/submit_gadi.py evaluate` can target candidate/best/phase checkpoints. See `HOTFIX_1.0.3.md`.
+> **v1.0.2 joint smoke runner:** Single command checks both speed and flow (preflight, all five training phases, per-phase validation, checkpoints) and writes a combined pass/fail report. See `HOTFIX_1.0.2.md`.
+> **v1.0.1 stability hotfix:** Fixes zero-variance NaN gradients and masked loss accounting. See `HOTFIX_1.0.1.md`.
 
-**FARE: Failure-Adaptive Restoration Experts for Traffic Forecasting under Incomplete Sensing**
+# FARE v1.0.3 Full — Retrieval-Centric Incomplete-Sensing-Aware STLAformer
 
-v0.2.4 replaces scalar-alpha-to-dense-gate supervision with **Forecast Intervention Landscapes + Hierarchical Prediction Control**.
+**Research implementation** (initial engineering release, not a validated accuracy claim).
 
-## Core idea
+## Status and dependencies
 
-Every expert still produces a dense raw estimate for every `artificial_missing` cell. Prediction control is now split into two identifiable decisions:
+This package contains actual PyTorch implementations of the FARE prediction model, train-only memory, graph target groups, directed-anchor observability, two-stage retrieval, state recovery, cross-attention-based innovation recovery, modified STLAformer, risk/utility controller, phases, stage evaluation, severity evaluation, OOF fitting, calibration, ablations and Gadi PBS wrappers.
 
-1. **Query-level Forecast Intervention Landscape** predicts downstream utility for every allowed intervention strength `alpha`.
-2. **Cell-level Reliability** predicts where the raw restoration is locally trustworthy.
+FARE **does not import STLA_DASR, Support_Oracle, the old FARE project, Mask_RAFT-STLA, Mask_RAST-STLA, or Baseline**. It imports only `Backbone` STLAformer code/weights and the frozen Base_SupportBench contract/metrics.
 
-The query controller selects `alpha` from the predicted utility landscape. Reliability redistributes that intervention across missing cells while preserving approximately the selected query-level mean strength.
+The supplied Backbone ZIP excludes its third-party `vendor/STLAformer/model/STLformer.py`; install/preserve the original Backbone vendor source locally/Gadi before running. FARE will explicitly fail preflight when the vendor/checkpoint is absent. The test suite uses a *synthetic STLA-compatible fixture*, not the actual official model or traffic dataset. No real-world forecasting accuracy is claimed or simulated.
 
-This avoids the v0.2.3 failure mode where a scalar `alpha*` label supervised a `[T,N]` gate and the network converged to a nearly constant mean gate.
+Dependencies: Python 3.11+, PyTorch, NumPy, pandas, PyYAML, and an installed local `Base_SupportBench`, `Backbone`, `Backbone_exps`, frozen `ExperimentCache` and their resolved SupportBench configs. You can use the current `TFP` environment. Graph directions are loaded from each dataset's `data/processed/traffident/base_supportbench/{target}/{dataset}/graph/directed_neighbors.npz`.
 
-## Experts
+## Installation
 
-- Context: full spatiotemporal learned restoration.
-- Structural: causal 28-day TMCP-style completion with validation utility landscape calibration.
-- Retrieval: pairwise downstream-utility candidate ranking + learned support fusion + intervention landscape.
-- Backbone-Aware: forecast-conditioned residual restoration + intervention landscape.
+Extract the ZIP so its top-level `FARE/` folder sits beside `Backbone/` and `Base_SupportBench/`:
 
-No MoE/router is trained in v0.2.4. Router work remains blocked until expert/safe-oracle headroom is materially useful.
+```text
+Speed_LLM_RAG/
+├── Base_SupportBench/
+├── Backbone/
+├── Backbone_exps/
+├── Base_SupportBench_artifacts/
+├── ExperimentCache/
+└── FARE/
+```
 
-## Training contract
-
-Stage A trains raw restoration (and Retrieval support ranking/fusion). Stage B freezes the restorer and trains only the hierarchical controller. Counterfactual utility curves use formal train/val future truth only; evaluation truth is never used for control decisions.
-
-Cell reliability is supervised by restoration correctness on formal train/val artificial-missing cells. This target answers *where* restoration is trustworthy; query-level forecast utility answers *whether/how much* it should affect STLAformer.
-
-## Smoke
+Windows PowerShell:
 
 ```powershell
 cd C:\Users\zwan0652\ResearchProgram\Speed_LLM_RAG
 conda activate TFP
 $env:SPEED_LLM_RAG_ROOT = (Get-Location).Path
-$env:SEED = "10"
-$env:TRAFFIDENT_TARGET = "speed"
-New-Item -ItemType Directory -Force -Path "FARE_logs\speed" | Out-Null
-$ts = Get-Date -Format "yyyyMMdd_HHmmss"
-python -u FARE\scripts\run_pipeline.py --target speed --smoke 2>&1 |
-  Tee-Object -FilePath "FARE_logs\speed\FARE.v0.2.4.speed.smoke.$ts.live.log"
+$env:PYTHONUNBUFFERED = '1'
+python -u FARE\scripts\smoke_all.py --dataset TraffiDent_Net_06 --seed 10
+# For a single target, use preflight.py and train.py --smoke as before.
 ```
 
-Smoke is an engineering/learning-signal check, not a performance estimate.
+Net-01, Net-02, Net-03, Net-04 and Net-06 share the **same source and hyperparameter template**; pretrained STLAformer weights, directed graph, nodes, normalization, retrieval store and calibration are per-dataset and per-target. To switch networks change only `--dataset`.
+
+## Combined smoke (Speed + Flow)
+
+```powershell
+python -u FARE\scripts\smoke_all.py --dataset TraffiDent_Net_06 --seed 10
+```
+
+The targets run **sequentially** on a single GPU; both are attempted and success is reported only if both pass preflight, all five training phases, and phase validation artifacts. Each target writes separate logs, checkpoints, and phase metrics. The combined report is at `FARE_logs/smoke/<dataset>/<timestamp>_seed10/smoke_summary.json`. Exit code is nonzero if either target fails. Net-01/02/03/04/06 use the same runner; change only `--dataset`.
+
+The combined smoke does **not** include expensive OOF utility fitting or formal s20/s40/s60/s90 test evaluation. Those remain independent formal pipeline tasks.
+
+## Full formal workflow
+
+1. Check the immutable data contract and the correct STLA checkpoint:
+
+```powershell
+python -u FARE\scripts\preflight.py --dataset TraffiDent_Net_06 --target speed
+```
+
+2. Build a Train-only historical memory artifact (optional, if not present `train.py` builds one and caches latent tokens):
+
+```powershell
+python -u FARE\scripts\build_memory.py --dataset TraffiDent_Net_06 --target speed
+```
+
+3. Train FARE with phase-specific checkpoints and validation metrics:
+
+```powershell
+python -u FARE\scripts\train.py --dataset TraffiDent_Net_06 --target speed --seed 10
+```
+
+The training phases are `retrieval`, `recovery`, `injection`, `partial`, and `full`. Each phase has its own `*_best.pt` and `stages/{phase}/val_summary.json` plus `val_retrieval.npz` showing candidate IDs and scores. `history.jsonl` contains every epoch and loss component. The selected candidate is `candidate_best.pt`.
+
+4. Fit the **out-of-fold risk/utility controller** from independently trained, temporally purged fold models. This step is computationally expensive: each OOF fold really retrains its own candidate; it does *not* use the main model's in-sample predictions as OOF supervision.
+
+```powershell
+python -u FARE\scripts\build_oof.py --checkpoint "<run_dir>\candidate_best.pt"
+```
+
+Creates `oof/oof_labels.npz`, `oof/oof_manifest.json`, and `controller_best.pt`.
+
+5. Calibrate on the frozen Validation split and save `best.pt`:
+
+```powershell
+python -u FARE\scripts\calibrate.py --checkpoint "<run_dir>\controller_best.pt"
+```
+
+6. Run independent test evaluation:
+
+```powershell
+python -u FARE\scripts\evaluate.py --checkpoint "<run_dir>\best.pt" --split test --severities 20 40 60 90
+```
+
+Outputs `evaluation/s20`, `evaluation/s40`, `evaluation/s60`, `evaluation/s90` with predictions, Base/Candidate/Final metrics, family metrics, candidate IDs/weights, retrieval quality, state recovery, helpful/harmful corrections and gates.
+
+**One-command sequential pipeline (long running):**
+
+```powershell
+python -u FARE\scripts\run_pipeline.py --dataset TraffiDent_Net_06 --target speed --seed 10
+```
+
+On Gadi split into PBS steps instead, because the OOF folds and joint training are not guaranteed to fit a single 48h allocation.
+
+## Stage evaluation and ablations
+
+```powershell
+python -u FARE\scripts\stage_evaluate.py --run-dir "<run_dir>" --phase retrieval --split val
+python -u FARE\scripts\stage_evaluate.py --run-dir "<run_dir>" --phase recovery --split val
+python -u FARE\scripts\stage_evaluate.py --run-dir "<run_dir>" --phase injection --split val
+python -u FARE\scripts\stage_evaluate.py --run-dir "<run_dir>" --phase partial --split val
+python -u FARE\scripts\stage_evaluate.py --run-dir "<run_dir>" --phase full --split val
+python -u FARE\scripts\ablate.py --checkpoint "<run_dir>\best.pt" --split val
+```
+
+Available inference ablations: `full`, `retrieval_off`, `global_retrieval` (global coarse retrieval; target re-ranking remains), `no_mask_alignment`, `random_memory`, `state_only`, `innovation_only`, `no_risk`. These are **inference ablations**, not separately retrained ablations; use separate training configs/seeds for publishable retrained ablations. Since no-retrieval and full models share network weights, comparing both does not confound two unrelated pretrained Backbones.
+
+To recover an interrupted phase, use the same run directory and the latest checkpoint:
+
+```powershell
+python -u FARE\scripts\train.py --dataset TraffiDent_Net_06 --target speed --run-dir "<run_dir>" --resume "<run_dir>\last.pt"
+```
+
+A `resume` restores model and optimizer state and resumes at the saved phase/epoch. If the phase is already in `phase_summary.json`, it resumes with the next phase after loading its best phase weights.
+
+## Gadi: default post-training Evaluate and manual Evaluate (v1.0.3)
+
+Run the **submission commands on the Gadi login node**, from the repository root:
+
+```bash
+cd /scratch/mh20/zw1165/Speed_LLM_RAG
+export SPEED_LLM_RAG_ROOT="$PWD"
+conda activate TFP
+
+# Recommended: submit both independent target training runs.
+# Automatically schedules two separate s20/s40/s60/s90 Evaluate PBS jobs,
+# each with `afterok:<its-own-train-job-id>`.
+python -u FARE/scripts/submit_gadi.py train \
+  --dataset TraffiDent_Net_06 --targets speed flow --seed 10
+```
+
+The default post-train Evaluate tests **`candidate_best.pt`**, the best
+forecast candidate after the five training phases. Its canonical output is
+`<run_dir>/evaluation_candidate/` (including `s20/`, `s40/`, `s60/`, `s90/`).
+This checkpoint is **not** the final OOF-calibrated `best.pt`.
+
+For the **entire final FARE pipeline**, including OOF-trained controller and
+Validation calibration, use `--finalize`. This submits a second dependent
+chain `train -> OOF -> calibration -> best.pt Evaluate`; candidate evaluation
+still runs after train, in parallel with the OOF branch:
+
+```bash
+python -u FARE/scripts/submit_gadi.py train \
+  --dataset TraffiDent_Net_06 --targets speed flow --seed 10 --finalize
+```
+
+The final calibrated test outputs `evaluation/s20/` through `evaluation/s90/`.
+This pipeline is computationally expensive and its OOF phase may require
+additional resources or adjusted walltime based on real-run profiling.
+
+You can also use raw qsub commands. **Direct training qsub enables
+same-allocation post-training candidate Evaluate by default**, though this
+may hit the shared 48h training walltime; prefer the submission helper above:
+
+```bash
+qsub -N FARE06sp -v DATASET=TraffiDent_Net_06,TARGET=speed,SEED=10 FARE/pbs/train_formal.pbs
+qsub -N FARE06fl -v DATASET=TraffiDent_Net_06,TARGET=flow,SEED=10 FARE/pbs/train_formal.pbs
+```
+
+For **manual test Evaluate** after a checkpoint exists:
+
+```bash
+# Final calibrated model (requires `best.pt` from calibration):
+python -u FARE/scripts/submit_gadi.py evaluate \
+  --run-dir /scratch/mh20/zw1165/Speed_LLM_RAG/FARE_exps/speed/TraffiDent_Net_06/formal/<run_id> \
+  --checkpoint-kind best
+
+# Post-train candidate model before OOF calibration:
+python -u FARE/scripts/submit_gadi.py evaluate \
+  --checkpoint /absolute/path/to/candidate_best.pt --checkpoint-kind candidate
+
+# Independently evaluate an earlier training stage on Validation:
+python -u FARE/scripts/submit_gadi.py evaluate \
+  --run-dir /absolute/path/to/run_dir --checkpoint-kind recovery --split val
+
+# Evaluate chosen severities and an ablation without overwriting auto output:
+python -u FARE/scripts/submit_gadi.py evaluate \
+  --checkpoint /absolute/path/to/best.pt --mode retrieval_off \
+  --severities 40 60 90
+```
+
+The manual PBS Evaluate writes to `<run_dir>/manual_evaluation/` in a new
+run-specific directory unless `--output` is explicitly supplied. Manual jobs
+can alternatively be submitted directly using `qsub -v CHECKPOINT=... FARE/pbs/evaluate.pbs`.
+Do not use the `best` checkpoint kind unless calibrated `best.pt` actually exists.
+
+Job IDs are saved in `<run_dir>/gadi_jobs.json`; live logs are under
+`FARE_logs/<target>/<dataset>/` (training/OOF/calibration) and
+`FARE_logs/evaluate/<target>/<dataset>/` (evaluation). `FARE_GADI_EVALUATE_DONE`
+is printed only after Evaluate exits successfully. Change only `--dataset`
+for Net-01/02/03/04/06; each target uses distinct memory and checkpoint.
+PBS project/queue/storage directives can be adjusted for your Gadi allocation.
+
+## Scientific and technical contracts
+
+- A **single architecture** runs on Net-01/02/03/04/06; no hardcoded `N=388` or Net-06 node IDs.
+- Only valid Train-window observations form the retrieval memory. Exact/overlapping history+forecast windows are excluded by `window_start`.
+- Candidate comparison uses the **intersection** of observed Query anchors and originally valid historical candidate anchors.
+- Retrieval uses two stages (coarse normalized region keys, then differentiable masked state/trend re-ranking).
+- State Recovery applies candidate-weighted historical states plus a graph-walk-propagated observable-anchor difference, with uncertainty and preservation of known observations.
+- Innovation Student cross-attends to retrieved historical node-level latent tokens. Teacher difference `full - recovered` is available **only inside training loss**, never inference.
+- The STLAformer wrapper preserves official weights and adds recovery embeddings, decomposition adapters, graph-aware reliability adapters and actual Top-K cross-attention in selected STLA blocks.
+- Base and retrieved predictions use **the same STLAformer parameters**. Final control is a calibrated mixture; no retrieval candidate means exact base fallback.
+- `x_full` and `y_raw` are not arguments to `FARE.forward()`.
+- Canonical MAE/RMSE and directly masked MAE/RMSE are imported from Base_SupportBench.
+- `best.pt`, serialized Train Memory, graph partition buffers, Backbone identity/hash, stage history and calibration form the evaluation identity.
+
+## Practical constraints and known validation gaps
+
+1. **Only the synthetic small-graph path is tested inside this delivered ZIP**. Actual Net-06 and Net-01..04 runs, official vendor STLAformer numerical equivalence, V100 fit and predictive gains require your connected project runtime. All corresponding scripts exist, but formal execution is not claimed.
+2. The full `FARE` uses approximate graph-based anchor transfer, rather than a proven physical traffic-flow model. Compare graph/no-graph in further experiments.
+3. Retrieval index keys are recomputed from model weights at stage/evaluation boundaries; they are not mixed from unrelated checkpoints. Coarse hard Top-K is discrete and is not differentiable; Query/Key receive paired-representation supervision while re-ranking receives differentiable weighting.
+4. OOF fitting is truly fold-specific but expensive; start with Net-06 and smaller **legitimately isolated** development cache before scheduling all 10 formal runs.
+5. The risk controller estimates utility/risk and calibrates on Validation; it does **not** mathematically guarantee RMSE improvement.
+6. For formal claims, add multiple seeds, separately retrained ablations, parameter/latency benchmarks, and leakage audits of every data asset.
+
+## Tests
+
+```bash
+python -m compileall -q FARE
+python FARE/tests/test_full.py
+python FARE/tests/test_smoke_all.py
+python FARE/tests/test_smoke_all_integration.py
+python FARE/tests/test_gadi_submit.py
+python FARE/tests/test_gadi_pbs_eval.py
+```
+
+Tests use synthetic model weights/data and verify forward, gradients, no candidate fallback, inference label isolation, checkpoint round trip and stage-specific training + evaluation artifact writing. They are functional tests, **not** traffic prediction accuracy benchmarks.
