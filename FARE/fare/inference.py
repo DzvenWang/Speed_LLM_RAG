@@ -23,6 +23,23 @@ class ExpertRuntime:
         if not cal.exists(): raise FileNotFoundError(f'Structural calibration missing: {cal}')
         self.structural_alpha=float(json.loads(cal.read_text(encoding='utf-8'))['alpha'])
 
+    @staticmethod
+    def _query_diag(info, artificial, extra=None):
+        art=artificial.bool(); B=art.shape[0]; out=[]
+        for q in range(B):
+            m=art[q]
+            gate=float(info['gate'][q][m].mean().detach().cpu()) if bool(m.any()) else 0.0
+            rel=float(info['reliability'][q][m].mean().detach().cpu()) if bool(m.any()) else 0.0
+            rec={
+                'selected_alpha':float(info['selected_alpha'][q].detach().cpu()),
+                'mean_gate':gate,
+                'mean_reliability':rel,
+                'predicted_landscape_pp':[float(v) for v in info['landscape'][q].detach().cpu().tolist()],
+            }
+            if extra is not None: rec.update(extra(q))
+            out.append(rec)
+        return out
+
     @torch.inference_mode()
     def neural_restore(self,x,observed,artificial,tod,dow,window_starts,batch_size=16):
         controlled={"context":[],"retrieval":[],"backbone_aware":[]}
@@ -51,10 +68,12 @@ class ExpertRuntime:
             controlled['retrieval'].append(rr.cpu().numpy().astype(np.float32)); raw['retrieval'].append(ri['raw_restored'].cpu().numpy().astype(np.float32))
             controlled['backbone_aware'].append(br.cpu().numpy().astype(np.float32)); raw['backbone_aware'].append(bi['raw_restored'].cpu().numpy().astype(np.float32))
 
-            def gm(g): return float(g[at].mean().cpu()) if bool(at.any()) else 0.0
-            diagnostics['context'].append({'mean_control_gate':gm(ci['gate'])})
-            diagnostics['retrieval'].append({'mean_support_gate':gm(ri['support_gate']),'mean_control_gate':gm(ri['control_gate']),'mean_max_weight':float(ri['weights'].max(1).values.mean().cpu())})
-            diagnostics['backbone_aware'].append({'mean_control_gate':gm(bi['gate'])})
+            diagnostics['context'].extend(self._query_diag(ci,at))
+            diagnostics['retrieval'].extend(self._query_diag(ri,at,lambda i:{
+                'mean_support_gate':float(ri['support_gate'][i][at[i]].mean().detach().cpu()) if bool(at[i].any()) else 0.0,
+                'mean_max_weight':float(ri['weights'][i].max(0).values.mean().detach().cpu()),
+            }))
+            diagnostics['backbone_aware'].extend(self._query_diag(bi,at))
         return ({k:np.concatenate(v,0) for k,v in controlled.items()}, {k:np.concatenate(v,0) for k,v in raw.items()}, diagnostics)
 
     def restore_all(self,x,observed,artificial,tod,dow,window_starts,smoke=False):

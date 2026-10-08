@@ -1,31 +1,25 @@
-# FARE v0.2.3 — Strong Restoration + Explicit Forecast-Utility Control
+# FARE v0.2.4 Architecture
 
-FARE remains a four-expert diagnostic model with no MoE router. The expert architectures remain Context, Structural TMCP, Forecast-Utility Retrieval and Backbone-Aware. v0.2.3 changes the training mechanism so that restoration capability and forecast intervention are learned separately.
+For expert `e`, Stage A produces dense raw restoration `X_hat_e` for all artificial-missing cells.
 
-For each neural expert `e`:
+For each training/validation query, the frozen STLAformer evaluates the counterfactual intervention grid:
 
-1. **Stage A:** learn a dense raw estimate `X_hat_e` while the prediction-control head is frozen.
-2. Build formal train/val counterfactual utility curves by evaluating frozen STLAformer at `alpha in {0,.25,.5,.75,1}`:
-   `X(alpha)=X_obs + M_artificial * alpha * (X_hat_e-X_obs)`.
-3. Label `alpha* = argmax_alpha Utility(alpha)` where utility is baseline-relative downstream forecast MAE improvement.
-4. **Stage B:** freeze the restorer and train the cell-wise gate. Its query mean is explicitly supervised toward `alpha*`, while forecast/no-harm losses permit cell-level deviations.
+`U_q(alpha) = (MAE_base - MAE_q(alpha)) / MAE_base`
 
-This removes the `g=0` local optimum that appeared in v0.2.2 without returning to sparse Top-32 restoration. Every missing cell still receives a dense estimate.
+for `alpha in {0, .25, .50, .75, 1}`.
 
-## Retrieval ranking
+The Stage-B query controller predicts the entire scaled utility vector rather than regressing only `argmax alpha`. Its losses are:
 
-The Retrieval candidate labels remain actual downstream STLAformer utility labels from formal train/val. Ranking is now pairwise:
+- utility-curve Smooth-L1 regression,
+- best-alpha cross entropy,
+- pairwise alpha-order ranking.
 
-`U_i > U_j  =>  score_i > score_j`
+A separate cell reliability head is supervised from raw restoration error on artificial-missing cells. Let `r_qtn` be the learned reliability and `a_q` the alpha selected by the query landscape. The controller normalizes reliability on missing cells and forms:
 
-using logistic pair loss. This is invariant to small absolute utility magnitudes. Random-order reference: loss `ln(2)=0.6931`, accuracy `0.5`.
+`g_qtn = clip(a_q * normalize(r_qtn), 0, 1)`
 
-Retrieval Stage A jointly learns target/node candidate scoring, support fusion and raw restoration. Retrieval Stage B freezes them and trains only the final prediction-control gate from alpha-utility labels.
+`X_controlled = X_obs + g * (X_hat - X_obs)` on artificial-missing cells only.
 
-## Structural expert
+During Stage-B training, forecast/no-harm gradients use oracle best-alpha as an override so the reliability head can learn useful allocation without depending on an immature query selector. At validation/inference the override is absent and the model uses its own predicted landscape.
 
-The Structural expert remains causal 28-day same-slot TMCP. Its raw dense restoration is non-parametric, so intervention alpha continues to be selected once on formal validation using downstream forecast MAE.
-
-## Evaluation
-
-Report raw restoration MAE, controlled forecast MAE/RMSE/gain, Expert Oracle, Safe Oracle, per-family routing, control gate statistics, counterfactual alpha diagnostics and Retrieval pairwise ranking diagnostics.
+Observed and originally-invalid cells are immutable.

@@ -1,16 +1,11 @@
 # Smoke
 python -u FARE\scripts\run_pipeline.py --target speed --smoke
 
-# Formal train (resumable)
+# Formal training
 python -u FARE\scripts\run_pipeline.py --target speed --stage train
 
-# Formal eval s40+s90
+# Formal evaluation (default s40+s90 diagnostic rows)
 python -u FARE\scripts\run_pipeline.py --target speed --stage eval
 
-# Individual stages
-python -u FARE\scripts\run_pipeline.py --target speed --stage context
-python -u FARE\scripts\run_pipeline.py --target speed --stage index
-python -u FARE\scripts\run_pipeline.py --target speed --stage retrieval_utility
-python -u FARE\scripts\run_pipeline.py --target speed --stage retrieval
-python -u FARE\scripts\run_pipeline.py --target speed --stage backbone_aware
-python -u FARE\scripts\run_pipeline.py --target speed --stage structural_calibration
+# Single severity
+python -u FARE\scripts\run_pipeline.py --target speed --stage eval --severity 90 --max-rows 100

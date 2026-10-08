@@ -147,7 +147,7 @@ class LearnedRetrievalIndex:
         np.save(out/"starts.npy",starts)
         write_json(out/"index_meta.json",{
             "index_version":"fare_v023_context_embedding_v1",
-            "runtime_patch":"0.2.3_memory_safe_embedding",
+            "runtime_patch":"0.2.4_memory_safe_embedding",
             "rows":int(len(starts)),
             "embedding_dim":int(emb_map.shape[1]),
             "backbone_checkpoint_sha256":ctx.checkpoint_sha256,

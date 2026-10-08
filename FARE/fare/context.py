@@ -64,11 +64,11 @@ class FAREContext:
 
     @property
     def artifact_root(self) -> Path:
-        return Path(self.cfg["project"]["artifact_root"]) / self.target / self.dataset / "v0.2.3" / self.run_mode
+        return Path(self.cfg["project"]["artifact_root"]) / self.target / self.dataset / "v0.2.4" / self.run_mode
 
     @property
     def exp_root(self) -> Path:
-        return Path(self.cfg["project"]["exp_root"]) / self.target / "FARE" / self.dataset / "v0.2.3" / self.run_mode
+        return Path(self.cfg["project"]["exp_root"]) / self.target / "FARE" / self.dataset / "v0.2.4" / self.run_mode
 
     def evaluation_cache(self, severity: int) -> Path:
         from backbone.shared_cache import cache_path, validate_shared_cache

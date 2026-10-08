@@ -42,5 +42,5 @@ def main():
         sevs=[a.severity] if a.severity else ([40] if a.smoke else list(ctx.cfg['experiment']['evaluation_severities']))
         rows=a.max_rows if a.max_rows is not None else (ctx.cfg['runtime']['smoke_rows'] if a.smoke else ctx.cfg['runtime']['diagnostic_rows'])
         for sev in sevs: evaluate_experts(ctx,int(sev),int(rows) if rows else None,a.smoke)
-    log('FARE_V023_PIPELINE_PASS')
+    log('FARE_V024_PIPELINE_PASS')
 if __name__=='__main__': main()

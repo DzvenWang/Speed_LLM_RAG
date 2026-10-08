@@ -1,4 +1,4 @@
-version: 0.2.3
+version: 0.2.4
 project:
   exp_root: ${SPEED_LLM_RAG_ROOT}/FARE_exps
   artifact_root: ${SPEED_LLM_RAG_ROOT}/FARE_artifacts
@@ -19,21 +19,27 @@ runtime:
   diagnostic_rows: 100
   smoke_rows: 20
   device: auto
-control_utility:
+intervention_landscape:
   alpha_grid: [0.0, 0.25, 0.50, 0.75, 1.0]
   train_rows: 4000
   val_rows: 1200
   smoke_train_rows: 160
   smoke_val_rows: 80
   label_batch_size: 8
-  supervision_weight: 2.0
+  utility_scale: 100.0
+  curve_weight: 1.0
+  choice_weight: 0.75
+  pairwise_weight: 0.35
+  reliability_weight: 0.50
   forecast_weight: 1.0
-  no_harm_weight: 1.25
+  no_harm_weight: 1.0
+  pairwise_min_utility_gap: 0.0001
+  choice_temperature: 1.0
 training:
   context:
     batch_size: 32
     stage_a_max_epochs: 40
-    stage_b_max_epochs: 12
+    stage_b_max_epochs: 15
     smoke_stage_a_epochs: 2
     smoke_stage_b_epochs: 2
     learning_rate: 0.0005
@@ -45,7 +51,6 @@ training:
     raw_forecast_weight: 0.75
     raw_utility_weight: 0.50
     no_harm_margin: 0.0
-    gate_init_bias: -3.0
     hidden_dim: 128
     num_layers: 4
     num_heads: 8
@@ -54,7 +59,7 @@ training:
   retrieval:
     batch_size: 24
     stage_a_max_epochs: 30
-    stage_b_max_epochs: 12
+    stage_b_max_epochs: 15
     smoke_stage_a_epochs: 2
     smoke_stage_b_epochs: 2
     learning_rate: 0.0005
@@ -77,11 +82,10 @@ training:
     fusion_hidden: 128
     dropout: 0.10
     support_gate_init_bias: -1.5
-    control_gate_init_bias: -3.0
   backbone_aware:
     batch_size: 20
     stage_a_max_epochs: 30
-    stage_b_max_epochs: 12
+    stage_b_max_epochs: 15
     smoke_stage_a_epochs: 2
     smoke_stage_b_epochs: 2
     learning_rate: 0.0004

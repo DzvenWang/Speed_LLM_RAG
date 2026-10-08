@@ -24,6 +24,7 @@ def main():
     ap.add_argument('--config',default=None)
     ap.add_argument('--batch-size',type=int)
     ap.add_argument('--num-workers',type=int)
+    ap.add_argument('--skip-evaluate',action='store_true',help='Skip automatic formal s20/s40/s60/s90 evaluation after training')
     a=ap.parse_args()
     if a.target: os.environ['TRAFFIDENT_TARGET']=a.target
     cfg=load_config(a.config); cfg['experiment']['seed']=int(a.seed)
@@ -34,4 +35,15 @@ def main():
     stamp=a.run_stamp or datetime.datetime.now().strftime('%Y%m%d_%H%M%S'); stage='formal_smoke' if a.smoke else 'formal'
     run=Path(cfg['project']['exp_root'])/cfg['experiment']['dataset']/stage/f'{stamp}_seed{a.seed}'
     best=train(cfg,cache,ck,rt,rv,run,a.smoke); print(f'BEST_CHECKPOINT={best}',flush=True)
+    if a.smoke:
+        print('AUTO_EVALUATE_SKIP reason=smoke',flush=True)
+    elif a.skip_evaluate:
+        print('AUTO_EVALUATE_SKIP reason=cli',flush=True)
+    else:
+        severities=[str(int(x)) for x in cfg['experiment'].get('severities',[20,40,60,90])]
+        cmd=[sys.executable,'-u',str(ROOT/'scripts/evaluate.py'),'--checkpoint',str(best),'--target',cfg['experiment']['target'],'--severities',*severities]
+        if a.config: cmd.extend(['--config',a.config])
+        print(f'AUTO_EVALUATE_START checkpoint={best} severities={",".join(severities)}',flush=True)
+        subprocess.check_call(cmd,cwd=ROOT)
+        print(f'AUTO_EVALUATE_PASS checkpoint={best}',flush=True)
 if __name__=='__main__': main()

@@ -29,13 +29,15 @@ python -u Mask_RAST-STLA\scripts\preflight.py --target speed
 python -u Mask_RAST-STLA\scripts\train.py --target speed --seed 10
 ```
 
-The training runner refreshes the full-state latent store automatically and writes `best_memory_index.npz` beside `best.pt`.
+The training runner refreshes the full-state latent store automatically and writes `best_memory_index.npz` beside `best.pt`. Formal training now **automatically evaluates the selected `best.pt`** on `s20/s40/s60/s90` after training succeeds. Results are written under `<run_dir>/evaluation/`, including `severity_summary.csv`. The root `summary.json` is updated with `test_evaluated: true`.
 
-Evaluation:
+Manual re-evaluation remains available:
 
 ```powershell
 python -u Mask_RAST-STLA\scripts\evaluate.py --target speed --checkpoint <best.pt>
 ```
+
+To intentionally train without the automatic evaluation step, add `--skip-evaluate`.
 
 Optional store diagnostic/build:
 
@@ -66,3 +68,11 @@ For flow, replace `speed` with `flow`.
 
 ### Timestamped formal logs (v1.1.1)
 Every line in the Gadi formal `.live.log` is prefixed with `[YYYY-MM-DD HH:MM:SS]`. The timestamping is applied at the PBS output pipeline so third-party warnings and multi-line command output are covered as well.
+
+
+### Automatic formal evaluation (v1.1.2)
+- Successful non-smoke training immediately evaluates the selected `best.pt` on severities `20/40/60/90`.
+- Smoke runs skip formal evaluation automatically.
+- `--skip-evaluate` is available for diagnostic/recovery runs.
+- An evaluation failure propagates as a non-zero training/PBS exit instead of being silently ignored.
+- The timestamped PBS pipeline also timestamps every automatic evaluation line.

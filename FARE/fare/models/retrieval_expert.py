@@ -3,18 +3,18 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
+from .intervention import HierarchicalInterventionController
+
 
 class RetrievalFusionExpert(nn.Module):
-    """Target-aware historical support fusion with two distinct controls.
+    """Forecast-utility retrieval + hierarchical intervention control.
 
-    support_gate: context-vs-memory restoration source selection.
-    control_gate: how strongly the resulting dense restoration may intervene
-                  in the frozen forecasting Backbone.
-    Candidate ranking is additionally supervised by offline downstream
-    forecast-utility labels generated from formal-train/val truth only.
+    Candidate ranking and source fusion remain separate from prediction control.
+    The controller sees retrieval uncertainty/agreement and predicts an alpha
+    utility landscape plus cell reliability.
     """
     def __init__(self, hidden=128, dropout=0.1, support_gate_init_bias=-1.5,
-                 control_gate_init_bias=-3.0):
+                 alpha_grid=(0., .25, .5, .75, 1.0)):
         super().__init__()
         self.rank_mlp = nn.Sequential(
             nn.Linear(6, hidden), nn.GELU(), nn.Dropout(dropout),
@@ -24,16 +24,15 @@ class RetrievalFusionExpert(nn.Module):
             nn.Linear(7, hidden), nn.GELU(), nn.Dropout(dropout),
             nn.Linear(hidden, hidden//2), nn.GELU(), nn.Linear(hidden//2, 1),
         )
-        self.control_gate = nn.Sequential(
-            nn.Linear(8, hidden), nn.GELU(), nn.Dropout(dropout),
-            nn.Linear(hidden, hidden//2), nn.GELU(), nn.Linear(hidden//2, 1),
-        )
+        # x, context, estimate, delta, agreement_std, max_weight,
+        # query_obs_fraction, missing_node, support_gate
+        self.intervention = HierarchicalInterventionController(9, alpha_grid, hidden, dropout)
         nn.init.zeros_(self.rank_mlp[-1].weight); nn.init.zeros_(self.rank_mlp[-1].bias)
         nn.init.zeros_(self.support_gate[-1].weight); nn.init.constant_(self.support_gate[-1].bias,float(support_gate_init_bias))
-        nn.init.zeros_(self.control_gate[-1].weight); nn.init.constant_(self.control_gate[-1].bias,float(control_gate_init_bias))
 
     def forward(self, x, observed, artificial, context_restored,
-                candidates, candidate_valid, coarse_similarity, a_norm):
+                candidates, candidate_valid, coarse_similarity, a_norm,
+                alpha_override=None):
         b,k,t,n = candidates.shape
         obs = observed.float()
         match = obs[:,None,:,:] * candidate_valid.float()
@@ -68,14 +67,15 @@ class RetrievalFusionExpert(nn.Module):
         ], dim=-1)
         sg = torch.sigmoid(self.support_gate(support_feat).squeeze(-1))
         estimate = (1.0-sg) * context_restored + sg * retrieved
+        delta = estimate - x
 
         missing_node = artificial.float().mean(1)[:,None,:].expand(-1,t,-1)
         control_feat = torch.stack([
-            x, context_restored, estimate, estimate-x,
-            agreement_std, max_weight, query_obs_fraction, missing_node,
+            x, context_restored, estimate, delta, agreement_std, max_weight,
+            query_obs_fraction, missing_node, sg,
         ], dim=-1)
-        cg = torch.sigmoid(self.control_gate(control_feat).squeeze(-1))
-        controlled = x + cg * (estimate-x)
+        ctrl = self.intervention(control_feat,artificial,observed,delta,alpha_override)
+        controlled = x + ctrl['gate'] * delta
         restored = torch.where(artificial.bool(), controlled, x)
         raw_restored = torch.where(artificial.bool(), estimate, x)
 
@@ -87,9 +87,9 @@ class RetrievalFusionExpert(nn.Module):
             'candidate_logits': logits,
             'query_candidate_scores': query_candidate_scores,
             'support_gate': sg,
-            'control_gate': cg,
             'estimate': estimate,
             'raw_restored': raw_restored,
             'retrieved': retrieved,
             'agreement_std': agreement_std,
+            **ctrl,
         }

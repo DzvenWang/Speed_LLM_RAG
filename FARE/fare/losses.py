@@ -44,15 +44,7 @@ def pairwise_utility_ranking_loss(
     valid: torch.Tensor | None = None,
     min_gap: float = 1e-4,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Pairwise utility ranking that is invariant to the absolute utility scale.
-
-    For every informative candidate pair, the higher-utility support must receive
-    the higher model score. This avoids the near-uniform softmax targets that
-    occur when downstream utilities are only a few 1e-3 apart.
-
-    Returns (loss, pair_accuracy, informative_pair_count).
-    Random-order logistic baseline is ln(2) ~= 0.6931 and accuracy 0.5.
-    """
+    """Pairwise ordering loss invariant to absolute utility magnitude."""
     if scores.ndim != 2 or utilities.shape != scores.shape:
         raise ValueError("scores/utilities must be [B,K]")
     if valid is None:
@@ -88,7 +80,74 @@ def query_gate_mean(gate: torch.Tensor, artificial: torch.Tensor) -> torch.Tenso
     return num/den
 
 
-def alpha_supervision_loss(gate: torch.Tensor, artificial: torch.Tensor, target_alpha: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    pred=query_gate_mean(gate,artificial)
-    target=target_alpha.float().reshape_as(pred)
-    return F.smooth_l1_loss(pred,target), (pred-target).abs().mean()
+def restoration_reliability_target(estimate: torch.Tensor, full: torch.Tensor,
+                                   artificial: torch.Tensor) -> torch.Tensor:
+    """Cell-level local trust target from supervised restoration correctness.
+
+    Query-level forecast utility is learned separately by the intervention
+    landscape.  Reliability only answers *where* a raw estimate is locally
+    trustworthy.  Per-query scaling avoids favoring easy queries globally.
+    """
+    m=artificial.bool().float()
+    err=(estimate-full).abs()
+    den=m.flatten(1).sum(1).clamp_min(1.0)
+    scale=(err*m).flatten(1).sum(1)/den
+    target=torch.exp(-err/scale[:,None,None].clamp_min(1e-4))
+    return target.detach()
+
+
+def reliability_supervision_loss(reliability: torch.Tensor, estimate: torch.Tensor,
+                                 full: torch.Tensor, artificial: torch.Tensor):
+    target=restoration_reliability_target(estimate,full,artificial)
+    m=artificial.bool()
+    if not torch.any(m):
+        z=reliability.sum()*0.0
+        return z,z,target
+    loss=F.smooth_l1_loss(reliability[m],target[m])
+    mae=(reliability[m]-target[m]).abs().mean()
+    return loss,mae,target
+
+
+def intervention_landscape_loss(predicted_scaled: torch.Tensor,
+                                target_utility: torch.Tensor,
+                                alpha_grid: torch.Tensor,
+                                utility_scale: float = 100.0,
+                                pairwise_min_gap: float = 1e-4,
+                                choice_temperature: float = 1.0):
+    """Supervise the complete query-level intervention-response landscape.
+
+    predicted_scaled is trained in percentage-point utility units.  Targets are
+    stored as relative utility fractions and scaled here for numerical stability.
+    Returns regression, choice CE, pairwise loss/accuracy and alpha diagnostics.
+    """
+    valid=torch.isfinite(target_utility)
+    if target_utility.ndim != 2 or predicted_scaled.shape != target_utility.shape:
+        raise ValueError("landscape tensors must be [B,A]")
+    if not torch.all(valid):
+        # Landscape generation is all-or-nothing per query; fail loudly if an
+        # incomplete curve reaches training.
+        if torch.any(valid.sum(1) != target_utility.shape[1]):
+            raise ValueError("Incomplete intervention utility curve in batch")
+    target_scaled=torch.nan_to_num(target_utility,nan=0.0)*float(utility_scale)
+    reg=F.smooth_l1_loss(predicted_scaled,target_scaled)
+    best_idx=torch.argmax(target_scaled,dim=1)
+    ce=F.cross_entropy(predicted_scaled/max(float(choice_temperature),1e-6),best_idx)
+    pair,pair_acc,pairs=pairwise_utility_ranking_loss(
+        predicted_scaled,target_scaled,torch.isfinite(target_scaled),float(pairwise_min_gap)*float(utility_scale)
+    )
+    pred_idx=torch.argmax(predicted_scaled,dim=1)
+    alpha_grid=alpha_grid.to(predicted_scaled.device)
+    pred_alpha=alpha_grid[pred_idx]
+    target_alpha=alpha_grid[best_idx]
+    alpha_acc=(pred_idx==best_idx).float().mean()
+    alpha_mae=(pred_alpha-target_alpha).abs().mean()
+    curve_mae=(predicted_scaled-target_scaled).abs().mean()
+    positive=(pred_alpha>0).float().mean()
+    oracle_positive=(target_alpha>0).float().mean()
+    return {
+        'regression':reg,'choice':ce,'pairwise':pair,'pair_acc':pair_acc,'pairs':pairs,
+        'curve_mae_pp':curve_mae,'alpha_acc':alpha_acc,'alpha_mae':alpha_mae,
+        'pred_alpha_mean':pred_alpha.mean(),'oracle_alpha_mean':target_alpha.mean(),
+        'pred_positive_rate':positive,'oracle_positive_rate':oracle_positive,
+        'target_alpha':target_alpha,'target_scaled':target_scaled,
+    }

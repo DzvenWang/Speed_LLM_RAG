@@ -15,6 +15,17 @@ def main():
     if a.target:os.environ['TRAFFIDENT_TARGET']=a.target
     cfg=load_config(a.config);device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu');ck=torch.load(a.checkpoint,map_location='cpu',weights_only=False);model,_=build_model(cfg,Path(ck['backbone_checkpoint']),device);model.load_state_dict(ck['state_dict'],strict=True);model.to(device).eval();formal=cache_path(cfg,'formal');repo=FullTrainRepository(formal);store=Path(a.checkpoint).resolve().parent/'best_memory_index.npz';index=LatentMemoryIndex.load(store) if store.is_file() else build_memory_index(model.memory_encoder,repo,device,int(cfg['retrieval']['store_batch_size']));index.to(device);mean=float(ck['mean']);std=float(ck['std']);rows=[]
     for sev in a.severities:
-        cache=cache_path(cfg,'evaluation',sev);ds=SupportSplit(cache,'test');dl=DataLoader(ds,batch_size=int(cfg['training']['batch_size']),shuffle=False,num_workers=0,pin_memory=torch.cuda.is_available());p,y,v,d,fg,lg=predict(model,dl,index,repo,device,mean,std);fam=summarize_by_family(p,y,v,d,ds.meta);out=Path(a.checkpoint).resolve().parent/'evaluation'/f's{sev}';out.mkdir(parents=True,exist_ok=True);np.savez_compressed(out/'test_predictions.npz',prediction=p.astype(np.float32));save_summary(out/'summary.json',{'severity':sev,'metrics':fam,'forecast_gate_mean':fg,'latent_gate_mean':lg});rows.append({'severity':sev,**fam['ALL']});print(f'EVAL s{sev} '+json.dumps(fam['ALL']),flush=True)
-    pd.DataFrame(rows).to_csv(Path(a.checkpoint).resolve().parent/'evaluation'/'severity_summary.csv',index=False)
+        cache=cache_path(cfg,'evaluation',sev);ds=SupportSplit(cache,'test')
+        nw=int(cfg.get('runtime',{}).get('num_workers',0));pin=bool(cfg.get('runtime',{}).get('pin_memory',True)) and torch.cuda.is_available()
+        dl_kwargs=dict(batch_size=int(cfg['training']['batch_size']),shuffle=False,num_workers=nw,pin_memory=pin)
+        if nw>0:
+            dl_kwargs['persistent_workers']=bool(cfg.get('runtime',{}).get('persistent_workers',True))
+            dl_kwargs['prefetch_factor']=int(cfg.get('runtime',{}).get('prefetch_factor',2))
+        dl=DataLoader(ds,**dl_kwargs);p,y,v,d,fg,lg=predict(model,dl,index,repo,device,mean,std);fam=summarize_by_family(p,y,v,d,ds.meta);out=Path(a.checkpoint).resolve().parent/'evaluation'/f's{sev}';out.mkdir(parents=True,exist_ok=True);np.savez_compressed(out/'test_predictions.npz',prediction=p.astype(np.float32));save_summary(out/'summary.json',{'severity':sev,'metrics':fam,'forecast_gate_mean':fg,'latent_gate_mean':lg});rows.append({'severity':sev,**fam['ALL']});print(f'EVAL s{sev} '+json.dumps(fam['ALL']),flush=True)
+    run_dir=Path(a.checkpoint).resolve().parent;eval_dir=run_dir/'evaluation';eval_dir.mkdir(parents=True,exist_ok=True)
+    pd.DataFrame(rows).to_csv(eval_dir/'severity_summary.csv',index=False)
+    root_summary=run_dir/'summary.json';payload=json.loads(root_summary.read_text(encoding='utf-8')) if root_summary.is_file() else {}
+    payload.update({'test_evaluated':True,'evaluation_severities':[int(x) for x in a.severities],'evaluation_summary':rows})
+    save_summary(root_summary,payload)
+    print(f'EVALUATION_PASS checkpoint={a.checkpoint} severities={",".join(str(x) for x in a.severities)} summary={eval_dir/"severity_summary.csv"}',flush=True)
 if __name__=='__main__':main()

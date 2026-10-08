@@ -4,12 +4,14 @@ import torch
 import torch.nn as nn
 
 from .blocks import GraphTemporalBlock, normalized_adjacency
+from .intervention import HierarchicalInterventionController
 
 
 class BackboneAwareRestorer(nn.Module):
-    """Forecast-conditioned dense restoration with explicit prediction control."""
+    """Forecast-conditioned dense restoration + hierarchical intervention landscape."""
     def __init__(self, num_nodes: int, adj, horizon=12, hidden_dim=128, num_layers=4,
-                 num_heads=8, dropout=0.1, ff_mult=4, control_gate_init_bias=-3.0):
+                 num_heads=8, dropout=0.1, ff_mult=4,
+                 alpha_grid=(0., .25, .5, .75, 1.0)):
         super().__init__()
         self.num_nodes=int(num_nodes); self.horizon=int(horizon)
         self.input_proj = nn.Linear(4, hidden_dim)
@@ -21,16 +23,14 @@ class BackboneAwareRestorer(nn.Module):
         self.blocks = nn.ModuleList([GraphTemporalBlock(hidden_dim,num_heads,ff_mult,dropout) for _ in range(num_layers)])
         self.out_ln = nn.LayerNorm(hidden_dim)
         self.residual = nn.Sequential(nn.Linear(hidden_dim,hidden_dim),nn.GELU(),nn.Linear(hidden_dim,1))
-        self.control = nn.Sequential(
-            nn.Linear(hidden_dim+5,hidden_dim),nn.GELU(),nn.Dropout(dropout),
-            nn.Linear(hidden_dim,hidden_dim//2),nn.GELU(),nn.Linear(hidden_dim//2,1),
-        )
+        # h + x + delta + observed + artificial + base uncertainty
+        self.intervention = HierarchicalInterventionController(hidden_dim + 5, alpha_grid, hidden_dim, dropout)
         nn.init.zeros_(self.residual[-1].weight); nn.init.zeros_(self.residual[-1].bias)
-        nn.init.zeros_(self.control[-1].weight); nn.init.constant_(self.control[-1].bias,float(control_gate_init_bias))
         self.scale = nn.Parameter(torch.tensor(0.10))
         self.register_buffer('a_norm', normalized_adjacency(adj), persistent=True)
 
-    def forward(self, x, observed, artificial, tod, dow, context_restored, base_forecast_norm):
+    def forward(self, x, observed, artificial, tod, dow, context_restored, base_forecast_norm,
+                alpha_override=None):
         b,t,n=x.shape
         inp=torch.stack([x,observed.float(),context_restored,context_restored-x],dim=-1)
         h=self.input_proj(inp)
@@ -44,12 +44,14 @@ class BackboneAwareRestorer(nn.Module):
         h=self.out_ln(h)
         delta=self.residual(h).squeeze(-1)
         estimate=context_restored + torch.tanh(self.scale) * delta
-        node_obs=observed.float().mean(1)[:,None,:].expand_as(x)
-        missing_node=artificial.float().mean(1)[:,None,:].expand_as(x)
+        restore_delta=estimate-x
         base_uncert=base_forecast_norm.std(1,unbiased=False)[:,None,:].expand_as(x)
-        feat=torch.cat([h,x[...,None],(estimate-x)[...,None],node_obs[...,None],missing_node[...,None],base_uncert[...,None]],dim=-1)
-        gate=torch.sigmoid(self.control(feat).squeeze(-1))
-        controlled=x + gate*(estimate-x)
+        cell=torch.cat([
+            h,x[...,None],restore_delta[...,None],observed.float()[...,None],
+            artificial.float()[...,None],base_uncert[...,None]
+        ],dim=-1)
+        ctrl=self.intervention(cell,artificial,observed,restore_delta,alpha_override)
+        controlled=x + ctrl['gate']*restore_delta
         restored=torch.where(artificial.bool(),controlled,x)
         raw_restored=torch.where(artificial.bool(),estimate,x)
-        return restored, {'delta':delta,'estimate':estimate,'raw_restored':raw_restored,'gate':gate}
+        return restored, {'delta':delta,'estimate':estimate,'raw_restored':raw_restored,**ctrl}

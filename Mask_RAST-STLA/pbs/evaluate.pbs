@@ -1,0 +1,55 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=12:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+set -euo pipefail
+
+TARGET=${TARGET:-${TRAFFIDENT_TARGET:-speed}}
+SEVERITIES=${SEVERITIES:-"20 40 60 90"}
+case "$TARGET" in speed|flow) ;; *) echo "ERROR TARGET=$TARGET (expected speed|flow)"; exit 2;; esac
+
+ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
+ENVROOT=${TFP_ENV_ROOT:-/scratch/mh20/zw1165/envs/TFP}
+PYTHON="$ENVROOT/bin/python"
+[[ -x "$PYTHON" ]] || { echo "ERROR Python not executable: $PYTHON"; exit 3; }
+
+if [[ -n "${CHECKPOINT:-}" ]]; then
+  CKPT="$CHECKPOINT"
+elif [[ -n "${RUN_DIR:-}" ]]; then
+  CKPT="$RUN_DIR/best.pt"
+else
+  echo "ERROR: provide CHECKPOINT=/path/to/best.pt or RUN_DIR=/path/to/run"; exit 4
+fi
+[[ "$CKPT" = /* ]] || CKPT="$ROOT/$CKPT"
+[[ -f "$CKPT" ]] || { echo "ERROR checkpoint not found: $CKPT"; exit 5; }
+
+export SPEED_LLM_RAG_ROOT="$ROOT"
+export TRAFFIDENT_TARGET="$TARGET"
+export PYTHONUNBUFFERED=1
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH="$ROOT/Mask_RAST-STLA:$ROOT/Base_SupportBench:${PYTHONPATH:-}"
+export PATH="$ENVROOT/bin:$PATH"
+
+cd "$ROOT"
+mkdir -p "Mask_RAST-STLA_logs/$TARGET"
+STAMP=$(date +%Y%m%d_%H%M%S)
+JOBID=${PBS_JOBID:-local}
+LOG="Mask_RAST-STLA_logs/$TARGET/Mask_RAST-STLA.${TARGET}.evaluate.${JOBID}.${STAMP}.live.log"
+
+timestamp_stream() { awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush(); }'; }
+log_line() { printf '%s\n' "$*" | timestamp_stream | tee -a "$LOG"; }
+run_logged() { "$@" 2>&1 | timestamp_stream | tee -a "$LOG"; local rc=${PIPESTATUS[0]}; return "$rc"; }
+
+log_line "EVALUATE_START model=Mask_RAST-STLA target=$TARGET checkpoint=$CKPT severities=$SEVERITIES job=$JOBID host=$(hostname)"
+log_line "ROOT=$ROOT PYTHON=$PYTHON"
+run_logged "$PYTHON" -V
+run_logged nvidia-smi || true
+run_logged "$PYTHON" -u Mask_RAST-STLA/scripts/preflight.py --target "$TARGET"
+# shellcheck disable=SC2086
+run_logged "$PYTHON" -u Mask_RAST-STLA/scripts/evaluate.py --checkpoint "$CKPT" --target "$TARGET" --severities $SEVERITIES
+log_line "EVALUATE_FINISH model=Mask_RAST-STLA target=$TARGET checkpoint=$CKPT severities=$SEVERITIES"
