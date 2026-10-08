@@ -1,13 +1,11 @@
 from __future__ import annotations
 import torch
 from torch.nn import functional as F
+from .ranking import target_recovery_ranking_loss
 
 def masked_mean(x,mask):
-    # Never convert NaN/Inf predictions into apparently perfect (zero) loss.
-    # The old nan_to_num made an invalid validation epoch score exactly 0.0.
     selected=x.masked_select(mask.bool().expand_as(x))
-    if not selected.numel():
-        return x.new_zeros(())
+    if not selected.numel():return x.new_zeros(())
     if not torch.isfinite(selected).all():
         raise FloatingPointError('Nonfinite value at an actively supervised position')
     return selected.mean()
@@ -20,16 +18,37 @@ def losses(model,batch,out,memory,phase,mean,std,cfg):
     forecast=masked_mean(abs_err/scale,valid)
     missing_forecast=masked_mean(abs_err/scale,direct)
     tail=masked_mean(sq,valid)
+    # Proposal supervision is deliberately weak: the alpha=1 candidate need
+    # not outperform the base, but its huge errors should not be cost-free.
+    candidate_raw=out['candidate_prediction']*std+mean
+    candidate_loss=masked_mean(F.smooth_l1_loss((candidate_raw-truth)/scale,
+                               torch.zeros_like(candidate_raw),reduction='none'),valid)
+    delta=out['candidate_prediction']-out['base_prediction']
+    # A small correction-magnitude regularizer improves stability and should
+    # not stop the model from learning helpful large corrections.
+    correction_energy=masked_mean(F.smooth_l1_loss(delta,torch.zeros_like(delta),reduction='none'),valid)
+    if cfg['experiment'].get('training_mode','full')=='no_memory':
+        total=forecast+cfg['loss']['direct']*missing_forecast+cfg['loss']['tail']*tail
+        zero=total.detach()*0
+        return {'total':total,'forecast':forecast.detach(),'direct':missing_forecast.detach(),
+                'tail':tail.detach(),'candidate':zero,'correction_energy':zero,
+                'retrieval':zero,'ranking':zero,'state':zero,'innovation':zero,'gate':zero}
     retrieval=forecast*0
+    ranking=forecast*0
+    rank_diag={}
+    if phase in ('retrieval','recovery','injection','partial','full') and cfg.get('ranking',{}).get('enabled',True):
+        rank_temp=float(cfg.get('ranking',{}).get('target_temperature',.25))
+        ranking,rank_diag=target_recovery_ranking_loss(
+            batch,{'ids':out['retrieved_ids'],'valid':out['retrieved_valid_candidates'],
+                   'weights':out['retrieved_weights']},memory,model.regions,rank_temp)
+
     if phase=='retrieval':
-        # Paired full/incomplete keys; only train truth is used for contrastive supervision.
         ctx=model.regions(batch['x_full'].float(),batch['raw_valid'].bool())
         enc=model.retrieval.encoder
         feats=enc._features(ctx['anchor_values'],ctx['anchor_mask'],torch.stack([torch.zeros_like(ctx['coverage']),ctx['coverage']],-1))
-        paired=torch.nn.functional.normalize(enc.k(feats),dim=-1)
+        paired=F.normalize(enc.k(feats),dim=-1)
         qry=out['retrieval_query']
-        paired_loss=1-(qry*paired).sum(-1)
-        retrieval=paired_loss.mean()
+        retrieval=(1-(qry*paired).sum(-1)).mean()
     rec_mask=batch['artificial_mask'].bool()&batch['raw_valid'].bool()
     state=masked_mean((out['recovered_state']-batch['x_full']).abs(),rec_mask)
     with torch.no_grad():
@@ -41,9 +60,17 @@ def losses(model,batch,out,memory,phase,mean,std,cfg):
     ctrl=(out['final_gate']**2).mean()
     w=cfg['loss']
     if phase=='retrieval':
-        total= w['retrieval']*retrieval + .05*state
+        total=w['retrieval']*retrieval+w.get('ranking',.15)*ranking+.05*state
     elif phase=='recovery':
-        total=w['state']*state+w['innovation']*innov +.1*forecast
+        total=w['state']*state+w['innovation']*innov+.1*forecast+w.get('ranking',.15)*ranking
     else:
-        total=(forecast + w['direct']*missing_forecast + w['tail']*tail + w['state']*state+w['innovation']*innov+w['gate']*ctrl)
-    return {'total':total,'forecast':forecast.detach(),'direct':missing_forecast.detach(),'tail':tail.detach(),'retrieval':retrieval.detach(),'state':state.detach(),'innovation':innov.detach(),'gate':out['final_gate'].mean().detach()}
+        total=(forecast+w['direct']*missing_forecast+w['tail']*tail+
+               w['state']*state+w['innovation']*innov+w['gate']*ctrl+
+               w.get('candidate',.08)*candidate_loss+
+               w.get('correction_energy',.003)*correction_energy+
+               w.get('ranking',.15)*ranking)
+    return {'total':total,'ranking':ranking.detach(),**rank_diag,'forecast':forecast.detach(),'direct':missing_forecast.detach(),
+            'tail':tail.detach(),'candidate':candidate_loss.detach(),
+            'correction_energy':correction_energy.detach(),
+            'retrieval':retrieval.detach(),'state':state.detach(),
+            'innovation':innov.detach(),'gate':out['final_gate'].mean().detach()}

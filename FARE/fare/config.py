@@ -26,7 +26,12 @@ def load_config(path=None, dataset=None, target=None, seed=None, smoke=False):
         cfg['training']['phase_epochs'] = {k: 1 for k in cfg['training']['phase_epochs']}
         cfg['experiment']['max_train_rows'] = 8
         cfg['experiment']['max_val_rows'] = 4
-        cfg['memory']['max_rows'] = 16
+        # Use well-separated TRAIN memory windows.  The first 8 train views
+        # almost completely overlap the first 16 memory windows, so the
+        # normal history+horizon exclusion would otherwise remove every
+        # smoke-training retrieval candidate.
+        cfg['memory']['max_rows'] = 64
+        cfg['memory']['sampling'] = 'spread'
         cfg['retrieval']['coarse_topk'] = 8
         cfg['retrieval']['topk'] = 3
     return cfg
@@ -78,3 +83,21 @@ def sha256(path):
 def json_write(path, obj):
     Path(path).parent.mkdir(parents=True,exist_ok=True)
     Path(path).write_text(json.dumps(obj,indent=2,ensure_ascii=False,default=str),encoding='utf-8')
+
+
+def config_from_checkpoint(checkpoint, *, smoke=False):
+    """Recover the exact architecture/training config embedded in a FARE checkpoint.
+
+    No implicit fallback to today's YAML defaults: architecture configs must
+    match saved weights, otherwise evaluation can silently differ from training.
+    """
+    if 'config' not in checkpoint:
+        raise RuntimeError('FARE checkpoint missing saved configuration')
+    cfg=copy.deepcopy(checkpoint['config'])
+    required=('experiment','training','model','backbone','graph','retrieval','memory','innovation','control','loss','evaluation')
+    missing=[k for k in required if k not in cfg]
+    if missing:raise RuntimeError(f'Checkpoint missing FARE configuration fields: {missing}')
+    cfg['project_root']=str(project_root())
+    if smoke and cfg['experiment'].get('max_train_rows') is None:
+        raise ValueError('--smoke only applies to checkpoints originally trained in smoke mode')
+    return cfg

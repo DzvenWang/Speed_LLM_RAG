@@ -13,14 +13,20 @@ class RetrievalEncoder(nn.Module):
     def __init__(self,history,hidden=64,key_dim=128):
         super().__init__();self.q=nn.Sequential(nn.Linear(history*2+2,hidden),nn.GELU(),nn.Linear(hidden,key_dim))
         self.k=nn.Sequential(nn.Linear(history*2+2,hidden),nn.GELU(),nn.Linear(hidden,key_dim))
+        # Dynamic failure observability belongs to the QUERY, not the static memory key.
+        self.observability_query=nn.Linear(hidden,key_dim,bias=False)
+        nn.init.normal_(self.observability_query.weight,std=0.003)
     def _features(self,x,valid,extra):
         # [B,G,H,A] -> [B,G,2H+2], with validity masking.
         m=valid.float(); v=(x*m).sum(-1)/m.sum(-1).clamp_min(1)
         c=m.mean(-1)
         return torch.cat([v,c,extra],-1)
-    def query(self,ctx):
+    def query(self,ctx,observability=None):
         f=self._features(ctx['anchor_values'],ctx['anchor_mask'],torch.stack([ctx['missing'],ctx['coverage']],-1))
-        return F.normalize(self.q(f),dim=-1)
+        key=self.q(f)
+        if observability is not None:
+            key=key+self.observability_query(observability)
+        return F.normalize(key,dim=-1)
     @torch.no_grad()
     def memory_keys(self,memory,regions,batch=256):
         ids=regions.anchor_ids;v=regions.anchor_valid;chunks=[]
@@ -45,10 +51,10 @@ class TargetRetriever(nn.Module):
         was_training=self.encoder.training;self.encoder.eval()
         memory.keys=self.encoder.memory_keys(memory,regions)
         self.encoder.train(was_training)
-    def forward(self,ctx,regions,memory,window_start,mode='full'):
+    def forward(self,ctx,regions,memory,window_start,mode='full',observability=None):
         if memory.keys is None:raise RuntimeError('Memory index not built; call retriever.refresh')
         b,g,h,a=ctx['anchor_values'].shape
-        query=self.encoder.query(ctx)
+        query=self.encoder.query(ctx,observability)
         # [B,G,M] from region-indexed keys, chunking avoided huge temporary 4D.
         if mode=='global_retrieval':
             global_query=F.normalize(query.mean(1),dim=-1)
@@ -83,7 +89,14 @@ class TargetRetriever(nn.Module):
         coverage=denom/(h*a)
         margin=(coarse-coarse.mean(-1,keepdim=True))
         f=torch.stack([mae,trend_err,coverage,coarse,margin],-1)
-        raw=coarse if mode=='no_mask_alignment' else (self.rerank(f).squeeze(-1)+coarse-.25*mae-.1*trend_err)
+        if mode=='no_mask_alignment':
+            raw=coarse
+        elif mode=='no_learned_reranker':
+            raw=coarse-.25*mae-.1*trend_err
+        elif mode=='no_observation_distance':
+            raw=self.rerank(f).squeeze(-1)+coarse
+        else:
+            raw=self.rerank(f).squeeze(-1)+coarse-.25*mae-.1*trend_err
         ok=(denom>=1)&(coarse>-1e3)
         ranked,idloc=raw.masked_fill(~ok,-1e4).topk(min(self.topk,count),dim=-1)
         ids=torch.gather(id64,-1,idloc)

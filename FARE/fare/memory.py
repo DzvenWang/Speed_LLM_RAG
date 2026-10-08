@@ -23,14 +23,24 @@ class TrainMemory:
         safe=ids.clamp(min=0,max=len(self.x)-1)
         return self.x[safe],self.valid[safe]
     @classmethod
-    def from_cache(cls,cache,max_rows=None,device='cpu'):
+    def from_cache(cls,cache,max_rows=None,device='cpu',sampling='head'):
         from .data import SupportSplit
         ds=SupportSplit(cache,'train')
         # De-duplicate multiple sensing views of the same historical window.
         starts=ds.meta.window_start.to_numpy(np.int64)
         _,unique=np.unique(starts,return_index=True)
         ix=np.sort(unique)
-        if max_rows is not None:ix=ix[:int(max_rows)]
+        if sampling not in ('head','spread'):
+            raise ValueError(f'Unsupported TRAIN memory sampling strategy: {sampling}')
+        if max_rows is not None:
+            count=min(int(max_rows),len(ix))
+            if count < 1:raise ValueError('Memory max_rows must be positive')
+            if sampling=='spread':
+                # Evenly distribute selected, unique TRAIN windows across
+                # the whole TRAIN split; never access validation/test here.
+                ix=ix[np.linspace(0,len(ix)-1,count,dtype=np.int64)]
+            else:
+                ix=ix[:count]
         full=ds.arr['x_full_norm'][ix]
         observed=np.asarray(ds.arr['history_observed'][ix],dtype=bool)
         artificial=np.asarray(ds.arr['artificial_missing'][ix],dtype=bool)

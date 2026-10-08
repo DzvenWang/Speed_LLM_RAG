@@ -54,7 +54,7 @@ def build_oof(model,memory,ds,cfg,meta,device,out):
                 v=bt['future_valid'][:,:,pick].bool()
                 gain=((b-y).abs()-(c-y).abs())/max(meta['std'],1e-6)
                 harm=((c-y).square()-(b-y).square()).clamp_min(0)/max(meta['std']**2,1e-6)
-                alpha=((y-b)/(c-b).where((c-b).abs()>1e-5,torch.ones_like(c-b))).clamp(0,1)
+                alpha=((y-b)/(c-b).where((c-b).abs()>1e-5,torch.ones_like(c-b))).clamp(0,fold_model.controller.max_alpha)
                 alpha=torch.where((c-b).abs()>1e-5,alpha,torch.zeros_like(alpha))
                 feats.append(f[v].cpu().numpy());util.append(gain[v].cpu().numpy());risk.append(harm[v].cpu().numpy());opt.append(alpha[v].cpu().numpy())
                 sampled+=int(v.sum())

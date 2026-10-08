@@ -1,8 +1,20 @@
+> **v1.3.1 Gradient Audit Hotfix (2026-10-08):** `scripts/diagnose_gradients.py`
+> initializes the Train-only retrieval key index with `m.refresh(mem)` before
+> the first forward pass and rebuilds it after each optimizer update. The audit
+> now reports `FARE_GRADIENT_INDEX_READY`, rejects nonfinite parameter gradients,
+> and fails if fewer than the requested steps run. Model architecture and training
+> hyperparameters are unchanged; **v1.3.0 checkpoints remain compatible**.
+> See `HOTFIX_1.3.1.md`.
+
+> **v1.1.0:** Full upgrade, not a small patch. Bounded, learned correction amplitude; candidate forecast supervision; calibration that matches actual inference; OOF alpha consistency; checkpoint-exact evaluation; validation alpha diagnostic. Read `RELEASE_1.1.0.md`. **Start a new run: v1.0.4 checkpoints are not compatible.**
+
+> **v1.0.4 Smoke Retrieval Coverage:** Smoke now spreads its memory across TRAIN history, preserving legal overlap exclusion. Epoch logs include TRAIN/Validation retrieval validity, candidate delta, and gate strength; zero valid TRAIN retrieval makes smoke fail. See `HOTFIX_1.0.4.md`.
+
 > **v1.0.3 Gadi Auto/Manual Evaluate:** Gadi formal training defaults to post-train s20/s40/s60/s90 testing. Prefer `scripts/submit_gadi.py train`, which queues independent `afterok` Evaluate jobs. Manual `scripts/submit_gadi.py evaluate` can target candidate/best/phase checkpoints. See `HOTFIX_1.0.3.md`.
 > **v1.0.2 joint smoke runner:** Single command checks both speed and flow (preflight, all five training phases, per-phase validation, checkpoints) and writes a combined pass/fail report. See `HOTFIX_1.0.2.md`.
 > **v1.0.1 stability hotfix:** Fixes zero-variance NaN gradients and masked loss accounting. See `HOTFIX_1.0.1.md`.
 
-# FARE v1.0.3 Full — Retrieval-Centric Incomplete-Sensing-Aware STLAformer
+# FARE v1.1.0 Full — Forecast-Calibrated Retrieval Integration
 
 **Research implementation** (initial engineering release, not a validated accuracy claim).
 
@@ -239,3 +251,64 @@ python FARE/tests/test_gadi_pbs_eval.py
 ```
 
 Tests use synthetic model weights/data and verify forward, gradients, no candidate fallback, inference label isolation, checkpoint round trip and stage-specific training + evaluation artifact writing. They are functional tests, **not** traffic prediction accuracy benchmarks.
+
+## v1.1.0 forecast-correction diagnostics and configuration
+
+The retrieval-supported candidate is a **proposal**, not an `alpha=1` forecast.
+The model learns a bounded `alpha` (default 0..0.60; prior 0.12) from
+retrieval confidence, uncertainty, predicted utility/risk, candidate delta,
+node and horizon features, then outputs `base + alpha * (candidate - base)`.
+The effective gate saved in predictions is exactly this alpha, **including**
+Validation multiplier calibration. No hardcoded network IDs or speed/flow
+smoke-derived alpha values are used.
+
+After FULL validation Evaluate (no `--smoke`):
+
+```powershell
+python -u FARE\scripts\evaluate.py --checkpoint "<run_dir>\candidate_best.pt" --split val --output "<run_dir>\val_diagnostic"
+python -u FARE\scripts\alpha_sweep.py --predictions "<run_dir>\val_diagnostic\val_full_predictions.npz"
+```
+
+This writes a scalar correction `alpha_sweep.csv` and `alpha_sweep.json`.
+This scan is **for validation diagnosis only**, does not overwrite a checkpoint,
+and cannot infer node-specific efficacy or extrapolate from a tiny smoke val.
+Validation `calibrate.py` fits a multiplier for the learned dynamic gate,
+which is capped to `control.max_alpha`.
+
+The original 1.0.4 `candidate_best.pt` cannot be loaded into 1.1.0 because
+controller weights and buffers changed. Existing results should be retained
+as an experimental baseline rather than overwriting old checkpoints.
+
+A custom full YAML may be submitted on Gadi with
+`python -u FARE/scripts/submit_gadi.py train --config /path/to/full.yaml ...`.
+Evaluate and OOF always rebuild architecture from the saved checkpoint config.
+Recommended complete tests: `python FARE/tests/test_fusion_v110.py`, plus all
+existing tests listed above.
+
+---
+
+## v1.2.0: target restoration-supervised Retrieval and corrected ablations
+
+Read [`RELEASE_1.2.0.md`](RELEASE_1.2.0.md) for rationale, safety conditions, commands, and experimental cautions. In short: the previous `state_only` and `no_risk` interventions were not strict. This release fixes them, adds leak-safe TRAIN-only hidden-state restoration ranking and a separately retrained `no_memory` FARE-STLA control. The method supports five networks and speed/flow without any hardcoded Net-06 node count.
+
+New CLI:
+
+- `python -u FARE/scripts/train.py --dataset TraffiDent_Net_06 --target flow --seed 10 --variant no_memory --smoke`
+- `python -u FARE/scripts/ablate.py --checkpoint /path/to/candidate_best.pt --split val` — per-mode CSV/JSON and prediction artifacts.
+- `python -u FARE/scripts/report_ranking.py --run-dir /path/to/run_dir` — candidate ranking proxy diagnostics.
+- `python -u FARE/scripts/submit_gadi.py train --dataset TraffiDent_Net_06 --targets speed flow --variant no_memory` — automatically schedules an independent formal Evaluate for the retrained no-memory comparator.
+
+After updating source, do not `--resume` old v1.1.0 optimizer/checkpoint states into the v1.2.0 training pipeline. Run new v1.2.0 training for fair comparative results.
+
+---
+
+## v1.3.0 changes (2026-10-08)
+
+See `RELEASE_1.3.0.md` for the full upgrade and executable commands. Highlights:
+
+- Normalized Ranking metrics on the same target-label-eligible support, with `ranking_target_valid_weight_mass`.
+- Actual Observability embedding use in retrieval Query, Recovery gate, and Reliability/Controller pathway.
+- `scripts/diagnose_gradients.py` and `scripts/diagnose_fixed_pool.py` for real-cache gradient and fixed-candidate-pool checks.
+- `configs/pilot.yaml`: 8k time-spread train records, 16k legal train-only memory entries, 5k validation; never pick alpha or modules on Test.
+- Existing five stages and Gadi Train→Auto Evaluate / Manual Evaluate are preserved.
+- **Not backward checkpoint-compatible with v1.2.0**; re-train v1.3.0.

@@ -60,6 +60,17 @@ def submit(pbs: str, name: str, env: dict, depends: str | None = None,
 
 
 def submit_train(args):
+    variant=getattr(args,'variant','full')
+    pilot=False
+    if args.config:
+        import yaml
+        with open(Path(args.config).expanduser(),'r',encoding='utf-8') as fh:
+            config_for_job=yaml.safe_load(fh)
+        pilot=config_for_job.get('experiment',{}).get('run_tag')=='pilot'
+    if pilot and args.finalize:
+        raise ValueError('Pilot cannot run OOF/finalize; first verify full formal protocol')
+    if variant == 'no_memory' and args.finalize:
+        raise ValueError('No-Memory baseline has no Retrieval utility for OOF --finalize')
     run_stamp = args.run_id or datetime.now().strftime('%Y%m%d_%H%M%S_%f')
     targets = tuple(dict.fromkeys(args.targets))
     if args.backbone_checkpoint and len(targets) != 1:
@@ -67,9 +78,13 @@ def submit_train(args):
     successes = 0
     for target in targets:
         run_dir = (PROJECT_ROOT / 'FARE_exps' / target / args.dataset /
-                   'formal' / f'{run_stamp}_seed{args.seed}').resolve()
+                   ('pilot' if pilot and variant=='full' else 'pilot_no_memory' if pilot else 'formal' if variant=='full' else 'formal_no_memory') / f'{run_stamp}_seed{args.seed}').resolve()
         env = dict(DATASET=args.dataset, TARGET=target, SEED=args.seed,
-                   RUN_DIR=str(run_dir), AUTO_EVALUATE='0')
+                   RUN_DIR=str(run_dir), AUTO_EVALUATE='0', FARE_VARIANT=variant)
+        if args.config:
+            config_path=Path(args.config).expanduser().resolve()
+            if not args.dry_run and not config_path.is_file():raise FileNotFoundError(config_path)
+            env['FARE_CONFIG']=str(config_path)
         if args.backbone_checkpoint:
             env['BACKBONE_CHECKPOINT'] = str(Path(args.backbone_checkpoint).resolve())
         jobs = {'dataset': args.dataset, 'target': target, 'seed': args.seed,
@@ -84,8 +99,8 @@ def submit_train(args):
                   f'job_id={train_id} run_dir={run_dir}', flush=True)
             if args.auto_evaluate:
                 ev_env = dict(RUN_DIR=str(run_dir), CHECKPOINT_KIND='candidate',
-                              EVAL_KIND='auto', SPLIT='test', SEVERITIES=':'.join(map(str, args.severities)),
-                              DATASET=args.dataset, TARGET=target)
+                              EVAL_KIND='auto', SPLIT=('val' if pilot else 'test'), SEVERITIES=':'.join(map(str, args.severities)),
+                              DATASET=args.dataset, TARGET=target, MODE=('no_memory' if variant=='no_memory' else 'full'))
                 ev_id = submit('evaluate.pbs', f'FAR{suffix}ev', ev_env,
                                depends=train_id, dry_run=args.dry_run,
                                ordinal=successes * 5 + 2)
@@ -170,7 +185,9 @@ def main():
     train.add_argument('--dataset', required=True, choices=DATASETS)
     train.add_argument('--targets', nargs='+', choices=['speed','flow'], default=['speed','flow'])
     train.add_argument('--seed', type=int, default=10)
+    train.add_argument('--variant',choices=['full','no_memory'],default='full')
     train.add_argument('--run-id', help='Optional shared run stamp')
+    train.add_argument('--config',help='Optional YAML shared by speed/flow; architecture stored in checkpoint')
     train.add_argument('--backbone-checkpoint')
     train.add_argument('--severities', nargs='+', type=int, choices=[20,40,60,90],
                        default=[20,40,60,90])
@@ -188,7 +205,7 @@ def main():
                     default=[20,40,60,90])
     ev.add_argument('--mode', default='full', choices=['full','retrieval_off','state_only',
                          'innovation_only','global_retrieval','no_mask_alignment',
-                         'random_memory','no_risk'])
+                         'random_memory','no_risk','no_utility','constant_alpha','no_memory','no_learned_reranker','no_observation_distance'])
     ev.add_argument('--dataset', choices=DATASETS)
     ev.add_argument('--target', choices=['speed','flow'])
     ev.add_argument('--batch-size', type=int)

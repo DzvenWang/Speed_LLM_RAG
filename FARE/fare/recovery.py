@@ -8,10 +8,13 @@ class RetrievedStateRecovery(nn.Module):
     def __init__(self,hidden=64):
         super().__init__()
         self.adapter=nn.Sequential(nn.Linear(5,hidden),nn.GELU(),nn.Linear(hidden,2))
-        self.gater=nn.Sequential(nn.Linear(5,hidden),nn.GELU(),nn.Linear(hidden,1))
+        self.gater=nn.Sequential(nn.Linear(6,hidden),nn.GELU(),nn.Linear(hidden,1))
+        self.obs_health=nn.Linear(hidden,1)
+        nn.init.normal_(self.obs_health.weight,std=0.003)
+        nn.init.zeros_(self.obs_health.bias)
         nn.init.zeros_(self.adapter[-1].weight);nn.init.zeros_(self.adapter[-1].bias)
         nn.init.constant_(self.gater[-1].bias,-1.5)
-    def forward(self,batch,ctx,retrieval,regions,memory):
+    def forward(self,batch,ctx,retrieval,regions,memory,observability=None):
         x=batch['x_obs'];m=batch['obs_mask'];b,h,n=x.shape;g=regions.g;k=retrieval['ids'].shape[-1]
         hist,valid=memory.fetch(retrieval['ids']) # [B,G,K,H,N]
         aid=regions.anchor_ids;ac=regions.a
@@ -46,7 +49,11 @@ class RetrievedStateRecovery(nn.Module):
         exist=retrieval['group_valid'][:,owner][:,None,:].expand(b,h,n)
         # Missing retrieval support must not be reported as zero uncertainty.
         uncertainty=torch.where(exist,uncertainty,torch.full_like(uncertainty,10.0))
-        inp=torch.stack([m.float(),coverage,target_missing,uncertainty.clamp(0,10),exist.float()],-1)
+        if observability is None:
+            obs_score=torch.zeros_like(x)
+        else:
+            obs_score=torch.tanh(self.obs_health(observability).squeeze(-1))[:,regions.owner][:,None,:].expand(b,h,n)
+        inp=torch.stack([m.float(),coverage,target_missing,uncertainty.clamp(0,10),exist.float(),obs_score],-1)
         gate=torch.sigmoid(self.gater(inp)).squeeze(-1)*(~m).float()*exist.float()
         supported=torch.where(m,x,gate*recovered)
         return {'recovered':recovered,'uncertainty':uncertainty,'gate':gate,'supported':supported,'valid':exist}

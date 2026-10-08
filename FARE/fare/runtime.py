@@ -15,7 +15,21 @@ def make_run_dir(cfg,tag='formal',stamp=None):
 def setup(cfg,ckpt_path=None,memory_path=None,device=None,smoke=False):
     device=torch.device(device or ('cuda:0' if torch.cuda.is_available() else 'cpu'))
     cache=cache_path(cfg,'formal')
-    train=SupportSplit(cache,'train',cfg['experiment'].get('max_train_rows'))
+    train_strategy=cfg['experiment'].get('train_sample_strategy','head')
+    limit=cfg['experiment'].get('max_train_rows')
+    if train_strategy=='spread' and limit is not None:
+        from torch.utils.data import Subset
+        import numpy as np
+        base_train=SupportSplit(cache,'train')
+        count=min(int(limit),len(base_train))
+        if count<1:raise ValueError('Pilot train max_train_rows must be positive')
+        idx=np.linspace(0,len(base_train)-1,count,dtype=np.int64)
+        train=Subset(base_train,idx.tolist())
+        train.num_nodes=base_train.num_nodes
+    elif train_strategy=='head':
+        train=SupportSplit(cache,'train',limit)
+    else:
+        raise ValueError('train_sample_strategy must be head or spread')
     val=SupportSplit(cache,'val',cfg['experiment'].get('max_val_rows'))
     if train.num_nodes!=val.num_nodes:raise RuntimeError('train / val node count mismatch')
     graph=graph_from_cache(cache)
@@ -34,8 +48,12 @@ def setup(cfg,ckpt_path=None,memory_path=None,device=None,smoke=False):
             for field,value in [('dataset',cfg['experiment']['dataset']),('target',cfg['experiment']['target'])]:
                 if stored.get(field) and stored[field]!=value: raise RuntimeError(f'Memory {field} mismatch: {stored[field]} != {value}')
     else:
-        memory=TrainMemory.from_cache(cache,cfg['memory'].get('max_rows'),device=device)
+        memory=TrainMemory.from_cache(
+            cache,(1 if cfg['experiment'].get('training_mode')=='no_memory' else cfg['memory'].get('max_rows')),
+            device=device,sampling=cfg['memory'].get('sampling','head')
+        )
     if memory.x.shape[-1]!=train.num_nodes:raise RuntimeError('Memory / network mismatch')
-    populate_latents(memory,model,dim=cfg['innovation']['memory_dim'])
+    if cfg['experiment'].get('training_mode')!='no_memory':
+        populate_latents(memory,model,dim=cfg['innovation']['memory_dim'])
     meta={'dataset':cfg['experiment']['dataset'],'target':cfg['experiment']['target'],'mean':float(ck['mean']),'std':float(ck['std']),'backbone_checkpoint':str(checkpoint),'backbone_sha256':sha256(checkpoint),'cache':str(cache),'num_nodes':train.num_nodes}
     return model,memory,train,val,device,meta
