@@ -7,11 +7,7 @@
 #PBS -N FARE_eval
 set -euo pipefail
 cd "${SPEED_LLM_RAG_ROOT:-$PBS_O_WORKDIR}"
-source ~/.bashrc || true
-if ! type conda &>/dev/null; then
-    source "$HOME/miniconda3/etc/profile.d/conda.sh" 2>/dev/null || true
-fi
-conda activate TFP
+source FARE/pbs/_activate_tfp.sh
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${NCPUS:-12}"
 

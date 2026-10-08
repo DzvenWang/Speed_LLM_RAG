@@ -1,5 +1,5 @@
 # Pilot: 8k time-spread train rows, ALL validation, legal 16k train-memory; no test for tuning.
-version: 1.3.0
+version: 1.3.2
 experiment:
   dataset: TraffiDent_Net_06
   target: speed

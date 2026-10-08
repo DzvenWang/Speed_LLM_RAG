@@ -1,6 +1,6 @@
-"""Gadi queue orchestration tested using a fake qsub command.
+"""Gadi qsub orchestration: same-allocation post-train Evaluate, no held job.
 
-Verifies job dependencies; does not claim real PBS/Gadi execution.
+Only fake qsub is used; this does NOT claim execution on Gadi hardware.
 """
 import json
 import os
@@ -41,31 +41,71 @@ def run_test():
                    FARE_FAKE_QSUB_COUNTER=str(root/'counter'),
                    FARE_FAKE_QSUB_LOG=str(log))
         runner = target/'scripts'/'submit_gadi.py'
-        result = subprocess.run([sys.executable,str(runner),'train',
-                                 '--dataset','TraffiDent_Net_06',
-                                 '--targets','speed','flow','--seed','10'],
-                                capture_output=True,text=True,env=env)
+        run = lambda *args: subprocess.run([sys.executable,str(runner),*args],
+                          capture_output=True,text=True,env=env)
+        result = run('train','--dataset','TraffiDent_Net_06',
+                     '--targets','speed','flow','--seed','10')
         assert result.returncode==0, (result.stdout,result.stderr)
         records = [json.loads(x) for x in log.read_text().splitlines()]
-        assert len(records)==4,records
+        assert len(records)==2,records
         for i,target_name in enumerate(('speed','flow')):
-            tr,ev=records[i*2:i*2+2]
+            tr=records[i]
             assert tr[-1].endswith('/train_formal.pbs')
-            assert ev[-1].endswith('/evaluate.pbs')
-            assert '-W' in ev and ev[ev.index('-W')+1]==f'depend=afterok:{10001+i*2}.gadi-pbs'
-            assert 'AUTO_EVALUATE=0' in tr[tr.index('-v')+1]
-            assert 'CHECKPOINT_KIND=candidate' in ev[ev.index('-v')+1]
-            assert f'TARGET={target_name}' in ev[ev.index('-v')+1]
+            assert '-W' not in tr
+            vars=tr[tr.index('-v')+1]
+            assert f'TARGET={target_name}' in vars
+            assert 'AUTO_EVALUATE=1' in vars
+            assert 'EVAL_SPLITS=test' in vars
+            assert 'SEVERITIES=20:40:60:90' in vars
         assert 'FARE_GADI_SUBMISSION_PASS targets=speed,flow' in result.stdout
-        run_dirs=list((root/'FARE_exps').glob('*/TraffiDent_Net_06/formal/*'))
-        assert len(run_dirs)==2
-        assert all((x/'gadi_jobs.json').exists() for x in run_dirs)
-        # Existing best.pt may be evaluated manually, without modifying auto results.
-        checkpoint=run_dirs[0]/'best.pt'; checkpoint.write_bytes(b'fixture checkpoint')
+        assert result.stdout.count('FARE_GADI_IN_JOB_EVALUATE_CONFIGURED')==2
+        dirs=list((root/'FARE_exps').glob('*/TraffiDent_Net_06/formal/*'))
+        assert len(dirs)==2
+        for d in dirs:
+            job=json.loads((d/'gadi_jobs.json').read_text())
+            assert job['evaluation_in_train_allocation']
+            assert job['eval_splits']==['test']
+            assert set(job['jobs'])=={'train'}
+        # Pilot: no second PBS job, default Validation only.
         before=len(records)
-        result=subprocess.run([sys.executable,str(runner),'evaluate',
-                              '--checkpoint',str(checkpoint),'--split','test',
-                              '--severities','20','40'],env=env,capture_output=True,text=True)
+        pilot_cfg=root/'pilot.yaml'
+        pilot_cfg.write_text('experiment:\n  run_tag: pilot\n')
+        result=run('train','--dataset','TraffiDent_Net_06',
+                   '--targets','speed','flow','--config',str(pilot_cfg))
+        assert result.returncode==0,(result.stdout,result.stderr)
+        records=[json.loads(x) for x in log.read_text().splitlines()]
+        assert len(records)==before+2,records
+        assert all('EVAL_SPLITS=val' in rec[rec.index('-v')+1] for rec in records[-2:])
+        # Explicit Pilot Test: still only one qsub; passes split list + severities.
+        before=len(records)
+        result=run('train','--dataset','TraffiDent_Net_06','--targets','speed',
+                   '--config',str(pilot_cfg),'--eval-splits','val','test',
+                   '--severities','20','60')
+        assert result.returncode==0,(result.stdout,result.stderr)
+        records=[json.loads(x) for x in log.read_text().splitlines()]
+        assert len(records)==before+1
+        pvars=records[-1][records[-1].index('-v')+1]
+        assert 'EVAL_SPLITS=val:test' in pvars and 'SEVERITIES=20:60' in pvars
+        assert 'FARE_PILOT_TEST_EXPLORATORY' in result.stdout
+        assert '-W' not in records[-1]
+        # Disable auto evaluation: still only one Train qsub, no Eval.
+        before=len(records)
+        result=run('train','--dataset','TraffiDent_Net_06','--targets','flow',
+                   '--no-auto-evaluate')
+        assert result.returncode==0,(result.stdout,result.stderr)
+        records=[json.loads(x) for x in log.read_text().splitlines()]
+        assert len(records)==before+1
+        assert 'AUTO_EVALUATE=0' in records[-1][records[-1].index('-v')+1]
+        # Contradictory flags must fail without creating a job.
+        result=run('train','--dataset','TraffiDent_Net_06','--targets','flow',
+                   '--no-auto-evaluate','--eval-splits','test')
+        assert result.returncode!=0
+        assert len(log.read_text().splitlines())==len(records)
+        # Manual Evaluate: still works as one independent qsub, no Hold.
+        checkpoint=dirs[0]/'best.pt';checkpoint.write_bytes(b'fixture checkpoint')
+        before=len(records)
+        result=run('evaluate','--checkpoint',str(checkpoint),'--split','test',
+                   '--severities','20','40')
         assert result.returncode==0,(result.stdout,result.stderr)
         records=[json.loads(x) for x in log.read_text().splitlines()]
         assert len(records)==before+1
@@ -73,27 +113,20 @@ def run_test():
         assert '-W' not in e
         evars=e[e.index('-v')+1]
         assert 'EVAL_KIND=manual' in evars and 'SEVERITIES=20:40' in evars
-        # Optional finalized flow: training -> OOF -> calibration -> final test
+        result=run('evaluate','--checkpoint',str(root/'missing.pt'))
+        assert result.returncode!=0
+        # Explicit --finalize still uses a separately scheduled OOF/calibration
+        # pipeline. Normal Train->Candidate Evaluate does not.
         log.write_text('')
-        result=subprocess.run([sys.executable,str(runner),'train',
-                               '--dataset','TraffiDent_Net_01',
-                               '--targets','speed','--finalize'],
-                              env=env,capture_output=True,text=True)
+        result=run('train','--dataset','TraffiDent_Net_01','--targets','speed','--finalize')
         assert result.returncode==0,(result.stdout,result.stderr)
         records=[json.loads(x) for x in log.read_text().splitlines()]
         assert [Path(x[-1]).name for x in records]==[
-            'train_formal.pbs','evaluate.pbs','oof_controller.pbs',
-            'calibrate.pbs','evaluate.pbs'], records
-        assert records[2][records[2].index('-W')+1]=='depend=afterok:10006.gadi-pbs'
-        assert records[3][records[3].index('-W')+1]=='depend=afterok:10008.gadi-pbs'
-        assert records[4][records[4].index('-W')+1]=='depend=afterok:10009.gadi-pbs'
-        # Refuse to queue manual evaluations without a real checkpoint.
-        result=subprocess.run([sys.executable,str(runner),'evaluate',
-                               '--checkpoint',str(root/'missing.pt')],
-                              env=env,capture_output=True,text=True)
-        assert result.returncode!=0
-        print('FARE_GADI_SUBMIT_TEST_PASS: both-target afterok, manual, final chain, missing checkpoint')
+            'train_formal.pbs','oof_controller.pbs','calibrate.pbs','evaluate.pbs'],records
+        assert '-W' not in records[0]
+        assert records[1][records[1].index('-W')+1]=='depend=afterok:10008.gadi-pbs'
+        assert records[2][records[2].index('-W')+1]=='depend=afterok:10009.gadi-pbs'
+        assert records[3][records[3].index('-W')+1]=='depend=afterok:10010.gadi-pbs'
+        print('FARE_GADI_SUBMIT_TEST_PASS: one-job per target; pilot val/test; independent manual; optional finalize chain')
 
-
-if __name__=='__main__':
-    run_test()
+if __name__=='__main__':run_test()

@@ -1,3 +1,13 @@
+> **v1.3.2 Same-Allocation Gadi Pilot & Formal Evaluate (2026-10-08):**
+> A normal `submit_gadi.py train` now submits **one PBS job per target**.
+> The selected `candidate_best.pt` is evaluated immediately after training,
+> using the **same GPU allocation**, without a separate held Evaluate job.
+> Pilot defaults to Validation; Formal defaults to s20/s40/s60/s90 Test.
+> Explicit `--eval-splits val test` enables exploratory Pilot Test **after**
+> Validation checkpoint selection. See `RELEASE_1.3.2.md`.
+> Manual `submit_gadi.py evaluate` remains available. The explicitly requested
+> `--finalize` OOF/calibration chain still creates additional dependent jobs.
+>
 > **v1.3.1 Gradient Audit Hotfix (2026-10-08):** `scripts/diagnose_gradients.py`
 > initializes the Train-only retrieval key index with `m.refresh(mem)` before
 > the first forward pass and rebuilds it after each optimizer update. The audit
@@ -10,7 +20,7 @@
 
 > **v1.0.4 Smoke Retrieval Coverage:** Smoke now spreads its memory across TRAIN history, preserving legal overlap exclusion. Epoch logs include TRAIN/Validation retrieval validity, candidate delta, and gate strength; zero valid TRAIN retrieval makes smoke fail. See `HOTFIX_1.0.4.md`.
 
-> **v1.0.3 Gadi Auto/Manual Evaluate:** Gadi formal training defaults to post-train s20/s40/s60/s90 testing. Prefer `scripts/submit_gadi.py train`, which queues independent `afterok` Evaluate jobs. Manual `scripts/submit_gadi.py evaluate` can target candidate/best/phase checkpoints. See `HOTFIX_1.0.3.md`.
+> **v1.0.3 Gadi Auto/Manual Evaluate:** Gadi formal training defaults to post-train s20/s40/s60/s90 testing. Historically `scripts/submit_gadi.py train` queued independent `afterok` Evaluate jobs; v1.3.2 changes the normal workflow to same-allocation evaluation. Manual `scripts/submit_gadi.py evaluate` can target candidate/best/phase checkpoints. See `HOTFIX_1.0.3.md`.
 > **v1.0.2 joint smoke runner:** Single command checks both speed and flow (preflight, all five training phases, per-phase validation, checkpoints) and writes a combined pass/fail report. See `HOTFIX_1.0.2.md`.
 > **v1.0.1 stability hotfix:** Fixes zero-variance NaN gradients and masked loss accounting. See `HOTFIX_1.0.1.md`.
 
@@ -138,7 +148,7 @@ python -u FARE\scripts\train.py --dataset TraffiDent_Net_06 --target speed --run
 
 A `resume` restores model and optimizer state and resumes at the saved phase/epoch. If the phase is already in `phase_summary.json`, it resumes with the next phase after loading its best phase weights.
 
-## Gadi: default post-training Evaluate and manual Evaluate (v1.0.3)
+## Gadi: one PBS allocation for Training + Candidate Evaluate (v1.3.2)
 
 Run the **submission commands on the Gadi login node**, from the repository root:
 
@@ -147,9 +157,8 @@ cd /scratch/mh20/zw1165/Speed_LLM_RAG
 export SPEED_LLM_RAG_ROOT="$PWD"
 conda activate TFP
 
-# Recommended: submit both independent target training runs.
-# Automatically schedules two separate s20/s40/s60/s90 Evaluate PBS jobs,
-# each with `afterok:<its-own-train-job-id>`.
+# Submit two Train PBS jobs total (Speed/Flow).
+# Each job evaluates candidate_best.pt in the SAME GPU allocation after Train.
 python -u FARE/scripts/submit_gadi.py train \
   --dataset TraffiDent_Net_06 --targets speed flow --seed 10
 ```
@@ -161,8 +170,8 @@ This checkpoint is **not** the final OOF-calibrated `best.pt`.
 
 For the **entire final FARE pipeline**, including OOF-trained controller and
 Validation calibration, use `--finalize`. This submits a second dependent
-chain `train -> OOF -> calibration -> best.pt Evaluate`; candidate evaluation
-still runs after train, in parallel with the OOF branch:
+chain `train+candidate-Evaluate -> OOF -> calibration -> best.pt Evaluate`.
+**This explicitly requested finalization is not a single-job workflow.**
 
 ```bash
 python -u FARE/scripts/submit_gadi.py train \
@@ -173,9 +182,9 @@ The final calibrated test outputs `evaluation/s20/` through `evaluation/s90/`.
 This pipeline is computationally expensive and its OOF phase may require
 additional resources or adjusted walltime based on real-run profiling.
 
-You can also use raw qsub commands. **Direct training qsub enables
-same-allocation post-training candidate Evaluate by default**, though this
-may hit the shared 48h training walltime; prefer the submission helper above:
+You can also use raw qsub commands. Direct training qsub enables
+same-allocation post-training candidate Evaluate by default. The same 48h
+walltime covers **both Train and Evaluate**:
 
 ```bash
 qsub -N FARE06sp -v DATASET=TraffiDent_Net_06,TARGET=speed,SEED=10 FARE/pbs/train_formal.pbs
@@ -296,7 +305,7 @@ New CLI:
 - `python -u FARE/scripts/train.py --dataset TraffiDent_Net_06 --target flow --seed 10 --variant no_memory --smoke`
 - `python -u FARE/scripts/ablate.py --checkpoint /path/to/candidate_best.pt --split val` — per-mode CSV/JSON and prediction artifacts.
 - `python -u FARE/scripts/report_ranking.py --run-dir /path/to/run_dir` — candidate ranking proxy diagnostics.
-- `python -u FARE/scripts/submit_gadi.py train --dataset TraffiDent_Net_06 --targets speed flow --variant no_memory` — automatically schedules an independent formal Evaluate for the retrained no-memory comparator.
+- `python -u FARE/scripts/submit_gadi.py train --dataset TraffiDent_Net_06 --targets speed flow --variant no_memory` — runs candidate Evaluate within the same Train PBS allocation for the retrained no-memory comparator.
 
 After updating source, do not `--resume` old v1.1.0 optimizer/checkpoint states into the v1.2.0 training pipeline. Run new v1.2.0 training for fair comparative results.
 

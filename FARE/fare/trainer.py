@@ -16,7 +16,7 @@ def seed_all(seed):
 
 def save_ckpt(path,model,opt,cfg,meta,epoch,phase,validation,memory_path=None):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
-    state={'version':'1.3.1','model':'FARE','phase':phase,'epoch':epoch,'state_dict':model.state_dict(),'optimizer':opt.state_dict() if opt is not None else None,'config':cfg,'metadata':meta,'validation':validation,'memory_path':str(memory_path) if memory_path else None,'rng':{'torch':torch.get_rng_state(),'numpy':np.random.get_state()}}
+    state={'version':'1.3.2','model':'FARE','phase':phase,'epoch':epoch,'state_dict':model.state_dict(),'optimizer':opt.state_dict() if opt is not None else None,'config':cfg,'metadata':meta,'validation':validation,'memory_path':str(memory_path) if memory_path else None,'rng':{'torch':torch.get_rng_state(),'numpy':np.random.get_state()}}
     torch.save(state,path)
 
 def load_ckpt(path,model=None,device='cpu',restore_rng=False):

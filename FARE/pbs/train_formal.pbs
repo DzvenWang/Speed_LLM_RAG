@@ -7,20 +7,17 @@
 #PBS -N FARE_train
 set -euo pipefail
 cd "${SPEED_LLM_RAG_ROOT:-$PBS_O_WORKDIR}"
-source ~/.bashrc || true
-if ! type conda &>/dev/null; then
-    source "$HOME/miniconda3/etc/profile.d/conda.sh" 2>/dev/null || true
-fi
-conda activate TFP
+source FARE/pbs/_activate_tfp.sh
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${NCPUS:-12}"
 DATASET="${DATASET:-TraffiDent_Net_06}"
 TARGET="${TARGET:-speed}"
 SEED="${SEED:-10}"
-# Direct qsub: auto-evaluate candidate_best.pt inside this job by default.
-# Recommended login-node submit_gadi.py: sets this to 0 and queues an
-# independent Evaluate PBS job with afterok dependency (avoids walltime loss).
+# Evaluation runs in THIS GPU allocation, after training has finished.
+# No held Evaluate PBS job is submitted by submit_gadi.py.
 AUTO_EVALUATE="${AUTO_EVALUATE:-1}"
+EVAL_SPLITS="${EVAL_SPLITS:-auto}"
+SEVERITIES="${SEVERITIES:-20:40:60:90}"
 mkdir -p "FARE_logs/${TARGET}/${DATASET}"
 STAMP=$(date '+%Y%m%d_%H%M%S')
 JOB="${PBS_JOBID:-manual}"
@@ -29,8 +26,18 @@ cmd=(python -u FARE/scripts/train.py --dataset "$DATASET" --target "$TARGET" --s
 if [[ -n "${RUN_DIR:-}" ]]; then cmd+=(--run-dir "$RUN_DIR"); fi
 if [[ -n "${FARE_CONFIG:-}" ]]; then cmd+=(--config "$FARE_CONFIG"); fi
 if [[ -n "${BACKBONE_CHECKPOINT:-}" ]]; then cmd+=(--backbone-checkpoint "$BACKBONE_CHECKPOINT"); fi
-if [[ "$AUTO_EVALUATE" == "1" ]]; then cmd+=(--auto-evaluate); fi
-printf 'FARE_GADI_TRAIN_START dataset=%s target=%s seed=%s auto_evaluate=%s run_dir=%s\n' \
-    "$DATASET" "$TARGET" "$SEED" "$AUTO_EVALUATE" "${RUN_DIR:-auto}" | tee -a "$LOG"
+if [[ "$AUTO_EVALUATE" == "1" ]]; then
+    cmd+=(--auto-evaluate)
+    if [[ "$EVAL_SPLITS" != "auto" ]]; then
+        IFS=':' read -r -a eval_split_array <<< "$EVAL_SPLITS"
+        if (( ${#eval_split_array[@]} == 0 )); then echo 'ERROR: empty EVAL_SPLITS' >&2; exit 2; fi
+        cmd+=(--eval-splits "${eval_split_array[@]}")
+    fi
+    IFS=':' read -r -a severity_array <<< "$SEVERITIES"
+    if (( ${#severity_array[@]} == 0 )); then echo 'ERROR: empty SEVERITIES' >&2; exit 2; fi
+    cmd+=(--eval-severities "${severity_array[@]}")
+fi
+printf 'FARE_GADI_TRAIN_START dataset=%s target=%s seed=%s auto_evaluate=%s eval_splits=%s severities=%s run_dir=%s\n' \
+    "$DATASET" "$TARGET" "$SEED" "$AUTO_EVALUATE" "$EVAL_SPLITS" "$SEVERITIES" "${RUN_DIR:-auto}" | tee -a "$LOG"
 "${cmd[@]}" "$@" 2>&1 | awk '{print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush()}' | tee -a "$LOG"
-printf 'FARE_GADI_TRAIN_DONE dataset=%s target=%s\n' "$DATASET" "$TARGET" | tee -a "$LOG"
+printf 'FARE_GADI_JOB_DONE dataset=%s target=%s evaluated=%s\n' "$DATASET" "$TARGET" "$AUTO_EVALUATE" | tee -a "$LOG"

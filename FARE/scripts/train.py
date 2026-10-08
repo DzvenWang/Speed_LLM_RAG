@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-import argparse,subprocess,sys
+import argparse,gc,json,subprocess,sys
 from pathlib import Path
 import _bootstrap
+import torch
 from fare.config import load_config,config_from_checkpoint,json_write
 from fare.runtime import setup,make_run_dir
 from fare.trainer import FARETrainer,seed_all
@@ -12,7 +13,16 @@ def main():
     a.add_argument('--seed',type=int,default=None);a.add_argument('--config');a.add_argument('--backbone-checkpoint');a.add_argument('--memory')
     a.add_argument('--variant',choices=['full','no_memory'],default='full');a.add_argument('--smoke',action='store_true');a.add_argument('--run-dir');a.add_argument('--resume');a.add_argument('--phases',nargs='+',default=None)
     a.add_argument('--auto-evaluate',action='store_true');a.add_argument('--batch-size',type=int);a.add_argument('--num-workers',type=int)
+    a.add_argument('--eval-splits',nargs='+',choices=['val','test'],default=None,
+                   help='Post-train evaluation split(s). Default: pilot=val, formal=test.')
+    a.add_argument('--eval-severities',nargs='+',type=int,choices=[20,40,60,90],default=[20,40,60,90])
     args=a.parse_args()
+    if args.eval_splits and not args.auto_evaluate:
+        raise ValueError('--eval-splits requires --auto-evaluate')
+    if args.eval_splits and len(set(args.eval_splits))!=len(args.eval_splits):
+        raise ValueError('Duplicate --eval-splits are not permitted')
+    if args.eval_severities and len(set(args.eval_severities))!=len(args.eval_severities):
+        raise ValueError('Duplicate --eval-severities are not permitted')
     if args.resume:
         from fare.trainer import load_ckpt
         prior=load_ckpt(args.resume)
@@ -60,15 +70,44 @@ def main():
     best=trainer.train(args.phases,args.smoke,args.resume)
     print(f'FARE_TRAIN_PASS run_dir={run_dir} candidate_checkpoint={best}',flush=True)
     if args.auto_evaluate and not args.smoke:
-        # Direct qsub fallback. For Gadi, prefer submit_gadi.py so Evaluate
-        # runs in its own afterok PBS job rather than consuming train walltime.
-        print(f'FARE_AUTO_EVALUATE_START checkpoint={best}',flush=True)
-        split='val' if cfg['experiment'].get('run_tag')=='pilot' else 'test'
-        cmd=[sys.executable,str(Path(__file__).with_name('evaluate.py')),
-             '--checkpoint',str(best),'--dataset',args.dataset,
-             '--target',args.target,'--memory',str(memory_path),
-             '--split',split,'--output',str(run_dir/'evaluation_candidate')]
-        if split=='test':cmd+=['--severities','20','40','60','90']
-        subprocess.check_call(cmd)
+        # The next subprocess remains in the CURRENT PBS allocation / GPU.
+        # Free the parent's training CUDA buffers before starting evaluation.
+        splits=args.eval_splits or (['val'] if cfg['experiment'].get('run_tag')=='pilot' else ['test'])
+        if cfg['experiment'].get('run_tag')=='pilot' and 'test' in splits:
+            print('FARE_PILOT_TEST_EXPLORATORY: Validation selects the checkpoint; '
+                  'Pilot Test is not an unbiased final comparison if used for tuning.',flush=True)
+        del trainer,model,memory,train,val
+        gc.collect()
+        if torch.cuda.is_available():torch.cuda.empty_cache()
+        report_path=run_dir/'posttrain_evaluation.json'
+        results={'checkpoint':str(best),'run_tag':cfg['experiment'].get('run_tag','formal'),
+                 'same_allocation':True,'requested_splits':splits,'completed_splits':[],
+                 'severities':args.eval_severities,'status':'running',
+                 'pilot_test_exploratory':bool(cfg['experiment'].get('run_tag')=='pilot' and 'test' in splits)}
+        json_write(report_path,results)
+        print(f'FARE_IN_JOB_EVALUATION_START checkpoint={best} splits={":".join(splits)} '
+              f'severities={":".join(map(str,args.eval_severities))} '
+              f'pbs_job_id={__import__("os").environ.get("PBS_JOBID","local")}',flush=True)
+        try:
+            for split in splits:
+                cmd=[sys.executable,'-u',str(Path(__file__).with_name('evaluate.py')),
+                     '--checkpoint',str(best),'--dataset',args.dataset,
+                     '--target',args.target,'--memory',str(memory_path),
+                     '--split',split,'--output',str(run_dir/'evaluation_candidate')]
+                if split=='test':cmd+=['--severities',*map(str,args.eval_severities)]
+                print(f'FARE_IN_JOB_EVALUATION_SPLIT_START split={split}',flush=True)
+                subprocess.run(cmd,check=True)
+                results['completed_splits'].append(split)
+                json_write(report_path,results)
+                print(f'FARE_IN_JOB_EVALUATION_SPLIT_PASS split={split}',flush=True)
+        except Exception as exc:
+            results['status']='failed'
+            results['error']=str(exc)
+            json_write(report_path,results)
+            print(f'FARE_IN_JOB_EVALUATION_FAIL error={exc}',flush=True)
+            raise
+        results['status']='pass'
+        json_write(report_path,results)
+        print(f'FARE_IN_JOB_EVALUATION_PASS completed={":".join(results["completed_splits"])}',flush=True)
         print(f'FARE_AUTO_EVALUATE_PASS checkpoint={best}',flush=True)
 if __name__=='__main__':main()
