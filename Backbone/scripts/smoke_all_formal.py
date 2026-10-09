@@ -36,6 +36,9 @@ def run_streamed(cmd, *, cwd, env):
 def main():
     ap = argparse.ArgumentParser(description='All-model real-Formal smoke: bounded training + s20/s40/s60/s90 evaluation.')
     ap.add_argument('--seed', type=int, default=10)
+    ap.add_argument('--train-data-mode',choices=('incomplete','complete'),default='incomplete')
+    ap.add_argument('--models',nargs='+',choices=ORDER,default=list(ORDER))
+    ap.add_argument('--targets',nargs='+',choices=TARGETS,default=list(TARGETS))
     ap.add_argument('--train-batches', type=int, default=2)
     ap.add_argument('--val-batches', type=int, default=1)
     ap.add_argument('--test-batches', type=int, default=1)
@@ -50,13 +53,13 @@ def main():
     log_stamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     log_dir = ROOT.parent / 'Backbone_logs' / 'smoke_all_formal'
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / f'BackboneSmokeAllFormal.{log_stamp}.log'
+    log_path = log_dir / f'BackboneSmokeAllFormal.{a.train_data_mode}.{log_stamp}.log'
     log_fp = log_path.open('w', encoding='utf-8', buffering=1)
     original_stdout, original_stderr = sys.stdout, sys.stderr
     sys.stdout = Tee(original_stdout, log_fp)
     sys.stderr = Tee(original_stderr, log_fp)
 
-    jobs = [(m,t) for m in ORDER for t in TARGETS]
+    jobs = [(m,t) for m in a.models for t in a.targets]
     failures = []
     t0 = time.time()
     print(f'ALL_FORMAL_SMOKE_LOG path={log_path}', flush=True)
@@ -69,7 +72,7 @@ def main():
         env['PYTHONUNBUFFERED'] = '1'
         env.setdefault('SPEED_LLM_RAG_ROOT', str(ROOT.parent))
 
-        train_cmd = [sys.executable,'-u',str(ROOT/'scripts/run_model_formal.py'),'--model',model,'--target',target,'--seed',str(a.seed),'--run-stamp',stamp,'--smoke','--smoke-train-batches',str(a.train_batches),'--smoke-val-batches',str(a.val_batches)]
+        train_cmd = [sys.executable,'-u',str(ROOT/'scripts/run_model_formal.py'),'--train-data-mode',a.train_data_mode,'--model',model,'--target',target,'--seed',str(a.seed),'--run-stamp',stamp,'--smoke','--smoke-train-batches',str(a.train_batches),'--smoke-val-batches',str(a.val_batches)]
 
         rc = run_streamed(train_cmd, cwd=ROOT, env=env)
         if rc != 0:
@@ -82,7 +85,8 @@ def main():
         if a.training_only:
             continue
 
-        checkpoint = ROOT.parent/'Backbone_exps'/target/model/'TraffiDent_Net_06'/'formal_smoke'/f'{stamp}_seed{a.seed}'/'smoke.pt'
+        stage_dir='formal_smoke' if a.train_data_mode=='incomplete' else 'formal_complete_smoke'
+        checkpoint = ROOT.parent/'Backbone_exps'/target/model/'TraffiDent_Net_06'/stage_dir/f'{stamp}_seed{a.seed}'/'smoke.pt'
         if not checkpoint.exists():
             failures.append((model,target,'checkpoint_missing',2))
             print(f'[{i:02d}/{len(jobs)}] FAIL checkpoint missing: {checkpoint}', flush=True)

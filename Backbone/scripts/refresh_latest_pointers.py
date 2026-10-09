@@ -11,6 +11,7 @@ REPO = ROOT.parent
 sys.path.insert(0, str(ROOT))
 
 from backbone.path_pointers import portable_project_path
+from backbone.training_modes import run_stage_directory
 from backbone.utils import load_yaml
 
 MODELS = ('STAEformer','HimNet','BigST','STDN','PatchSTG','STLAformer')
@@ -29,6 +30,7 @@ def main() -> None:
     ap.add_argument('--models',nargs='*',choices=MODELS,default=list(MODELS))
     ap.add_argument('--targets',nargs='*',choices=TARGETS,default=list(TARGETS))
     ap.add_argument('--seed',type=int,default=10)
+    ap.add_argument('--train-data-mode',choices=('incomplete','complete'),default='incomplete')
     args=ap.parse_args()
 
     project_root=Path(os.environ.get('SPEED_LLM_RAG_ROOT',REPO)).expanduser().resolve()
@@ -36,7 +38,7 @@ def main() -> None:
         os.environ['TRAFFIDENT_TARGET']=target
         cfg=load_yaml(ROOT/'configs/backbone.yaml')
         for model in args.models:
-            formal=Path(cfg['project']['exp_root'])/model/cfg['experiment']['subgraph']/'formal'
+            formal=Path(cfg['project']['exp_root'])/model/cfg['experiment']['subgraph']/run_stage_directory('formal',args.train_data_mode)
             ck=newest_checkpoint(formal,args.seed)
             if ck is None:
                 print(f'[SKIP] {target} / {model}: best.pt not found under {formal}',flush=True)
@@ -47,7 +49,7 @@ def main() -> None:
             formal.mkdir(parents=True,exist_ok=True)
             (formal/'LATEST_RUN.txt').write_text(run_ptr+'\n',encoding='utf-8')
             (formal/'LATEST_CHECKPOINT.txt').write_text(ck_ptr+'\n',encoding='utf-8')
-            print(f'[OK] {target} / {model}',flush=True)
+            print(f'[OK] {target} / {model} / {args.train_data_mode}',flush=True)
             print(f'     RUN  = {run_ptr}',flush=True)
             print(f'     CKPT = {ck_ptr}',flush=True)
 

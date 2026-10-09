@@ -14,10 +14,12 @@ import sys
 import json
 from contextlib import nullcontext
 import pandas as pd
+import torch
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = Path(os.environ.get('SPEED_LLM_RAG_ROOT', ROOT.parent)).expanduser().resolve()
 sys.path.insert(0, str(ROOT))
+from backbone.training_modes import mode_from_checkpoint, evaluation_mode_subdir
 from backbone.evaluation_reporting import severity_table_lines, scenario_table_lines
 from backbone.utils import load_yaml
 _TS_RE = re.compile(r'^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]')
@@ -69,10 +71,16 @@ def main() -> None:
     checkpoint = Path(args.checkpoint).expanduser()
     if not checkpoint.is_absolute():
         checkpoint = (REPO_ROOT / checkpoint).resolve()
+    if not checkpoint.is_file(): raise FileNotFoundError(f'Checkpoint not found: {checkpoint}')
+    ckmeta=torch.load(checkpoint,map_location='cpu',weights_only=False)
+    train_data_mode=mode_from_checkpoint(ckmeta)
+    del ckmeta
+    if args.log_path is None:
+        log_path = log_root / f'{args.model}.checkpoint_eval.{train_data_mode}.all.seed{seed_tag}.{stamp}.live.log'
     checkpoint_run_tag = checkpoint.parent.name or 'checkpoint'
     result_root = (
         Path(cfg['project']['exp_root']) / args.model / cfg['experiment']['subgraph']
-        / 'checkpoint_evaluation' / checkpoint_run_tag / 'combined'
+        / 'checkpoint_evaluation' / Path(*evaluation_mode_subdir(train_data_mode)) / checkpoint_run_tag / 'combined'
         / f'{stamp}_seed{seed_tag}'
     )
     result_root.mkdir(parents=True, exist_ok=True)
@@ -89,6 +97,7 @@ def main() -> None:
             _emit(fh, f'LOG_FILE={log_path}')
         _emit(fh, f'START checkpoint evaluation checkpoint={args.checkpoint} severities={args.severities} expected_seed={args.expected_seed}')
         _emit(fh, 'EVALUATION_POLICY=simple_current_cache_current_layout')
+        _emit(fh, f'TRAIN_DATA_MODE={train_data_mode} EVALUATION_INPUT_MODE=incomplete')
 
         severity_rows = []
         scenario_rows = []

@@ -1,4 +1,4 @@
-# Backbone v1.2.0
+# Backbone v1.3.0
 
 Backbone training/evaluation project for TraffiDent incomplete-sensing experiments.
 
@@ -50,3 +50,9 @@ Backbone_exps/speed/STLAformer/TraffiDent_Net_06/formal/20260930_215233_seed10/b
 ```
 
 The same pointer files can therefore be copied between Windows and Gadi. Legacy absolute pointers are still accepted and rebased when possible. Existing runs can be migrated with `python -u Backbone/scripts/refresh_latest_pointers.py`.
+
+## Dual sensing train-input modes (v1.3.0)
+
+Formal training now supports `--train-data-mode incomplete` (**default; fully backward compatible**) and `--train-data-mode complete` (use unmasked historical input with raw-invalid positions still filled safely). Both modes use the same frozen Formal rows, labels, seed, and model recipe. The validation input matches the train-input mode, and both are automatically evaluated with the **existing incomplete-sensing s20/s40/s60/s90 test caches**. The new checkpoint directory is `formal_complete` and its own `LATEST_CHECKPOINT.txt`, leaving old `formal` results and Baseline dependencies intact.
+
+See [DUAL_TRAINING_MODES.md](DUAL_TRAINING_MODES.md) for Windows/Gadi commands, exact definitions, checkpoint outputs, and tests.

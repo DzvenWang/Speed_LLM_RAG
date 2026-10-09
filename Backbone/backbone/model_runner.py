@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 from .adapters import build_adapter
 from .data import CachedSplit
+from .training_modes import require_mode
 from .identity import load_cache_identity, require_cache_version_compatibility
 from .metrics import METRICS_REVISION
 from .predictions import save_prediction_npz
@@ -36,18 +37,19 @@ def _batch_sizes(mc):
         if x>0 and x not in out: out.append(x)
     return out
 
-def _train_once(cfg, recipes, model_name, cache_dir, run_dir, vendor_root, bench, mean, std, seed, batch_size):
+def _train_once(cfg, recipes, model_name, cache_dir, run_dir, vendor_root, bench, mean, std, seed, batch_size, train_data_mode):
     seed_all(seed); run_dir=ensure_dir(run_dir); device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     mc=dict(recipes['models'][model_name]); mc['batch_size']=int(batch_size); runtime=cfg['runtime']
     ident=load_cache_identity(cache_dir); require_cache_version_compatibility(cfg,ident,'formal')
     target=str(cfg['experiment']['target'])
-    write_json(run_dir/'RUN_MANIFEST.json',{**ident,'code_project_version':str(cfg['version']),'model':model_name,'target':target,'seed':seed,'status':'STARTED'})
-    train=CachedSplit(cache_dir,'train'); val=CachedSplit(cache_dir,'val')
+    write_json(run_dir/'RUN_MANIFEST.json',{**ident,'code_project_version':str(cfg['version']),'model':model_name,'target':target,'seed':seed,'status':'STARTED','train_data_mode':train_data_mode})
+    train_data_mode = require_mode(train_data_mode)
+    train=CachedSplit(cache_dir,'train',input_mode=train_data_mode); val=CachedSplit(cache_dir,'val',input_mode=train_data_mode)
     train_loader=DataLoader(train,batch_size=batch_size,shuffle=True,num_workers=int(runtime.get('num_workers',0)),pin_memory=torch.cuda.is_available())
     val_loader=DataLoader(val,batch_size=batch_size,shuffle=False,num_workers=0,pin_memory=torch.cuda.is_available())
     adapter=build_adapter(model_name,vendor_root,bench.N,device,mean,std,mc,bench.adj,bench.nodes); model=adapter.model
     opt=_optimizer(model,mc); sched,plateau=_scheduler(opt,mc); params=count_parameters(model)
-    log(f'FORMAL_START model={model_name} target={target} seed={seed} device={device} batch_size={batch_size} params={params:,}')
+    log(f'FORMAL_START model={model_name} target={target} seed={seed} train_data_mode={train_data_mode} device={device} batch_size={batch_size} params={params:,}')
     best=float('inf'); best_epoch=-1; wait=0; history=[]; batches_seen=0; total=time.time()
     max_epochs=int(mc['max_epochs']); patience=int(mc['patience']); grad=float(mc.get('grad_clip',0)); print_every=int(runtime.get('print_every_batches',100))
     for epoch in range(1,max_epochs+1):
@@ -68,7 +70,7 @@ def _train_once(cfg, recipes, model_name, cache_dir, run_dir, vendor_root, bench
         log(f'model={model_name} epoch={epoch:03d} train_loss={rec["train_loss"]:.6f} val_MAE={v:.6f} val_masked_MAE={rec["val_masked_MAE"]:.6f} lr={rec["lr"]:.3e} time={rec["seconds"]:.1f}s')
         if v < best-1e-8:
             best=v; best_epoch=epoch; wait=0
-            ck={'project_version':cfg['version'],'run_identity':ident,'stage':'formal','model':model_name,'target':target,'state_dict':model.state_dict(),'model_config':mc,'num_nodes':bench.N,'mean':mean,'std':std,'seed':seed,'batch_size':batch_size,'best_val_MAE':best,'best_epoch':best_epoch,'recipe_source':mc.get('recipe_source'),'adapter_revision':getattr(adapter,'adapter_revision',None),'adapter_metadata':getattr(adapter,'adapter_metadata',{})}
+            ck={'project_version':cfg['version'],'run_identity':ident,'stage':'formal','model':model_name,'target':target,'train_data_mode':train_data_mode,'state_dict':model.state_dict(),'model_config':mc,'num_nodes':bench.N,'mean':mean,'std':std,'seed':seed,'batch_size':batch_size,'best_val_MAE':best,'best_epoch':best_epoch,'recipe_source':mc.get('recipe_source'),'adapter_revision':getattr(adapter,'adapter_revision',None),'adapter_metadata':getattr(adapter,'adapter_metadata',{})}
             torch.save(ck,run_dir/'best.pt')
         else:
             wait+=1
@@ -76,25 +78,26 @@ def _train_once(cfg, recipes, model_name, cache_dir, run_dir, vendor_root, bench
     pd.DataFrame(history).to_csv(run_dir/'history.csv',index=False)
     ck=torch.load(run_dir/'best.pt',map_location=device,weights_only=False); model.load_state_dict(ck['state_dict'],strict=True)
     vp,vdf,vs=evaluate(adapter,val_loader,val.meta,device)
-    save_prediction_npz(run_dir/'val_predictions.npz',val.meta.view_id.astype(str).tolist(),vp.astype(np.float32),manifest_path=run_dir/'val_predictions.manifest.json',metadata={'producer':'Backbone','model':model_name,'target':target,'seed':seed,'stage':'formal','run_identity':ident})
+    save_prediction_npz(run_dir/'val_predictions.npz',val.meta.view_id.astype(str).tolist(),vp.astype(np.float32),manifest_path=run_dir/'val_predictions.manifest.json',metadata={'producer':'Backbone','model':model_name,'target':target,'seed':seed,'stage':'formal','train_data_mode':train_data_mode,'run_identity':ident})
     vdf.to_csv(run_dir/'val_metrics.csv',index=False)
-    summary={'project_version':cfg['version'],'run_identity':ident,'stage':'formal','model':model_name,'target':target,'seed':seed,'parameters':params,'batch_size':batch_size,'best_epoch':best_epoch,'best_val_MAE':best,'train_seconds_total':float(time.time()-total),'recipe_source':mc.get('recipe_source'),'validation':vs,'metrics_revision':METRICS_REVISION,'test_evaluated':False}
-    write_json(run_dir/'summary.json',summary); write_json(run_dir/'RUN_MANIFEST.json',{**ident,'code_project_version':str(cfg['version']),'model':model_name,'target':target,'seed':seed,'status':'FINISHED','best_epoch':best_epoch,'best_val_MAE':best})
+    summary={'project_version':cfg['version'],'run_identity':ident,'stage':'formal','model':model_name,'target':target,'train_data_mode':train_data_mode,'seed':seed,'parameters':params,'batch_size':batch_size,'best_epoch':best_epoch,'best_val_MAE':best,'train_seconds_total':float(time.time()-total),'recipe_source':mc.get('recipe_source'),'validation':vs,'metrics_revision':METRICS_REVISION,'test_evaluated':False}
+    write_json(run_dir/'summary.json',summary); write_json(run_dir/'RUN_MANIFEST.json',{**ident,'code_project_version':str(cfg['version']),'model':model_name,'target':target,'seed':seed,'status':'FINISHED','train_data_mode':train_data_mode,'best_epoch':best_epoch,'best_val_MAE':best})
     log(f'FORMAL_PASS model={model_name} target={target} seed={seed} best_epoch={best_epoch} val_MAE={vs["MAE"]:.6f}')
     return summary
 
-def _smoke_once(cfg, recipes, model_name, cache_dir, run_dir, vendor_root, bench, mean, std, seed, batch_size, train_batches=2, val_batches=1):
+def _smoke_once(cfg, recipes, model_name, cache_dir, run_dir, vendor_root, bench, mean, std, seed, batch_size, train_batches=2, val_batches=1, train_data_mode="incomplete"):
     """Bounded real-Formal smoke: forward/backward/step, validation, checkpoint save/load."""
     seed_all(seed); run_dir=ensure_dir(run_dir); device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     mc=dict(recipes['models'][model_name]); mc['batch_size']=int(batch_size); runtime=cfg['runtime']
     ident=load_cache_identity(cache_dir); require_cache_version_compatibility(cfg,ident,'formal')
     target=str(cfg['experiment']['target']); train_batches=max(1,int(train_batches)); val_batches=max(1,int(val_batches))
-    train=CachedSplit(cache_dir,'train'); val=CachedSplit(cache_dir,'val')
+    train_data_mode = require_mode(train_data_mode)
+    train=CachedSplit(cache_dir,'train',input_mode=train_data_mode); val=CachedSplit(cache_dir,'val',input_mode=train_data_mode)
     train_loader=DataLoader(train,batch_size=batch_size,shuffle=False,num_workers=0,pin_memory=torch.cuda.is_available())
     val_loader=DataLoader(val,batch_size=batch_size,shuffle=False,num_workers=0,pin_memory=torch.cuda.is_available())
     adapter=build_adapter(model_name,vendor_root,bench.N,device,mean,std,mc,bench.adj,bench.nodes); model=adapter.model
     opt=_optimizer(model,mc); grad=float(mc.get('grad_clip',0)); params=count_parameters(model); losses=[]; batches_seen=0
-    log(f'SMOKE_START model={model_name} stage=formal target={target} seed={seed} device={device} batch_size={batch_size} train_batches={train_batches} val_batches={val_batches} params={params:,}')
+    log(f'SMOKE_START model={model_name} stage=formal train_data_mode={train_data_mode} target={target} seed={seed} device={device} batch_size={batch_size} train_batches={train_batches} val_batches={val_batches} params={params:,}')
     model.train()
     for bi,b in enumerate(train_loader,1):
         opt.zero_grad(set_to_none=True); pn=adapter.train_forward(b,batches_seen); _assert_prediction_shape(pn,b['y_raw'],f'{model_name}/smoke_train')
@@ -113,16 +116,16 @@ def _smoke_once(cfg, recipes, model_name, cache_dir, run_dir, vendor_root, bench
             vals.append(float(loss.detach().cpu())); log(f'SMOKE_VAL model={model_name} batch={bi}/{val_batches} loss={vals[-1]:.6f}')
             if bi>=val_batches: break
     ckpath=Path(run_dir)/'smoke.pt'
-    torch.save({'project_version':cfg['version'],'run_identity':ident,'stage':'formal','smoke':True,'model':model_name,'target':target,'state_dict':model.state_dict(),'model_config':mc,'num_nodes':bench.N,'mean':mean,'std':std,'seed':seed,'batch_size':batch_size},ckpath)
+    torch.save({'project_version':cfg['version'],'run_identity':ident,'stage':'formal','smoke':True,'model':model_name,'target':target,'train_data_mode':train_data_mode,'state_dict':model.state_dict(),'model_config':mc,'num_nodes':bench.N,'mean':mean,'std':std,'seed':seed,'batch_size':batch_size},ckpath)
     loaded=torch.load(ckpath,map_location=device,weights_only=False)
     if loaded.get('model')!=model_name or loaded.get('target')!=target or int(loaded.get('seed',-1))!=int(seed): raise RuntimeError('Smoke checkpoint identity mismatch')
     model.load_state_dict(loaded['state_dict'],strict=True)
-    summary={'status':'PASS','project_version':cfg['version'],'stage':'formal','smoke':True,'model':model_name,'target':target,'seed':seed,'device':str(device),'batch_size':batch_size,'train_batches':train_batches,'val_batches':val_batches,'train_loss_mean':float(np.mean(losses)),'val_loss_mean':float(np.mean(vals)),'cache_dir':str(cache_dir),'checkpoint':str(ckpath),'parameters':params}
+    summary={'status':'PASS','project_version':cfg['version'],'stage':'formal','smoke':True,'model':model_name,'target':target,'train_data_mode':train_data_mode,'seed':seed,'device':str(device),'batch_size':batch_size,'train_batches':train_batches,'val_batches':val_batches,'train_loss_mean':float(np.mean(losses)),'val_loss_mean':float(np.mean(vals)),'cache_dir':str(cache_dir),'checkpoint':str(ckpath),'parameters':params}
     write_json(Path(run_dir)/'smoke_summary.json',summary)
     log(f'SMOKE_PASS model={model_name} stage=formal target={target} seed={seed} train_loss={summary["train_loss_mean"]:.6f} val_loss={summary["val_loss_mean"]:.6f} checkpoint={ckpath}')
     return summary
 
-def smoke_model(cfg, recipes, model_name, cache_dir, run_dir, vendor_root, bench, mean, std, seed, train_batches=2, val_batches=1):
+def smoke_model(cfg, recipes, model_name, cache_dir, run_dir, vendor_root, bench, mean, std, seed, train_batches=2, val_batches=1, *, train_data_mode='incomplete'):
     if model_name not in MODELS: raise ValueError(f'Generic smoke supports {MODELS}; PatchSTG uses its dedicated smoke')
     mc=recipes['models'][model_name]
     smoke_bs=int(mc.get('smoke_batch_size', min(int(mc['batch_size']), 4)))
@@ -133,7 +136,7 @@ def smoke_model(cfg, recipes, model_name, cache_dir, run_dir, vendor_root, bench
     for i,bs in enumerate(candidates):
         try:
             if i: log(f'SMOKE_OOM_RETRY model={model_name} batch_size={bs}')
-            return _smoke_once(cfg,recipes,model_name,cache_dir,run_dir,vendor_root,bench,mean,std,seed,bs,train_batches,val_batches)
+            return _smoke_once(cfg,recipes,model_name,cache_dir,run_dir,vendor_root,bench,mean,std,seed,bs,train_batches,val_batches,train_data_mode)
         except torch.cuda.OutOfMemoryError as e:
             last=e; log(f'SMOKE_CUDA_OOM model={model_name} batch_size={bs}')
             if torch.cuda.is_available(): torch.cuda.empty_cache()
@@ -143,13 +146,13 @@ def smoke_model(cfg, recipes, model_name, cache_dir, run_dir, vendor_root, bench
     if last is not None: raise last
     raise RuntimeError('No usable smoke batch size')
 
-def train_model(cfg, recipes, model_name, cache_dir, run_dir, vendor_root, bench, mean, std, seed):
+def train_model(cfg, recipes, model_name, cache_dir, run_dir, vendor_root, bench, mean, std, seed, *, train_data_mode='incomplete'):
     if model_name not in MODELS: raise ValueError(f'Generic formal runner supports {MODELS}; PatchSTG uses its dedicated runner')
     last=None
     for i,bs in enumerate(_batch_sizes(recipes['models'][model_name])):
         try:
             if i: log(f'OOM_RETRY model={model_name} batch_size={bs}')
-            return _train_once(cfg,recipes,model_name,cache_dir,run_dir,vendor_root,bench,mean,std,seed,bs)
+            return _train_once(cfg,recipes,model_name,cache_dir,run_dir,vendor_root,bench,mean,std,seed,bs,train_data_mode)
         except torch.cuda.OutOfMemoryError as e:
             last=e; log(f'CUDA_OOM model={model_name} batch_size={bs}')
             if torch.cuda.is_available(): torch.cuda.empty_cache()

@@ -12,9 +12,11 @@ set -euo pipefail
 : "${MODEL:?MODEL=STAEformer|HimNet|BigST|STDN|PatchSTG|STLAformer}"
 : "${TARGET:?TARGET=speed|flow}"
 SEED=${SEED:-10}
+TRAIN_DATA_MODE=${TRAIN_DATA_MODE:-incomplete}
 case "$MODEL" in STAEformer|HimNet|BigST|STDN|PatchSTG|STLAformer) ;; *) echo "ERROR unsupported MODEL=$MODEL"; exit 2;; esac
 case "$TARGET" in speed|flow) ;; *) echo "ERROR TARGET=$TARGET"; exit 2;; esac
 [[ "$SEED" == "10" ]] || { echo "ERROR Formal seed fixed to 10"; exit 2; }
+case "$TRAIN_DATA_MODE" in incomplete|complete) ;; *) echo "ERROR TRAIN_DATA_MODE must be incomplete or complete"; exit 2;; esac
 ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
 PROJ="$ROOT/Backbone"
 ENVROOT=${TFP_ENV_ROOT:-/scratch/mh20/zw1165/envs/TFP}
@@ -28,14 +30,14 @@ export PATH="$ENVROOT/bin:$PATH"
 unset TRANSFORMERS_CACHE || true
 LOGROOT="$ROOT/Backbone_logs/$TARGET/$MODEL"; mkdir -p "$LOGROOT"
 STAMP=$(date +%Y%m%d_%H%M%S); JOBID=${PBS_JOBID:-local}
-LOG="$LOGROOT/${MODEL}.${TARGET}.formal.seed${SEED}.${JOBID}.${STAMP}.live.log"; touch "$LOG"
+LOG="$LOGROOT/${MODEL}.${TARGET}.formal_${TRAIN_DATA_MODE}.seed${SEED}.${JOBID}.${STAMP}.live.log"; touch "$LOG"
 cd "$PROJ"
 exec > >("$PYTHON3" -u "$PROJ/timestamp_stream.py" | tee -a "$LOG") 2>&1
 trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"' EXIT
-echo "START USER_SELECTED_FORMAL model=$MODEL target=$TARGET seed=$SEED job=$JOBID host=$(hostname)"
+echo "START USER_SELECTED_FORMAL model=$MODEL target=$TARGET seed=$SEED train_data_mode=$TRAIN_DATA_MODE job=$JOBID host=$(hostname)"
 echo "ROOT=$ROOT PYTHON=$PYTHON TRAFFIDENT_TARGET=$TRAFFIDENT_TARGET"
 "$PYTHON" -V; nvidia-smi || true
 [[ -d "$PROJ/vendor/$MODEL" ]] || { echo "ERROR missing vendor/$MODEL"; exit 4; }
-"$PYTHON" -u scripts/preflight.py --stage formal --config configs/backbone.yaml
-"$PYTHON" -u scripts/run_model_formal.py --model "$MODEL" --seed "$SEED" --run-stamp "$STAMP" --config configs/backbone.yaml --recipes configs/model_recipes.yaml
+"$PYTHON" -u scripts/preflight.py --stage formal --train-data-mode "$TRAIN_DATA_MODE" --config configs/backbone.yaml
+"$PYTHON" -u scripts/run_model_formal.py --model "$MODEL" --train-data-mode "$TRAIN_DATA_MODE" --seed "$SEED" --run-stamp "$STAMP" --config configs/backbone.yaml --recipes configs/model_recipes.yaml
 echo "FINISH model=$MODEL target=$TARGET seed=$SEED"

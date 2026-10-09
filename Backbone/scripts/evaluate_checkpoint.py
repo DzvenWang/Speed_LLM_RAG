@@ -23,6 +23,7 @@ for p in (ROOT, REPO_ROOT / 'Base_SupportBench'):
         sys.path.insert(0, str(p))
 
 from backbone.data import CachedSplit
+from backbone.training_modes import mode_from_checkpoint, evaluation_mode_subdir
 from backbone.adapters import build_adapter
 from backbone.patchstg import compute_patchstg_layout
 from backbone.predictions import save_prediction_npz
@@ -93,9 +94,11 @@ def main() -> None:
     if checkpoint_target and expected_target and checkpoint_target != expected_target:
         raise RuntimeError(f'Checkpoint target={checkpoint_target} conflicts with evaluation target={expected_target}')
     log(f'TARGET_CONTRACT_PASS checkpoint_target={checkpoint_target or "legacy_unspecified"} evaluation_target={expected_target}')
+    train_data_mode = mode_from_checkpoint(ck)
+    log(f'EVALUATION_SENSING train_data_mode={train_data_mode} test_input_mode=incomplete')
 
     bench = SupportBench(cfg['experiment']['subgraph'], root=cfg['project']['benchmark_root'])
-    test = CachedSplit(cache, 'test')
+    test = CachedSplit(cache, 'test', input_mode='incomplete')
 
     # These are the only hard compatibility checks worth keeping: they prevent tensor
     # shape errors or silently evaluating the wrong network size.
@@ -162,19 +165,22 @@ def main() -> None:
     query_counts = {str(k): int(v) for k, v in eval_meta['family'].astype(str).value_counts().to_dict().items()}
     sev_row = severity_row(summary, args.severity, seed)
     scen_rows = scenario_rows(summary, families, args.severity, seed, query_counts)
+    sev_row['train_data_mode'] = train_data_mode
+    for scenario in scen_rows: scenario['train_data_mode'] = train_data_mode
 
     stamp = args.run_stamp or datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     checkpoint_sha = sha256_file(checkpoint)
     checkpoint_run_tag = checkpoint.parent.name or f'checkpoint_{checkpoint_sha[:12]}'
     out = (
         Path(cfg['project']['exp_root']) / model_name / cfg['experiment']['subgraph']
-        / 'checkpoint_evaluation' / checkpoint_run_tag / f's{args.severity}'
+        / 'checkpoint_evaluation' / Path(*evaluation_mode_subdir(train_data_mode)) / checkpoint_run_tag / f's{args.severity}'
         / f'{stamp}_seed{seed}'
     )
     out.mkdir(parents=True, exist_ok=True)
 
     metadata = {
         'producer': 'Backbone', 'model': model_name, 'seed': seed,
+        'train_data_mode': train_data_mode, 'evaluation_input_mode': 'incomplete',
         'stage': 'checkpoint_evaluation', 'severity': args.severity,
         'smoke_test_batches': args.smoke_test_batches,
         'checkpoint': str(checkpoint), 'checkpoint_sha256': checkpoint_sha,
@@ -193,6 +199,7 @@ def main() -> None:
         'project_version': cfg.get('version'),
         'evaluation_mode': 'simple_explicit_checkpoint',
         'model': model_name, 'seed': seed, 'severity': args.severity,
+        'train_data_mode': train_data_mode, 'evaluation_input_mode': 'incomplete',
         'checkpoint': str(checkpoint), 'checkpoint_sha256': checkpoint_sha,
         'checkpoint_best_epoch': ck.get('best_epoch'),
         'checkpoint_best_val_MAE': ck.get('best_val_MAE'),
@@ -214,6 +221,7 @@ def main() -> None:
                 'checkpoint': str(checkpoint),
                 'checkpoint_sha256': checkpoint_sha,
                 'layout_match': bool(layout_match),
+                'train_data_mode': train_data_mode, 'evaluation_input_mode': 'incomplete',
             },
         )
     log(
