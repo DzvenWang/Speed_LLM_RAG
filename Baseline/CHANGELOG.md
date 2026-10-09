@@ -27,3 +27,11 @@
 - Legacy absolute pointer/checkpoint paths are automatically rebased using `Backbone_exps` / `Baseline_exps` anchors when copied across machines.
 - Formal summaries/checkpoints now persist the portable reference checkpoint path plus SHA256, rather than a host-specific absolute path.
 
+
+## 1.4.5 — selectable Backbone training sensing mode
+- Added `BACKBONE_TRAIN_MODE=incomplete|complete` (default `incomplete`) and `--backbone-train-mode` for all reference Backbone consumers.
+- Complete checkpoints resolve from Backbone `formal_complete`; legacy incomplete checkpoints from `formal` remain unchanged.
+- Strict verification against the checkpoint's `train_data_mode` (old checkpoints default `incomplete`).
+- Mode-specific Baseline formal, evaluation, and live log paths prevent overwriting earlier experiments.
+- Persist `reference_backbone_train_mode` with reference checkpoint provenance and keep old Formal results compatible.
+- Added seven CPU-only regression tests; see `REFERENCE_BACKBONE_TRAIN_MODES.md`.

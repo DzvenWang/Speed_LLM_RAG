@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader, Subset
 GADI_ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 ROOT=GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
+from baseline.backbones.training_mode import set_mode_from_cli, current_mode, method_reference_parent
 from baseline.utils import load_yaml
 from baseline.path_pointers import resolve_portable_pointer
 from baseline.runners.common import GinARDataset,ImputationDataset,RASTDataset,SARAFTensorDataset,build_time_marks,save_split_outputs,scale_stats,set_seed,require_gpu,simple_namespace
@@ -74,6 +75,9 @@ def _validate_formal_run(cfg, m, seed, run_dir: Path, backbone_model: str | None
 
     if cfg.get('methods',{}).get(m,{}).get('requires_reference_backbone_for_final_forecast',False):
         saved_model=str(sm.get('reference_backbone_model') or '')
+        saved_train_mode=str(sm.get('reference_backbone_train_mode') or 'incomplete')
+        if saved_train_mode != current_mode():
+            raise RuntimeError(f'{m}: reference Backbone training mode mismatch: saved={saved_train_mode} requested={current_mode()}')
         saved_checkpoint=str(sm.get('reference_backbone_checkpoint') or '')
         saved_sha=str(sm.get('reference_backbone_checkpoint_sha256') or '')
         saved_seed=int(sm.get('reference_backbone_seed',-1))
@@ -88,7 +92,7 @@ def _validate_formal_run(cfg, m, seed, run_dir: Path, backbone_model: str | None
         if got_sha != saved_sha:
             raise RuntimeError(f'{m} seed={seed}: reference Backbone checkpoint SHA256 mismatch')
     else:
-        saved_model=saved_checkpoint=saved_sha=None; saved_seed=None
+        saved_model=saved_checkpoint=saved_sha=None; saved_seed=None; saved_train_mode=None
 
     sel={
         'run_dir':str(d),
@@ -98,6 +102,7 @@ def _validate_formal_run(cfg, m, seed, run_dir: Path, backbone_model: str | None
         'run_identity_hash':sm.get('run_identity_hash'),
         'selection_mode':'direct_formal_run',
         'reference_backbone_model':saved_model,
+        'reference_backbone_train_mode':saved_train_mode,
         'reference_backbone_checkpoint':saved_checkpoint,
         'reference_backbone_checkpoint_sha256':saved_sha,
         'reference_backbone_seed':saved_seed,
@@ -114,7 +119,7 @@ def load_sel(cfg,m,seed,formal_run_dir=None,backbone_model=None):
     rr=exp/m
     if cfg.get('methods',{}).get(m,{}).get('requires_reference_backbone_for_final_forecast',False):
         if not backbone_model: raise RuntimeError(f'--backbone is required to resolve Formal run for {m}')
-        rr=rr/str(backbone_model)
+        rr=method_reference_parent(rr,str(backbone_model))
     rr=rr/cfg['experiment']['subgraph']/'formal'
     latest=rr/'LATEST_RUN.txt'
     candidates=[]
@@ -265,7 +270,7 @@ def remft(cfg,fc,ec,seed,device,ck,max_rows=None):
 
 def main():
     methods=['ImputeFormer','LRTC-TMCP','GinAR','RAFT','RAST','SARAF','ReMFT','RAFT-PatchSTG','RAFT-STLAformer','RAST-PatchSTG','RAST-STLAformer']
-    ap=argparse.ArgumentParser(); ap.add_argument('--method',choices=methods,required=True); ap.add_argument('--seed',type=int,required=True); ap.add_argument('--severity',type=int,choices=[20,40,60,90],required=True); ap.add_argument('--backbone',choices=SUPPORTED_BACKBONES); ap.add_argument('--formal-run-dir',default=None); ap.add_argument('--lifecycle-checkpoint',default=None,help='Smoke-only checkpoint; bypass completed-Formal selection and write only under _lifecycle_smoke.'); ap.add_argument('--lifecycle-max-batches',type=int,default=2,help='Lifecycle smoke only: cap real inference to this many evaluation batches.'); a=ap.parse_args()
+    ap=argparse.ArgumentParser(); ap.add_argument('--method',choices=methods,required=True); ap.add_argument('--seed',type=int,required=True); ap.add_argument('--severity',type=int,choices=[20,40,60,90],required=True); ap.add_argument('--backbone',choices=SUPPORTED_BACKBONES); ap.add_argument('--formal-run-dir',default=None); ap.add_argument('--lifecycle-checkpoint',default=None,help='Smoke-only checkpoint; bypass completed-Formal selection and write only under _lifecycle_smoke.'); ap.add_argument('--lifecycle-max-batches',type=int,default=2,help='Lifecycle smoke only: cap real inference to this many evaluation batches.'); ap.add_argument('--backbone-train-mode', choices=['incomplete','complete'], default=None);a=ap.parse_args();set_mode_from_cli(a.backbone_train_mode)
     cfg=load_yaml(ROOT/'configs/baseline.yaml'); set_seed(a.seed); device=require_gpu(); exp=Path(cfg['project']['exp_root']); fc=cache_path(cfg,'formal'); ec=cache_path(cfg,'evaluation',a.severity)
     if a.lifecycle_checkpoint:
         cp=Path(a.lifecycle_checkpoint).resolve()
@@ -293,7 +298,7 @@ def main():
         rd=Path(sel['run_dir'])/'evaluation'/f's{a.severity}'
     else:
         base=exp/'evaluation'/a.method
-        if sel.get('reference_backbone_model'): base=base/str(sel['reference_backbone_model'])
+        if sel.get('reference_backbone_model'): base=method_reference_parent(base,str(sel['reference_backbone_model']))
         rd=base/cfg['experiment']['subgraph']/f'seed{a.seed}'/f's{a.severity}'
     rd.mkdir(parents=True,exist_ok=True)
     if a.lifecycle_checkpoint:
@@ -301,7 +306,7 @@ def main():
         sm={'method':a.method,'seed':int(a.seed),'split':'test','smoke_rows':int(raw.shape[0]),'prediction_shape':list(raw.shape),'formal_checkpoint':sel['checkpoint'],'formal_checkpoint_sha256':sel['checkpoint_sha256'],'test_access':'lifecycle_smoke_limited_inference','severity':int(a.severity),'protocol_name':ec.parent.parent.parent.name}
         (rd/'test_summary.smoke.json').write_text(json.dumps(sm,indent=2))
     else:
-        sm=save_split_outputs(cfg,ec,rd,'test',raw,a.method,a.seed,{'formal_checkpoint':sel['checkpoint'],'formal_checkpoint_sha256':sel['checkpoint_sha256'],'reporting_track':cfg.get('methods',{}).get(a.method,{}).get('table_group','unknown'),'test_access':'direct_after_completed_formal_run','severity':int(a.severity),'protocol_name':ec.parent.parent.parent.name})
+        sm=save_split_outputs(cfg,ec,rd,'test',raw,a.method,a.seed,{'formal_checkpoint':sel['checkpoint'],'formal_checkpoint_sha256':sel['checkpoint_sha256'],'reference_backbone_train_mode':sel.get('reference_backbone_train_mode'),'reference_backbone_checkpoint':sel.get('reference_backbone_checkpoint'),'reference_backbone_checkpoint_sha256':sel.get('reference_backbone_checkpoint_sha256'),'reporting_track':cfg.get('methods',{}).get(a.method,{}).get('table_group','unknown'),'test_access':'direct_after_completed_formal_run','severity':int(a.severity),'protocol_name':ec.parent.parent.parent.name})
     print(f'EVALUATION_RESULT_DIR={rd}')
     if a.lifecycle_checkpoint: print(f'LIFECYCLE_EVAL_PASS method={a.method} severity=s{a.severity} rows={int(raw.shape[0])} shape={tuple(raw.shape)}',flush=True)
     print(json.dumps(sm,default=str,indent=2))

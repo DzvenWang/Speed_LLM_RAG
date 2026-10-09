@@ -1,10 +1,11 @@
-version: 1.4.4
+version: 1.4.5
 compatible_formal_versions:
 - 1.4.0
 - 1.4.1
 - 1.4.2
 - 1.4.3
 - 1.4.4
+- 1.4.5
 project:
   root: ${SPEED_LLM_RAG_ROOT}
   baseline_root: ${SPEED_LLM_RAG_ROOT}/Baseline
@@ -42,6 +43,7 @@ experiment:
   - 90
 reference_backbone:
   selection_mode: explicit_model_direct_checkpoint_resolution
+  train_mode_default: incomplete  # overridden by BACKBONE_TRAIN_MODE / --backbone-train-mode
   seed: 10
   supported_models:
   - STAEformer

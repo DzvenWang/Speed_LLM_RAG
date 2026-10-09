@@ -11,6 +11,7 @@ import torch
 from torch.utils.data import Dataset
 
 from baseline.evaluation import evaluate_prediction_file
+from baseline.backbones.training_mode import method_reference_parent
 from baseline.run_identity import build_run_manifest, write_run_manifest
 from baseline.path_pointers import portable_project_path
 from baseline.shared_cache import cache_path, shared_contract_config
@@ -62,7 +63,7 @@ def make_run_dir(cfg: dict, method: str, stage: str, seed: int, backbone_model: 
     stamp = time.strftime('%Y%m%d_%H%M%S')
     base = Path(cfg['project']['exp_root']) / method
     if backbone_model:
-        base = base / str(backbone_model)
+        base = method_reference_parent(base, str(backbone_model))
     p = base / cfg['experiment']['subgraph'] / stage / f'{stamp}_seed{seed}'
     p.mkdir(parents=True, exist_ok=False)
     return p

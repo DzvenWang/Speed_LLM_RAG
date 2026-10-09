@@ -23,6 +23,11 @@ case "$METHOD" in
   *) echo "METHOD=$METHOD is not supported by this Formal PBS"; exit 2;;
 esac
 case "$SEED" in 10) ;; *) echo "Formal v1.4.4 currently requires SEED=10"; exit 2;; esac
+export BACKBONE_TRAIN_MODE="${BACKBONE_TRAIN_MODE:-incomplete}"
+case "$BACKBONE_TRAIN_MODE" in
+  incomplete|complete) ;;
+  *) echo "ERROR BACKBONE_TRAIN_MODE must be incomplete or complete (got $BACKBONE_TRAIN_MODE)"; exit 2;;
+esac
 if [[ "$METHOD" == "RAST-PatchSTG" || "$METHOD" == "RAFT-PatchSTG" ]]; then
   BACKBONE="${BACKBONE:-PatchSTG}"
 fi
@@ -38,42 +43,55 @@ fi
 if [[ "$METHOD" == "LRTC-TMCP" && "$SEED" != "10" ]]; then
   echo "LRTC-TMCP is deterministic; only seed10 is required"; exit 2
 fi
+USES_REFERENCE=0
+case "$METHOD" in
+  ImputeFormer|LRTC-TMCP|RAST-PatchSTG|RAST-STLAformer|RAFT-PatchSTG|RAFT-STLAformer) USES_REFERENCE=1;;
+esac
+if [[ "$USES_REFERENCE" != "1" && "$BACKBONE_TRAIN_MODE" == "complete" ]]; then
+  echo "ERROR $METHOD does not consume a reference Backbone: BACKBONE_TRAIN_MODE=complete has no meaning"; exit 2
+fi
 source "$ROOT/scripts/pbs_live_log.sh"
-baseline_live_log_start "BaselineFormal" "$METHOD" "seed${SEED}" "formal"
+if [[ "$USES_REFERENCE" == "1" ]]; then
+  baseline_live_log_start "BaselineFormal" "$METHOD" "seed${SEED}" "$BACKBONE_TRAIN_MODE" "formal"
+else
+  baseline_live_log_start "BaselineFormal" "$METHOD" "seed${SEED}" "formal"
+fi
 baseline_install_exit_trap
 export PYTHONPATH="$ROOT:$PROJECT_ROOT/Base_SupportBench:${PYTHONPATH:-}"
 unset TRANSFORMERS_CACHE || true
 cd "$ROOT"
-echo "START Formal v1.4.4 method=$METHOD target=$TRAFFIDENT_TARGET seed=$SEED"
+echo "START Formal method=$METHOD target=$TRAFFIDENT_TARGET seed=$SEED reference_backbone_train_mode=$BACKBONE_TRAIN_MODE"
 nvidia-smi
 if [[ "$METHOD" == "ImputeFormer" || "$METHOD" == "LRTC-TMCP" || "$METHOD" == "RAST-PatchSTG" || "$METHOD" == "RAST-STLAformer" || "$METHOD" == "RAFT-PatchSTG" || "$METHOD" == "RAFT-STLAformer" ]]; then
-  "$PY" scripts/preflight.py --stage formal --method "$METHOD" --backbone "$BACKBONE"
-  "$PY" scripts/preflight_formal.py --method "$METHOD" --seed "$SEED" --stage formal --backbone "$BACKBONE"
+  "$PY" scripts/preflight.py --stage formal --method "$METHOD" --backbone "$BACKBONE" --backbone-train-mode "$BACKBONE_TRAIN_MODE"
+  "$PY" scripts/preflight_formal.py --method "$METHOD" --seed "$SEED" --stage formal --backbone "$BACKBONE" --backbone-train-mode "$BACKBONE_TRAIN_MODE"
 else
   "$PY" scripts/preflight.py --stage formal --method "$METHOD"
   "$PY" scripts/preflight_formal.py --method "$METHOD" --seed "$SEED" --stage formal
 fi
 case "$METHOD" in
   ImputeFormer)
-    "$PY" -u baseline/runners/imputeformer_runner.py --stage formal --seed "$SEED" --backbone "$BACKBONE";;
+    "$PY" -u baseline/runners/imputeformer_runner.py --stage formal --seed "$SEED" --backbone "$BACKBONE" --backbone-train-mode "$BACKBONE_TRAIN_MODE";;
   LRTC-TMCP)
-    "$PY" -u baseline/runners/lrtc_tmcp_runner.py --stage formal --seed "$SEED" --backbone "$BACKBONE";;
+    "$PY" -u baseline/runners/lrtc_tmcp_runner.py --stage formal --seed "$SEED" --backbone "$BACKBONE" --backbone-train-mode "$BACKBONE_TRAIN_MODE";;
   GinAR) "$PY" -u baseline/runners/ginar_runner.py --stage formal --seed "$SEED";;
   RAFT) "$PY" -u baseline/runners/raft_runner.py --stage formal --seed "$SEED";;
   RAST) "$PY" scripts/check_rast_runtime.py; "$PY" -u baseline/runners/rast_runner.py --stage formal --seed "$SEED" --variant native;;
   SARAF) "$PY" -u baseline/runners/saraf_runner.py --stage formal --seed "$SEED";;
   ReMFT) "$PY" scripts/check_remft_runtime.py; "$PY" -u baseline/runners/remft_runner.py --stage formal --seed "$SEED";;
-  RAST-PatchSTG) "$PY" scripts/check_rast_runtime.py; "$PY" -u baseline/runners/rast_runner.py --stage formal --seed "$SEED" --variant patchstg --backbone "$BACKBONE";;
-  RAST-STLAformer) "$PY" scripts/check_rast_runtime.py; "$PY" -u baseline/runners/rast_runner.py --stage formal --seed "$SEED" --variant reference --backbone "$BACKBONE";;
-  RAFT-PatchSTG) "$PY" -u baseline/runners/retrieval_reference_control_runner.py --method RAFT-PatchSTG --stage formal --seed "$SEED" --backbone "$BACKBONE";;
-  RAFT-STLAformer) "$PY" -u baseline/runners/retrieval_reference_control_runner.py --method RAFT-STLAformer --stage formal --seed "$SEED" --backbone "$BACKBONE";;
+  RAST-PatchSTG) "$PY" scripts/check_rast_runtime.py; "$PY" -u baseline/runners/rast_runner.py --stage formal --seed "$SEED" --variant patchstg --backbone "$BACKBONE" --backbone-train-mode "$BACKBONE_TRAIN_MODE";;
+  RAST-STLAformer) "$PY" scripts/check_rast_runtime.py; "$PY" -u baseline/runners/rast_runner.py --stage formal --seed "$SEED" --variant reference --backbone "$BACKBONE" --backbone-train-mode "$BACKBONE_TRAIN_MODE";;
+  RAFT-PatchSTG) "$PY" -u baseline/runners/retrieval_reference_control_runner.py --method RAFT-PatchSTG --stage formal --seed "$SEED" --backbone "$BACKBONE" --backbone-train-mode "$BACKBONE_TRAIN_MODE";;
+  RAFT-STLAformer) "$PY" -u baseline/runners/retrieval_reference_control_runner.py --method RAFT-STLAformer --stage formal --seed "$SEED" --backbone "$BACKBONE" --backbone-train-mode "$BACKBONE_TRAIN_MODE";;
 esac
 echo "PRIMARY FORMAL TRAINING PASS method=$METHOD seed=$SEED"
 
 AUTO_EVAL="${AUTO_EVAL:-1}"
 if [[ "$AUTO_EVAL" == "1" ]]; then
   if [[ "$METHOD" == "ImputeFormer" || "$METHOD" == "LRTC-TMCP" || "$METHOD" == "RAST-PatchSTG" || "$METHOD" == "RAST-STLAformer" || "$METHOD" == "RAFT-PatchSTG" || "$METHOD" == "RAFT-STLAformer" ]]; then
-    FORMAL_PARENT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline_exps/$TRAFFIDENT_TARGET/$METHOD/$BACKBONE/TraffiDent_Net_06/formal"
+    FORMAL_PARENT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline_exps/$TRAFFIDENT_TARGET/$METHOD/$BACKBONE"
+    if [[ "$BACKBONE_TRAIN_MODE" == "complete" ]]; then FORMAL_PARENT="$FORMAL_PARENT/complete"; fi
+    FORMAL_PARENT="$FORMAL_PARENT/TraffiDent_Net_06/formal"
   else
     FORMAL_PARENT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}/Baseline_exps/$TRAFFIDENT_TARGET/$METHOD/TraffiDent_Net_06/formal"
   fi
@@ -86,7 +104,7 @@ if [[ "$AUTO_EVAL" == "1" ]]; then
   echo "FORMAL_RUN_DIR=$FORMAL_RUN_DIR"
   echo "START DIRECT Core-5 EVALUATION method=$METHOD seed=$SEED severities=s20,s40,s60,s90"
   if [[ "$METHOD" == "ImputeFormer" || "$METHOD" == "LRTC-TMCP" || "$METHOD" == "RAST-PatchSTG" || "$METHOD" == "RAST-STLAformer" || "$METHOD" == "RAFT-PatchSTG" || "$METHOD" == "RAFT-STLAformer" ]]; then
-    "$PY" -u scripts/run_evaluations.py --method "$METHOD" --seed "$SEED" --backbone "$BACKBONE" --formal-run-dir "$FORMAL_RUN_DIR"
+    "$PY" -u scripts/run_evaluations.py --method "$METHOD" --seed "$SEED" --backbone "$BACKBONE" --backbone-train-mode "$BACKBONE_TRAIN_MODE" --formal-run-dir "$FORMAL_RUN_DIR"
   else
     "$PY" -u scripts/run_evaluations.py --method "$METHOD" --seed "$SEED" --formal-run-dir "$FORMAL_RUN_DIR"
   fi

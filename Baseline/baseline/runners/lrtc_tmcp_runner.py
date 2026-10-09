@@ -18,6 +18,7 @@ if not ROOT.exists():
     ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
+from baseline.backbones.training_mode import set_mode_from_cli, current_mode, method_reference_parent
 from baseline.backbones.reference_backbone import ReferenceBackbone, build_reference_backbone
 from baseline.compat.lrtc_tmcp import recover_batch
 from baseline.lrtc_causal_history import resolve_lrtc_canonical_history_source
@@ -202,7 +203,9 @@ def main():
     ap.add_argument('--smoke', action='store_true')
     ap.add_argument('--backbone', required=True)
     ap.add_argument('--backbone-checkpoint', default=None)
+    ap.add_argument('--backbone-train-mode', choices=['incomplete','complete'], default=None)
     a = ap.parse_args()
+    set_mode_from_cli(a.backbone_train_mode)
 
     cfg, cache = validate_stage(a.stage, 'LRTC-TMCP')
     allowed = [int(x) for x in cfg['methods']['LRTC-TMCP'].get('formal_seeds', [10])]
@@ -230,7 +233,7 @@ def main():
             'historical_days': prov['historical_days'],
             'context_days': prov['context_days'],
             'strict_future_isolation': prov['strict_future_isolation'],
-            'reference_backbone_model': backbone.model_name,
+            'reference_backbone_train_mode': backbone.train_mode, 'reference_backbone_model': backbone.model_name,
             'reference_backbone_seed': backbone.reference_seed,
             'reference_backbone_checkpoint': backbone.checkpoint_reference,
             'reference_backbone_checkpoint_sha256': backbone.checkpoint_sha256,
@@ -254,7 +257,7 @@ def main():
         'strict_future_isolation': True,
         'heldout_support_forbidden': True,
         'method_implementation_revision': cfg.get('method_implementation_revisions', {}).get('LRTC-TMCP'),
-        'reference_backbone_model': backbone.model_name,
+        'reference_backbone_train_mode': backbone.train_mode, 'reference_backbone_model': backbone.model_name,
         'reference_backbone_seed': backbone.reference_seed,
         'reference_backbone_checkpoint': backbone.checkpoint_reference,
         'reference_backbone_checkpoint_sha256': backbone.checkpoint_sha256,
@@ -290,7 +293,7 @@ def main():
         'mean_tmcp_seconds_per_batch': float(np.mean([x.elapsed_seconds for x in infos])) if infos else None,
         'tmcp_decomposition': str(cfg['runners']['LRTC-TMCP'].get('decomposition', 'gram_eigh')),
         'active_convergence': bool(cfg['runners']['LRTC-TMCP'].get('active_convergence', True)),
-        'reference_backbone_model': backbone.model_name,
+        'reference_backbone_train_mode': backbone.train_mode, 'reference_backbone_model': backbone.model_name,
         'reference_backbone_seed': backbone.reference_seed,
         'reference_backbone_checkpoint': backbone.checkpoint_reference,
         'reference_backbone_checkpoint_sha256': backbone.checkpoint_sha256,

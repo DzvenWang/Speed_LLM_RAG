@@ -8,6 +8,7 @@ import numpy as np
 GADI_ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 ROOT=GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
+from baseline.backbones.training_mode import set_mode_from_cli, current_mode, method_reference_parent
 from baseline.utils import load_yaml
 from baseline.shared_cache import cache_path, EVALUATION_SEVERITIES
 
@@ -29,7 +30,9 @@ def main():
     ap.add_argument('--seed',type=int,required=True)
     ap.add_argument('--formal-run-dir',default=None)
     ap.add_argument('--backbone',default=None)
+    ap.add_argument('--backbone-train-mode', choices=['incomplete','complete'], default=None)
     a=ap.parse_args()
+    set_mode_from_cli(a.backbone_train_mode)
     cfg=load_yaml(ROOT/'configs/baseline.yaml')
     py=cfg['project']['python']
     exp=Path(cfg['project']['exp_root'])
@@ -38,17 +41,17 @@ def main():
     for sev in [int(x) for x in cfg['experiment'].get('evaluation_severities',EVALUATION_SEVERITIES)]:
         print(f'========== EVALUATION s{sev} START method={a.method} seed={a.seed} ==========',flush=True)
         cmd_pre=[py,str(ROOT/'scripts/preflight.py'),'--stage','evaluation','--method',a.method,'--severity',str(sev)]
-        if a.backbone: cmd_pre += ['--backbone',a.backbone]
+        if a.backbone: cmd_pre += ['--backbone',a.backbone,'--backbone-train-mode',current_mode()]
         subprocess.check_call(cmd_pre)
         cmd_pf=[py,str(ROOT/'scripts/preflight_formal.py'),'--method',a.method,'--seed',str(a.seed),'--stage','evaluation','--severity',str(sev)]
-        if a.backbone: cmd_pf += ['--backbone',a.backbone]
+        if a.backbone: cmd_pf += ['--backbone',a.backbone,'--backbone-train-mode',current_mode()]
         subprocess.check_call(cmd_pf)
         cmd=[py,'-u',str(ROOT/'scripts/run_evaluation.py'),'--method',a.method,'--seed',str(a.seed),'--severity',str(sev)]
-        if a.backbone: cmd += ['--backbone',a.backbone]
+        if a.backbone: cmd += ['--backbone',a.backbone,'--backbone-train-mode',current_mode()]
         if a.formal_run_dir: cmd += ['--formal-run-dir',str(a.formal_run_dir)]
         subprocess.check_call(cmd)
         base=exp/'evaluation'/a.method
-        if a.backbone: base=base/a.backbone
+        if a.backbone: base=method_reference_parent(base,a.backbone)
         rd=base/cfg['experiment']['subgraph']/f'seed{a.seed}'/f's{sev}'
         mf=rd/'test_metrics.csv'
         if not mf.exists():
@@ -76,7 +79,7 @@ def main():
             })
         print(f'========== EVALUATION s{sev} PASS ==========',flush=True)
     base=exp/'evaluation'/a.method
-    if a.backbone: base=base/a.backbone
+    if a.backbone: base=method_reference_parent(base,a.backbone)
     out=base/cfg['experiment']['subgraph']/f'seed{a.seed}'
     sevdf=pd.DataFrame(severity_rows)
     scdf=pd.DataFrame(scenario_rows)

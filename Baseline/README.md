@@ -68,3 +68,14 @@ Use `TARGET=flow` for the corresponding flow experiments.
 ## v1.4.4 matched-backbone retrieval controls
 
 Native `RAFT` and `RAST` are not modified. For matched-backbone controls only, both PatchSTG and STLAformer variants use a zero-initialized learnable residual coefficient so the initial prediction equals the selected reference Backbone. This is a compatibility calibration for transplanted retrieval/fusion branches, not a change to the official native baselines.
+
+### Backbone reference training mode (v1.4.5)
+
+Reference-Backbone-dependent Baselines may now select a Backbone trained on
+`incomplete` (default, original `formal`) or `complete` (new `formal_complete`)
+inputs via `BACKBONE_TRAIN_MODE=complete` or `--backbone-train-mode complete`.
+Baseline's missing-query training and Core-5 evaluation do **not** change.
+Complete reference runs and evaluation outputs are written to separate `/complete/`
+directories; previous incomplete paths are untouched. See
+[`REFERENCE_BACKBONE_TRAIN_MODES.md`](REFERENCE_BACKBONE_TRAIN_MODES.md) for commands,
+validation rules and output paths.

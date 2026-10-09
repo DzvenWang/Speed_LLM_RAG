@@ -6,6 +6,7 @@ from pathlib import Path
 GADI_ROOT = next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd())
 ROOT = GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from baseline.backbones.training_mode import set_mode_from_cli, current_mode, method_reference_parent
 from baseline.utils import load_yaml
 from baseline.shared_cache import cache_path
 from baseline.backbones.reference_backbone import resolve_reference_checkpoint, SUPPORTED_BACKBONES
@@ -18,7 +19,9 @@ ap.add_argument('--stage', choices=['formal','evaluation'], default='formal')
 ap.add_argument('--severity', type=int, choices=[20,40,60,90])
 ap.add_argument('--backbone', choices=SUPPORTED_BACKBONES)
 ap.add_argument('--backbone-checkpoint', default=None)
+ap.add_argument('--backbone-train-mode', choices=['incomplete','complete'], default=None)
 a = ap.parse_args()
+set_mode_from_cli(a.backbone_train_mode)
 cfg = load_yaml(ROOT / 'configs/baseline.yaml')
 if a.method in ('RAST-STLAformer','RAFT-STLAformer') and a.backbone != 'STLAformer':
     raise SystemExit(f'{a.method} requires --backbone STLAformer')

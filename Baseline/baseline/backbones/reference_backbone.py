@@ -11,6 +11,7 @@ import torch
 
 from baseline.shared_cache import cache_path
 from baseline.path_pointers import portable_project_path, resolve_portable_pointer
+from baseline.backbones.training_mode import current_mode, checkpoint_mode, reference_stage
 
 SUPPORTED_BACKBONES = ('STAEformer','HimNet','BigST','STDN','PatchSTG','STLAformer')
 _SHARED_KEYS = (
@@ -62,7 +63,7 @@ def _formal_cache_identity(cfg: dict) -> dict:
     return load_cache_identity(p)
 
 
-def _validate_checkpoint_dict(cfg: dict, ck: dict, *, model: str, seed: int, path: Path) -> None:
+def _validate_checkpoint_dict(cfg: dict, ck: dict, *, model: str, seed: int, path: Path, train_mode: str | None = None) -> None:
     if not isinstance(ck,dict):
         raise RuntimeError(f'Backbone checkpoint must be a dict: {path}')
     got_model=str(ck.get('model') or '').strip()
@@ -75,6 +76,12 @@ def _validate_checkpoint_dict(cfg: dict, ck: dict, *, model: str, seed: int, pat
     got_target=str(ck.get('target') or ck.get('run_identity',{}).get('target_name') or '').strip()
     if got_target and got_target != expected_target:
         raise RuntimeError(f'Backbone checkpoint target={got_target} != requested {expected_target}: {path}')
+    requested_mode = current_mode(train_mode)
+    actual_mode = checkpoint_mode(ck)
+    if actual_mode != requested_mode:
+        raise RuntimeError(
+            f'Backbone checkpoint train_data_mode={actual_mode!r} != requested {requested_mode!r}: {path}'
+        )
     for key in ('state_dict','model_config','mean','std'):
         if key not in ck:
             raise RuntimeError(f'Backbone checkpoint missing {key}: {path}')
@@ -97,8 +104,8 @@ def _validate_checkpoint_dict(cfg: dict, ck: dict, *, model: str, seed: int, pat
             raise RuntimeError(f'Backbone checkpoint shared identity mismatch {ik}: checkpoint={gv} baseline={ev}: {path}')
 
 
-def _candidate_checkpoints(cfg: dict, model: str, seed: int) -> Iterable[Path]:
-    root=Path(cfg['project']['backbone_exp_root'])/cfg['experiment']['target']/model/cfg['experiment']['subgraph']/'formal'
+def _candidate_checkpoints(cfg: dict, model: str, seed: int, *, train_mode: str | None = None) -> Iterable[Path]:
+    root=Path(cfg['project']['backbone_exp_root'])/cfg['experiment']['target']/model/cfg['experiment']['subgraph']/reference_stage(train_mode)
     seen=set()
     latest_ck=root/'LATEST_CHECKPOINT.txt'
     if latest_ck.exists():
@@ -121,8 +128,9 @@ def _candidate_checkpoints(cfg: dict, model: str, seed: int) -> Iterable[Path]:
                 seen.add(str(p)); yield p
 
 
-def resolve_reference_checkpoint(cfg: dict, model: str, *, seed: int = 10, checkpoint: str | Path | None = None) -> tuple[Path,dict]:
+def resolve_reference_checkpoint(cfg: dict, model: str, *, seed: int = 10, checkpoint: str | Path | None = None, train_mode: str | None = None) -> tuple[Path,dict]:
     model=str(model)
+    train_mode=current_mode(train_mode)
     if model not in SUPPORTED_BACKBONES:
         raise ValueError(f'Unsupported Backbone {model!r}; choose from {SUPPORTED_BACKBONES}')
     candidates=[]
@@ -131,20 +139,21 @@ def resolve_reference_checkpoint(cfg: dict, model: str, *, seed: int = 10, check
         p=resolve_portable_pointer(explicit,cfg['project']['root'])
         candidates=[p]
     else:
-        candidates=list(_candidate_checkpoints(cfg,model,int(seed)))
+        candidates=list(_candidate_checkpoints(cfg,model,int(seed),train_mode=train_mode))
     errors=[]
     for p in candidates:
         try:
             if not p.is_file(): raise FileNotFoundError(p)
             ck=torch.load(p,map_location='cpu',weights_only=False)
-            _validate_checkpoint_dict(cfg,ck,model=model,seed=int(seed),path=p)
+            _validate_checkpoint_dict(cfg,ck,model=model,seed=int(seed),path=p,train_mode=train_mode)
             return p.resolve(),ck
         except Exception as e:
             errors.append(f'{p}: {type(e).__name__}: {e}')
     detail='\n'.join(errors[-8:]) if errors else '(no candidate checkpoints found)'
     raise RuntimeError(
         f'No compatible Backbone checkpoint found for model={model} target={cfg["experiment"]["target"]} '
-        f'seed={seed}. Train the Backbone formal model first or pass --backbone-checkpoint.\n{detail}'
+        f'seed={seed} train_mode={train_mode} (expected Backbone/{reference_stage(train_mode)}). '
+        'Train the corresponding Backbone formal model first or pass --backbone-checkpoint.\n'+detail
     )
 
 
@@ -155,9 +164,10 @@ class ReferenceBackbone:
     optionally an exact checkpoint); the chosen checkpoint is recorded by the Baseline
     run and reused for evaluation.
     """
-    def __init__(self, cfg: dict, device: torch.device, *, model: str, seed: int = 10, checkpoint: str | Path | None = None):
+    def __init__(self, cfg: dict, device: torch.device, *, model: str, seed: int = 10, checkpoint: str | Path | None = None, train_mode: str | None = None):
         self.cfg=cfg; self.device=device; self.model_name=str(model); self.reference_seed=int(seed)
-        self.checkpoint,self.checkpoint_obj=resolve_reference_checkpoint(cfg,self.model_name,seed=self.reference_seed,checkpoint=checkpoint)
+        self.train_mode=current_mode(train_mode)
+        self.checkpoint,self.checkpoint_obj=resolve_reference_checkpoint(cfg,self.model_name,seed=self.reference_seed,checkpoint=checkpoint,train_mode=self.train_mode)
         self.checkpoint_sha256=sha256_file(self.checkpoint)
         self.checkpoint_reference=portable_project_path(self.checkpoint,cfg['project']['root'])
         ck=self.checkpoint_obj
@@ -180,6 +190,7 @@ class ReferenceBackbone:
         self.adapter=adapter
         self.registry={
             'selected_model':self.model_name,
+            'reference_backbone_train_mode':self.train_mode,
             'reference_seed':self.reference_seed,
             'reference_checkpoint':self.checkpoint_reference,
             'reference_checkpoint_sha256':self.checkpoint_sha256,
@@ -215,8 +226,8 @@ class ReferenceBackbone:
         return self.adapter.raw(self.predict_norm(x_norm,tod_hist,dow_hist))
 
 
-def build_reference_backbone(cfg: dict, device: torch.device, *, model: str, seed: int = 10, checkpoint: str | Path | None = None) -> ReferenceBackbone:
-    return ReferenceBackbone(cfg,device,model=model,seed=seed,checkpoint=checkpoint)
+def build_reference_backbone(cfg: dict, device: torch.device, *, model: str, seed: int = 10, checkpoint: str | Path | None = None, train_mode: str | None = None) -> ReferenceBackbone:
+    return ReferenceBackbone(cfg,device,model=model,seed=seed,checkpoint=checkpoint,train_mode=train_mode)
 
 
 class ReferenceBackboneRASTBridge(torch.nn.Module):

@@ -25,6 +25,7 @@ if not SUPPORTBENCH_PROJECT.exists():
 if SUPPORTBENCH_PROJECT.exists() and str(SUPPORTBENCH_PROJECT) not in sys.path:
     sys.path.insert(0, str(SUPPORTBENCH_PROJECT))
 
+from baseline.backbones.training_mode import set_mode_from_cli, current_mode, method_reference_parent
 from baseline.backbones.reference_backbone import ReferenceBackbone, build_reference_backbone
 from baseline.runners.common import (
     ImputationDataset,
@@ -221,7 +222,9 @@ def main():
     ap.add_argument('--smoke', action='store_true')
     ap.add_argument('--backbone', required=True)
     ap.add_argument('--backbone-checkpoint', default=None)
+    ap.add_argument('--backbone-train-mode', choices=['incomplete','complete'], default=None)
     a = ap.parse_args()
+    set_mode_from_cli(a.backbone_train_mode)
     cfg, cache = validate_stage(a.stage, 'SPRINT')
     set_seed(a.seed)
     device = require_gpu()
@@ -258,7 +261,7 @@ def main():
             raise RuntimeError(f'SPRINT smoke prediction shape {raw.shape} != {exp}')
         print('SPRINT CAUSAL HISTORY -> REFERENCE BACKBONE GPU SMOKE PASS', {
             'shape': raw.shape,
-            'reference_backbone_model': backbone.model_name,
+            'reference_backbone_train_mode': backbone.train_mode, 'reference_backbone_model': backbone.model_name,
             'reference_backbone_seed': backbone.reference_seed,
         }, flush=True)
         return
@@ -273,7 +276,7 @@ def main():
         'historical_days': int(c['historical_days']),
         'day_steps': int(c['day_steps']),
         'vendor_algorithm_defaults': native,
-        'reference_backbone_model': backbone.model_name,
+        'reference_backbone_train_mode': backbone.train_mode, 'reference_backbone_model': backbone.model_name,
             'reference_backbone_seed': backbone.reference_seed,
         'reference_backbone_checkpoint': backbone.checkpoint_reference,
         'reference_backbone_checkpoint_sha256': backbone.checkpoint_sha256,
@@ -292,7 +295,7 @@ def main():
         'sprint_historical_days': int(c['historical_days']),
         'sprint_day_steps': int(c['day_steps']),
         'downstream_forecaster': f'{backbone.model_name} reference checkpoint',
-        'reference_backbone_model': backbone.model_name,
+        'reference_backbone_train_mode': backbone.train_mode, 'reference_backbone_model': backbone.model_name,
             'reference_backbone_seed': backbone.reference_seed,
         'reference_backbone_checkpoint': backbone.checkpoint_reference,
         'reference_backbone_checkpoint_sha256': backbone.checkpoint_sha256,

@@ -8,6 +8,7 @@ COMMON=(next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline
 if not COMMON.exists(): COMMON=ROOT.parent/'Base_SupportBench'
 for p in [ROOT,COMMON,ROOT.parent/'Protocol',ROOT.parent/'Base_SupportBench']:
     if str(p) not in sys.path: sys.path.insert(0,str(p))
+from baseline.backbones.training_mode import set_mode_from_cli, current_mode, method_reference_parent
 from baseline.registry import ORDER
 from baseline.contracts import audit_repo_contract
 from baseline.utils import load_yaml
@@ -24,7 +25,9 @@ ap.add_argument('--method',default=None)
 ap.add_argument('--severity',type=int,choices=EVALUATION_SEVERITIES)
 ap.add_argument('--backbone',choices=SUPPORTED_BACKBONES)
 ap.add_argument('--backbone-checkpoint',default=None)
+ap.add_argument('--backbone-train-mode', choices=['incomplete','complete'], default=None)
 a=ap.parse_args()
+set_mode_from_cli(a.backbone_train_mode)
 if a.stage=='evaluation' and a.severity is None: raise SystemExit('--severity is required for evaluation')
 cfg=load_yaml(ROOT/'configs/baseline.yaml')
 if a.method in ('RAST-STLAformer','RAFT-STLAformer') and a.backbone != 'STLAformer':

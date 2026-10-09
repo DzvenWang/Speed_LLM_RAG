@@ -20,6 +20,7 @@ if not ROOT.exists():
     ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
+from baseline.backbones.training_mode import set_mode_from_cli, current_mode, method_reference_parent
 from baseline.runners.common import (  # noqa: E402
     RASTDataset,
     make_run_dir,
@@ -88,6 +89,7 @@ def build_model(cfg, variant, seed, device, db, backbone_model=None, backbone_ch
             checkpoint=backbone_checkpoint,
         )
         model.backbone = ReferenceBackboneRASTBridge(reference)
+        model._reference_backbone_train_mode = reference.train_mode
         model._reference_backbone_model = selected
         model._reference_backbone_checkpoint = reference.checkpoint_reference
         model._reference_backbone_checkpoint_sha256 = str(reference.checkpoint_sha256)
@@ -379,7 +381,9 @@ def main():
     ap.add_argument('--backbone', choices=SUPPORTED_BACKBONES)
     ap.add_argument('--backbone-checkpoint', default=None)
     ap.add_argument('--smoke', action='store_true')
+    ap.add_argument('--backbone-train-mode', choices=['incomplete','complete'], default=None)
     args = ap.parse_args()
+    set_mode_from_cli(args.backbone_train_mode)
 
     if args.variant in ('patchstg','reference') and args.stage != 'formal':
         raise SystemExit('RAST matched-backbone controlled adaptation is formal-only')
@@ -449,6 +453,7 @@ def main():
                     'correction_rms': smoke['correction_rms'],
                     'correction_max_abs': smoke['correction_max_abs'],
                     'impact': smoke['impact'],
+                    'reference_backbone_train_mode': getattr(model, '_reference_backbone_train_mode', None),
                     'reference_backbone_model': getattr(model, '_reference_backbone_model', None),
                     'reference_backbone_seed': getattr(model, '_reference_backbone_seed', None),
                     'reference_backbone_checkpoint': getattr(model, '_reference_backbone_checkpoint', None),
@@ -571,6 +576,7 @@ def main():
             'best_val_mae_norm': best,
             'variant': args.variant,
             'method_implementation_revision': cfg.get('method_implementation_revisions', {}).get(method_key),
+            'reference_backbone_train_mode': getattr(model, '_reference_backbone_train_mode', None),
             'reference_backbone_model': getattr(model, '_reference_backbone_model', None),
             'reference_backbone_checkpoint': getattr(model, '_reference_backbone_checkpoint', None),
             'reference_backbone_checkpoint_sha256': getattr(model, '_reference_backbone_checkpoint_sha256', None),
@@ -613,6 +619,7 @@ def main():
             'final_val_impact_vs_reference_backbone': final_impact if args.variant != 'native' else None,
             'impact_diagnostic_contract': 'matched_reference_backbone_helpful_harmful_v1',
             'test_access': False,
+            'reference_backbone_train_mode': getattr(model, '_reference_backbone_train_mode', None),
             'reference_backbone_model': getattr(model, '_reference_backbone_model', None),
             'reference_backbone_seed': getattr(model, '_reference_backbone_seed', None),
             'reference_backbone_checkpoint': getattr(model, '_reference_backbone_checkpoint', None),

@@ -18,6 +18,7 @@ ROOT = GADI_ROOT if GADI_ROOT.exists() else Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from baseline.backbones.training_mode import set_mode_from_cli, current_mode, method_reference_parent
 from baseline.backbones.reference_backbone import build_reference_backbone, SUPPORTED_BACKBONES  # noqa: E402
 from baseline.runners.common import (  # noqa: E402
     SARAFTensorDataset,
@@ -231,7 +232,9 @@ def main() -> None:
     ap.add_argument('--smoke', action='store_true')
     ap.add_argument('--backbone', choices=SUPPORTED_BACKBONES)
     ap.add_argument('--backbone-checkpoint', default=None)
+    ap.add_argument('--backbone-train-mode', choices=['incomplete','complete'], default=None)
     args = ap.parse_args()
+    set_mode_from_cli(args.backbone_train_mode)
 
     native_key = 'RAFT' if args.method.startswith('RAFT-') else 'SARAF'
     selected_backbone = ('STLAformer' if args.method == 'RAFT-STLAformer' else 'PatchSTG')
@@ -340,6 +343,7 @@ def main() -> None:
         'control_model': best_control_state,
         'best_epoch': int(best_epoch),
         'best_val_mse_norm': float(best),
+        'reference_backbone_train_mode': model.frozen.train_mode,
         'reference_backbone_model': selected_backbone,
         'reference_backbone_checkpoint': model.frozen.checkpoint_reference,
         'reference_backbone_checkpoint_sha256': str(model.frozen.checkpoint_sha256),
@@ -364,6 +368,7 @@ def main() -> None:
             'residual_scale_init': float(rcfg.get('reference_control_residual_scale_init', 0.0)),
             'residual_formula': ('base + alpha * (raft_fused - base)' if getattr(model, 'safe_residual', False) else None),
             'wall_seconds': float(time.time() - t0),
+            'reference_backbone_train_mode': model.frozen.train_mode,
             'reference_backbone_model': selected_backbone,
             'reference_backbone_checkpoint': model.frozen.checkpoint_reference,
             'reference_backbone_checkpoint_sha256': str(model.frozen.checkpoint_sha256),

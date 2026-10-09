@@ -6,6 +6,7 @@ import numpy as np, torch
 from torch import nn
 from torch.utils.data import DataLoader
 ROOT=next((p for p in Path(__file__).resolve().parents if p.name == 'Baseline'), Path.cwd());sys.path.insert(0,str(ROOT))
+from baseline.backbones.training_mode import set_mode_from_cli, current_mode, method_reference_parent
 from baseline.runners.common import ImputationDataset,make_run_dir,require_gpu,save_val_outputs,set_seed,validate_stage
 from baseline.backbones.reference_backbone import build_reference_backbone
 from baseline.compat.imputeformer_tsl_shim import install_imputeformer_tsl_shim
@@ -60,7 +61,7 @@ def forecast_val(model,dl,backbone,device):
     return np.concatenate(out,0).astype(np.float32)
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--stage',choices=['development','formal'],default='development');ap.add_argument('--seed',type=int,required=True);ap.add_argument('--smoke',action='store_true');ap.add_argument('--backbone',required=True);ap.add_argument('--backbone-checkpoint',default=None);a=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--stage',choices=['development','formal'],default='development');ap.add_argument('--seed',type=int,required=True);ap.add_argument('--smoke',action='store_true');ap.add_argument('--backbone',required=True);ap.add_argument('--backbone-checkpoint',default=None);ap.add_argument('--backbone-train-mode', choices=['incomplete','complete'], default=None);a=ap.parse_args();set_mode_from_cli(a.backbone_train_mode)
     cfg,cache=validate_stage(a.stage,'ImputeFormer');set_seed(a.seed);device=require_gpu();backbone=build_reference_backbone(cfg,device,model=a.backbone,seed=int(cfg.get('reference_backbone',{}).get('seed',10)),checkpoint=a.backbone_checkpoint);c=cfg['runners']['ImputeFormer']
     tr=ImputationDataset(cache,'train');va=ImputationDataset(cache,'val');N=tr.x.shape[2];model=build_model(cfg,N).to(device);nparams=sum(p.numel() for p in model.parameters() if p.requires_grad)
     dl=lambda ds,sh:DataLoader(ds,batch_size=int(c['batch_size']),shuffle=sh,num_workers=0,pin_memory=True)
@@ -96,7 +97,7 @@ def main():
         print('IMPUTEFORMER GPU SMOKE PASS',float(loss),flush=True)
         print('IMPUTEFORMER -> REFERENCE BACKBONE GPU SMOKE PASS',
               {'prediction_shape':tuple(pred_raw.shape),
-               'reference_backbone_model':backbone.model_name,
+               'reference_backbone_train_mode':backbone.train_mode,'reference_backbone_model':backbone.model_name,
                'reference_backbone_seed':backbone.reference_seed,
                'reference_backbone_checkpoint':backbone.checkpoint_reference,
                'reference_backbone_checkpoint_sha256':backbone.checkpoint_sha256},flush=True)
@@ -116,7 +117,7 @@ def main():
             stale+=1
             if stale>=int(c['patience']):print(f'EARLY STOP epoch={ep} best_epoch={be}');break
     model.load_state_dict(state);model.to(device);raw=forecast_val(model,val,backbone,device);rd=make_run_dir(cfg,'ImputeFormer',a.stage,a.seed,backbone_model=backbone.model_name)
-    torch.save({'model':state,'best_epoch':be,'best_val_impute_mae_norm':best,'reference_backbone_model':backbone.model_name,'reference_backbone_seed':backbone.reference_seed,'reference_backbone_checkpoint':backbone.checkpoint_reference,'reference_backbone_checkpoint_sha256':backbone.checkpoint_sha256},rd/'best.pt')
-    sm=save_val_outputs(cfg,cache,rd,raw,'ImputeFormer',a.seed,a.stage,{'best_epoch':be,'best_val_impute_MAE_norm':best,'params':nparams,'wall_seconds':time.time()-t0,'official_architecture':'vendor/ImputeFormer/experiments/imputeformer/models/ImputeFormer.py::ImputeFormerModel','downstream_forecaster':f'{backbone.model_name} reference checkpoint','reference_backbone_model':backbone.model_name,'reference_backbone_seed':backbone.reference_seed,'reference_backbone_checkpoint':backbone.checkpoint_reference,'reference_backbone_checkpoint_sha256':backbone.checkpoint_sha256,'checkpoint_selection':'history-imputation validation only','test_access':False})
+    torch.save({'model':state,'best_epoch':be,'best_val_impute_mae_norm':best,'reference_backbone_train_mode':backbone.train_mode,'reference_backbone_model':backbone.model_name,'reference_backbone_seed':backbone.reference_seed,'reference_backbone_checkpoint':backbone.checkpoint_reference,'reference_backbone_checkpoint_sha256':backbone.checkpoint_sha256},rd/'best.pt')
+    sm=save_val_outputs(cfg,cache,rd,raw,'ImputeFormer',a.seed,a.stage,{'best_epoch':be,'best_val_impute_MAE_norm':best,'params':nparams,'wall_seconds':time.time()-t0,'official_architecture':'vendor/ImputeFormer/experiments/imputeformer/models/ImputeFormer.py::ImputeFormerModel','downstream_forecaster':f'{backbone.model_name} reference checkpoint','reference_backbone_train_mode':backbone.train_mode,'reference_backbone_model':backbone.model_name,'reference_backbone_seed':backbone.reference_seed,'reference_backbone_checkpoint':backbone.checkpoint_reference,'reference_backbone_checkpoint_sha256':backbone.checkpoint_sha256,'checkpoint_selection':'history-imputation validation only','test_access':False})
     print('IMPUTEFORMER COMPLETE',json.dumps({'run_dir':str(rd),'val':sm['val']},default=str))
 if __name__=='__main__':main()
