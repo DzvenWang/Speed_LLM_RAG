@@ -58,6 +58,13 @@ def run_test():
             assert 'EVAL_SPLITS=test' in vars
             assert 'SEVERITIES=20:40:60:90' in vars
         assert 'FARE_GADI_SUBMISSION_PASS targets=speed,flow' in result.stdout
+        # A manually configured conda.sh override is forwarded through qsub -v.
+        override = dict(env, FARE_CONDA_SH='/scratch/mh20/zw1165/miniconda/etc/profile.d/conda.sh')
+        forwarded = subprocess.run([sys.executable,str(runner),'train','--dataset',
+             'TraffiDent_Net_06','--targets','speed','--dry-run'],
+             capture_output=True,text=True,env=override)
+        assert forwarded.returncode==0,(forwarded.stdout,forwarded.stderr)
+        assert 'FARE_CONDA_SH=/scratch/mh20/zw1165/miniconda/etc/profile.d/conda.sh' in forwarded.stdout
         assert result.stdout.count('FARE_GADI_IN_JOB_EVALUATE_CONFIGURED')==2
         dirs=list((root/'FARE_exps').glob('*/TraffiDent_Net_06/formal/*'))
         assert len(dirs)==2

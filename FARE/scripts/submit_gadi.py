@@ -45,7 +45,13 @@ def submit(pbs: str, name: str, env: dict, depends: str | None = None,
         if not re.fullmatch(r'[A-Za-z0-9_.-]+', depends):
             raise ValueError(f'Invalid dependency job ID: {depends}')
         cmd += ['-W', f'depend=afterok:{depends}']
-    cmd += ['-v', to_qsub_env(env), str(script)]
+    # Optional explicitly configured Conda bootstrap override must reach the
+    # compute node, not just the submission shell. PBS -v is explicit.
+    pbs_env = dict(env)
+    conda_sh = os.environ.get('FARE_CONDA_SH', '').strip()
+    if conda_sh and 'FARE_CONDA_SH' not in pbs_env:
+        pbs_env['FARE_CONDA_SH'] = str(Path(conda_sh).expanduser())
+    cmd += ['-v', to_qsub_env(pbs_env), str(script)]
     if dry_run:
         print('FARE_GADI_DRY_RUN ' + json.dumps(cmd, ensure_ascii=False), flush=True)
         return f'dryrun-{ordinal}.gadi-pbs'

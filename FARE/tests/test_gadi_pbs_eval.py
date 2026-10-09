@@ -25,14 +25,16 @@ def test_run():
         for filename in ('evaluate.py','train.py'):
             (scripts/filename).write_text(FAKE_CLI)
         home=root/'fakehome';home.mkdir()
-        (home/'.bashrc').write_text('conda(){ :; }\n')
+        (home/'.bashrc').write_text(': "${BASHRCSOURCED?do not source rc under PBS strict mode}"\n')
+        bootstrap=root/'mock_conda.sh'
+        bootstrap.write_text('conda() { if [ "$1" = activate ]; then export CONDA_DEFAULT_ENV="$2"; fi; }\n')
         run=root/'FARE_exps'/'speed'/'TraffiDent_Net_06'/'formal'/'test_seed10'
         run.mkdir(parents=True)
         ck=run/'candidate_best.pt';ck.write_bytes(b'fake')
         (run/'best.pt').write_bytes(b'fake')
         marker=root/'calls.jsonl'
         env=dict(os.environ, HOME=str(home), SPEED_LLM_RAG_ROOT=str(root),
-                 FARE_FAKE_PBS_MARKER=str(marker), PBS_JOBID='9876.gadi-pbs',
+                 FARE_FAKE_PBS_MARKER=str(marker), FARE_CONDA_SH=str(bootstrap), PBS_JOBID='9876.gadi-pbs',
                  DATASET='TraffiDent_Net_06', TARGET='speed')
         e=dict(env,RUN_DIR=str(run),CHECKPOINT_KIND='candidate', EVAL_KIND='auto',
                SPLIT='test',SEVERITIES='20:40:60:90')
@@ -69,8 +71,6 @@ def test_run():
         assert '--auto-evaluate' not in args
         # The Gadi user may have a `conda` executable, but no activation
         # function in the noninteractive PBS shell. Use explicit conda.sh.
-        bootstrap=root/'mock_conda.sh'
-        bootstrap.write_text('conda() { if [ "$1" = activate ]; then export CONDA_DEFAULT_ENV="$2"; fi; }\n')
         bare_home=root/'bare_home';bare_home.mkdir()
         no_rc=dict(e,HOME=str(bare_home),FARE_CONDA_SH=str(bootstrap),AUTO_EVALUATE='1')
         result=subprocess.run(['bash',str(PBS_DIR/'train_formal.pbs')],env=no_rc,capture_output=True,text=True)

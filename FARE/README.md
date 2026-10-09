@@ -321,3 +321,20 @@ See `RELEASE_1.3.0.md` for the full upgrade and executable commands. Highlights:
 - `configs/pilot.yaml`: 8k time-spread train records, 16k legal train-only memory entries, 5k validation; never pick alpha or modules on Test.
 - Existing five stages and Gadi Train→Auto Evaluate / Manual Evaluate are preserved.
 - **Not backward checkpoint-compatible with v1.2.0**; re-train v1.3.0.
+
+
+## Gadi PBS startup fix (v1.3.3)
+
+Gadi job output `**/etc/bashrc: line 12: BASHRCSOURCED: unbound variable**` means the PBS shell exited **before** Python/CUDA training began; it is not a model or memory error. Starting in v1.3.3 all four PBS entrypoints (`train_formal`, `evaluate`, `oof_controller`, `calibrate`) source only `FARE/pbs/_activate_tfp.sh`, which **never sources `~/.bashrc` or `/etc/bashrc`**. It finds `conda.sh` in the parent directory of `Speed_LLM_RAG` (the Gadi layout has `../miniconda/etc/profile.d/conda.sh`) or uses the optional `FARE_CONDA_SH` override. During `conda.sh` loading and activation, nounset is temporarily disabled and then restored. The script exits with an actionable `FARE_CONDA_INIT_ERROR` or `FARE_CONDA_ACTIVATE_ERROR` on failure.
+
+Verify the bootstrapping from the Gadi login node without booking a GPU:
+
+```bash
+cd /scratch/mh20/zw1165/Speed_LLM_RAG
+export SPEED_LLM_RAG_ROOT="$PWD"
+bash --noprofile --norc -c 'set -euo pipefail; source FARE/pbs/_activate_tfp.sh; python -c "import sys; print(sys.executable)"'
+```
+
+Expected: `FARE_CONDA_INIT_OK`, `FARE_CONDA_READY ... env=TFP`, and the correct Python executable. If auto-discovery fails, set `export FARE_CONDA_SH=/scratch/mh20/zw1165/miniconda/etc/profile.d/conda.sh` in the login environment to test it; `submit_gadi.py` will forward it in the PBS `-v` environment, including manual Evaluate and optional finalization jobs.
+
+**Already-submitted failed PBS jobs cannot be restarted by editing source files.** After installing v1.3.3, submit a fresh Pilot. This still creates exactly **one Train + in-allocation Val/Test Evaluate PBS job per target**. Train and Evaluate share the same GPU allocation and walltime. No model architecture or checkpoint format changes.
