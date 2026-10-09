@@ -1,4 +1,4 @@
-version: 1.1.2
+version: 2.0.0
 project:
   root: ${SPEED_LLM_RAG_ROOT}
   backbone_root: ${SPEED_LLM_RAG_ROOT}/Backbone
@@ -25,7 +25,9 @@ encoder:
   spatial_heads: 4
   dropout: 0.10
 retrieval:
-  top_k: 3
+  top_k: 6
+  graph_neighbors: 8
+  graph_sampled_rows: 1200
   temperature: 0.10
   store_refresh_epochs: 5
   store_batch_size: 256
@@ -34,12 +36,16 @@ model:
   fusion_hidden: 96
   latent_gate_dim: 8
   dropout: 0.10
-  forecast_gate_bias: -2.0
+  none_bias: 0.8
+  node_hidden: 16
+  max_normalized_correction: 3.0
   latent_gate_bias: -1.0
 training:
-  batch_size: 32
+  batch_size: 16
   fallback_batch_sizes: [24, 16, 8]
   max_epochs: 80
+  schedule: progressive
+  ablation: full
   patience: 20
   warmup_epochs: 10
   partial_epochs: 35
@@ -48,7 +54,10 @@ training:
   lr_backbone: 0.00005
   weight_decay: 0.0001
   grad_clip: 5.0
-  forecast_loss: huber
+  forecast_loss: mae
+  rank_weight: 0.05
+  utility_temperature: 0.25
+  rmse_weight: 0.05
   alignment_weight: 0.10
   retrieval_aux_weight: 0.15
   gate_reg_weight: 0.0005

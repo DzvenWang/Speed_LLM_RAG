@@ -1,4 +1,4 @@
-version: 1.1.2
+version: 2.0.0
 project:
   root: ${SPEED_LLM_RAG_ROOT}
   backbone_root: ${SPEED_LLM_RAG_ROOT}/Backbone
@@ -20,7 +20,9 @@ backbone:
   mask_features: [observed, node_coverage, time_coverage, missing_age]
 retrieval:
   periods: [4, 2, 1]
-  top_k: 20
+  top_k: 12
+  shortlist_per_period: 3
+  replay_batch_size: 24
   temperature: 0.10
   coverage_gamma: 0.5
   query_batch_size: 128
@@ -32,11 +34,15 @@ model:
   latent_gate_dim: 8
   fusion_hidden: 64
   dropout: 0.10
-  gate_bias: -2.0
+  none_bias: 1.0
+  latent_dim: 16
+  max_normalized_correction: 3.0
 training:
-  batch_size: 64
+  batch_size: 16
   fallback_batch_sizes: [32, 16, 8]
   max_epochs: 80
+  schedule: progressive
+  ablation: full
   patience: 20
   warmup_epochs: 10
   partial_epochs: 35
@@ -45,7 +51,10 @@ training:
   lr_backbone: 0.00005
   weight_decay: 0.0001
   grad_clip: 5.0
-  forecast_loss: huber
+  forecast_loss: mae
+  rank_weight: 0.05
+  utility_temperature: 0.25
+  rmse_weight: 0.05
   retrieval_aux_weight: 0.20
   gate_reg_weight: 0.0005
   min_delta: 0.00000001
@@ -54,7 +63,7 @@ runtime:
   pin_memory: true
   persistent_workers: true
   prefetch_factor: 2
-  preload_retrieval_memory_gpu: true
+  preload_retrieval_memory_gpu: false
   gpu_monitor_interval_sec: 30
   amp: false
   print_every: 100

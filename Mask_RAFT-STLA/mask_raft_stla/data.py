@@ -7,7 +7,7 @@ class SupportSplit(Dataset):
     def __init__(self, cache: str|Path, split: str, limit: int|None=None):
         r=Path(cache); self.root=r; self.split=split
         def mm(name): return np.load(r/f'{split}_{name}.npy',mmap_mode='r')
-        self.x_obs=mm('x_obs_norm'); self.x_full=mm('x_full_norm'); self.y_norm=mm('y_norm'); self.y_raw=mm('y_raw')
+        self.x_obs=mm('x_obs_norm'); self.y_norm=mm('y_norm'); self.y_raw=mm('y_raw')
         self.observed=mm('history_observed'); self.valid=mm('future_valid'); self.direct=mm('direct_mask')
         self.tod=mm('tod_hist'); self.dow=mm('dow_hist'); self.meta=pd.read_csv(r/f'{split}_manifest.csv')
         self.n=len(self.meta) if limit is None else min(int(limit),len(self.meta))
@@ -15,7 +15,6 @@ class SupportSplit(Dataset):
     def __getitem__(self,i):
         return {
             'index':int(i),'x':torch.from_numpy(np.array(self.x_obs[i],np.float32,copy=True)),
-            'x_full':torch.from_numpy(np.array(self.x_full[i],np.float32,copy=True)),
             'mask':torch.from_numpy(np.array(self.observed[i],np.float32,copy=True)),
             'y_norm':torch.from_numpy(np.array(self.y_norm[i],np.float32,copy=True)),
             'y_raw':torch.from_numpy(np.array(self.y_raw[i],np.float32,copy=True)),

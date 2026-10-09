@@ -50,7 +50,7 @@ log_line "EVALUATE_START model=Mask_RAFT-STLA target=$TARGET checkpoint=$CKPT se
 log_line "ROOT=$ROOT PYTHON=$PYTHON"
 run_logged "$PYTHON" -V
 run_logged nvidia-smi || true
-run_logged "$PYTHON" -u Mask_RAFT-STLA/scripts/preflight.py --target "$TARGET"
+log_line "EVAL_PREFLIGHT uses checkpoint-embedded v2 config and SHA256 verification"
 # shellcheck disable=SC2086
 run_logged "$PYTHON" -u Mask_RAFT-STLA/scripts/evaluate.py --checkpoint "$CKPT" --target "$TARGET" --severities $SEVERITIES
 log_line "EVALUATE_FINISH model=Mask_RAFT-STLA target=$TARGET checkpoint=$CKPT severities=$SEVERITIES"

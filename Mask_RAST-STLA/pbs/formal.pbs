@@ -11,8 +11,10 @@ set -euo pipefail
 
 TARGET=${TARGET:-${TRAFFIDENT_TARGET:-speed}}
 SEED=${SEED:-10}
+DATASET=${DATASET:-TraffiDent_Net_06}
+ABLATION=${ABLATION:-full}
 case "$TARGET" in speed|flow) ;; *) echo "ERROR TARGET=$TARGET (expected speed|flow)"; exit 2;; esac
-[[ "$SEED" == "10" ]] || { echo "ERROR Formal seed fixed to 10"; exit 2; }
+[[ "$SEED" =~ ^[0-9]+$ ]] || { echo "ERROR SEED must be a nonnegative integer"; exit 2; }
 
 ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
 ENVROOT=${TFP_ENV_ROOT:-/scratch/mh20/zw1165/envs/TFP}
@@ -63,8 +65,8 @@ cleanup_gpu_monitor() {
 }
 trap cleanup_gpu_monitor EXIT
 
-run_logged "$PYTHON" -u Mask_RAST-STLA/scripts/preflight.py --target "$TARGET"
+run_logged "$PYTHON" -u Mask_RAST-STLA/scripts/preflight.py --target "$TARGET" --dataset "$DATASET"
 log_line "PERF_CONFIG project=Mask_RAST-STLA ncpus=12"
-run_logged "$PYTHON" -u Mask_RAST-STLA/scripts/train.py --target "$TARGET" --seed "$SEED" --run-stamp "$STAMP"
+run_logged "$PYTHON" -u Mask_RAST-STLA/scripts/train.py --target "$TARGET" --seed "$SEED" --dataset "$DATASET" --ablation "$ABLATION" --run-stamp "$STAMP"
 
 log_line "FINISH model=Mask_RAST-STLA target=$TARGET seed=$SEED"

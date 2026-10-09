@@ -6,34 +6,23 @@ from mask_rast_stla.config import load_config,cache_path,resolve_stla_checkpoint
 from mask_rast_stla.trainer import train
 
 def main():
-    ap=argparse.ArgumentParser()
-    ap.add_argument('--target',choices=['speed','flow'])
-    ap.add_argument('--seed',type=int,default=10)
-    ap.add_argument('--backbone-checkpoint')
-    ap.add_argument('--smoke',action='store_true')
-    ap.add_argument('--run-stamp')
-    ap.add_argument('--config',default=None)
-    ap.add_argument('--batch-size',type=int)
-    ap.add_argument('--num-workers',type=int)
-    ap.add_argument('--skip-evaluate',action='store_true',help='Skip automatic formal s20/s40/s60/s90 evaluation after training')
-    a=ap.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--target',choices=['speed','flow']);p.add_argument('--seed',type=int,default=10)
+    p.add_argument('--dataset');p.add_argument('--backbone-checkpoint');p.add_argument('--config');p.add_argument('--smoke',action='store_true')
+    p.add_argument('--run-stamp');p.add_argument('--batch-size',type=int);p.add_argument('--num-workers',type=int)
+    p.add_argument('--ablation',choices=['full','no_retrieval','no_future','no_regional','no_none','shuffled'])
+    p.add_argument('--skip-evaluate',action='store_true');a=p.parse_args()
     if a.target:os.environ['TRAFFIDENT_TARGET']=a.target
-    cfg=load_config(a.config);cfg['experiment']['seed']=int(a.seed)
-    if a.batch_size:cfg['training']['batch_size']=int(a.batch_size)
-    if a.num_workers is not None:cfg['runtime']['num_workers']=int(a.num_workers)
+    cfg=load_config(a.config);cfg['experiment']['seed']=a.seed
+    if a.dataset:cfg['experiment']['dataset']=a.dataset
+    if a.batch_size:cfg['training']['batch_size']=a.batch_size
+    if a.num_workers is not None:cfg['runtime']['num_workers']=a.num_workers
+    if a.ablation:cfg['training']['ablation']=a.ablation
     cache=cache_path(cfg,'formal');ck=resolve_stla_checkpoint(cfg,a.backbone_checkpoint)
-    stamp=a.run_stamp or datetime.datetime.now().strftime('%Y%m%d_%H%M%S');stage='formal_smoke' if a.smoke else 'formal'
-    run=Path(cfg['project']['exp_root'])/cfg['experiment']['dataset']/stage/f'{stamp}_seed{a.seed}'
+    tag='formal_smoke' if a.smoke else 'formal';stamp=a.run_stamp or datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    run=Path(cfg['project']['exp_root'])/cfg['experiment']['dataset']/tag/f'{stamp}_seed{a.seed}_{cfg["training"]["ablation"]}'
     best=train(cfg,cache,ck,run,a.smoke);print(f'BEST_CHECKPOINT={best}',flush=True)
-    if a.smoke:
-        print('AUTO_EVALUATE_SKIP reason=smoke',flush=True)
-    elif a.skip_evaluate:
-        print('AUTO_EVALUATE_SKIP reason=cli',flush=True)
-    else:
-        severities=[str(int(x)) for x in cfg['experiment'].get('severities',[20,40,60,90])]
-        cmd=[sys.executable,'-u',str(ROOT/'scripts/evaluate.py'),'--checkpoint',str(best),'--target',cfg['experiment']['target'],'--severities',*severities]
-        if a.config:cmd.extend(['--config',a.config])
-        print(f'AUTO_EVALUATE_START checkpoint={best} severities={",".join(severities)}',flush=True)
-        subprocess.check_call(cmd,cwd=ROOT)
-        print(f'AUTO_EVALUATE_PASS checkpoint={best}',flush=True)
+    if not a.smoke and not a.skip_evaluate:
+        subprocess.check_call([sys.executable,'-u',str(ROOT/'scripts/evaluate.py'),'--checkpoint',str(best),'--severities',*[str(s) for s in cfg['experiment']['severities']]],cwd=ROOT)
+        print('AUTO_EVALUATE_PASS',best,flush=True)
+    else:print('AUTO_EVALUATE_SKIP reason=smoke_or_cli',flush=True)
 if __name__=='__main__':main()

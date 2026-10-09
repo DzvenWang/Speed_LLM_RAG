@@ -31,7 +31,7 @@ def build_retrieval_cache(cache_dir: Path, split: str, out_path: Path, periods, 
     mem_meta=pd.read_csv(memory_cache_dir/'train_manifest.csv'); qry_meta=pd.read_csv(cache_dir/f'{split}_manifest.csv')
     Q=len(qry_meta) if limit is None else min(int(limit),len(qry_meta)); M=len(mem_meta) if memory_limit is None else min(int(memory_limit),len(mem_meta)); mem_meta=mem_meta.iloc[:M].reset_index(drop=True); H=query_x.shape[1]
     indices=np.empty((Q,len(periods),top_k),np.int32); scores=np.empty((Q,len(periods),top_k),np.float32); coverage=np.empty((Q,len(periods)),np.float32)
-    mem_starts=torch.as_tensor(mem_meta.window_start.astype(np.int64).to_numpy(),device=device); qry_starts=np.asarray(qry_meta.window_start.astype(np.int64).to_numpy()[:Q]); span=H+12
+    mem_starts=torch.as_tensor(mem_meta.window_start.astype(np.int64).to_numpy(),device=device); qry_starts=np.asarray(qry_meta.window_start.astype(np.int64).to_numpy()[:Q]); span=H+int(np.load(memory_cache_dir/'train_y_norm.npy',mmap_mode='r').shape[1])
     for pi,g in enumerate(periods):
         print(f'RETRIEVAL period={g} split={split} Q={Q} M={M}',flush=True)
         # Build full-memory coarse features once on CPU to avoid duplicate transformation per query batch.
