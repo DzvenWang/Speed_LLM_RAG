@@ -17,7 +17,7 @@ class SupportSplit(Dataset):
 class FullTrainRepository:
     def __init__(self, formal_cache: str|Path, limit: int|None=None):
         r=Path(formal_cache); self.root=r; self.x=np.load(r/'train_x_full_norm.npy',mmap_mode='r'); self.y=np.load(r/'train_y_norm.npy',mmap_mode='r'); self.future_valid=np.load(r/'train_future_valid.npy',mmap_mode='r') if (r/'train_future_valid.npy').is_file() else None; self.tod=np.load(r/'train_tod_hist.npy',mmap_mode='r'); self.dow=np.load(r/'train_dow_hist.npy',mmap_mode='r'); self.meta=pd.read_csv(r/'train_manifest.csv'); self.n=len(self.meta) if limit is None else min(int(limit),len(self.meta)); self.starts=np.asarray(self.meta.window_start.astype(np.int64).to_numpy()[:self.n])
-        self.x_device=None; self.tod_device=None; self.dow_device=None; self._device=None
+        self.x_device=None; self.tod_device=None; self.dow_device=None; self.y_device=None; self.future_valid_device=None; self._device=None
     def __len__(self): return self.n
     def preload(self,device):
         device=torch.device(device)
@@ -27,13 +27,15 @@ class FullTrainRepository:
             self.x_device=torch.from_numpy(np.array(self.x[:self.n],np.float32,copy=True)).to(device)
             self.tod_device=torch.from_numpy(np.array(self.tod[:self.n],np.int64,copy=True)).to(device)
             self.dow_device=torch.from_numpy(np.array(self.dow[:self.n],np.int64,copy=True)).to(device)
+            self.y_device=torch.from_numpy(np.array(self.y[:self.n],np.float32,copy=True)).to(device)
+            self.future_valid_device=(torch.from_numpy(np.array(self.future_valid[:self.n],np.bool_,copy=True)).to(device) if self.future_valid is not None else None)
             self._device=str(device)
-            gb=(self.x_device.numel()*self.x_device.element_size()+self.tod_device.numel()*self.tod_device.element_size()+self.dow_device.numel()*self.dow_device.element_size())/1024**3
+            gb=(self.x_device.numel()*self.x_device.element_size()+self.tod_device.numel()*self.tod_device.element_size()+self.dow_device.numel()*self.dow_device.element_size()+self.y_device.numel()*self.y_device.element_size()+ (0 if self.future_valid_device is None else self.future_valid_device.numel()*self.future_valid_device.element_size()))/1024**3
             print(f'REPOSITORY_GPU rows={self.n} size_gb={gb:.3f}',flush=True)
             return True
         except RuntimeError as e:
             if 'out of memory' not in str(e).lower(): raise
-            self.x_device=self.tod_device=self.dow_device=None; self._device=None; torch.cuda.empty_cache()
+            self.x_device=self.tod_device=self.dow_device=self.y_device=self.future_valid_device=None; self._device=None; torch.cuda.empty_cache()
             print(f'REPOSITORY_GPU_FALLBACK reason={str(e).splitlines()[0]}',flush=True)
             return False
     def batch(self,start,end,device=None):
@@ -60,6 +62,9 @@ class FullTrainRepository:
 
     def fetch_future(self,indices,device):
         shape=tuple(indices.shape)
+        if self._device==str(torch.device(device)) and self.y_device is not None:
+            # Safe index validation already takes place in LatentMemoryIndex.
+            return self.y_device[indices.long().to(device)].reshape(*shape,*self.y.shape[1:])
         flat=indices.detach().cpu().numpy().astype(np.int64).reshape(-1)
         if (flat<0).any() or (flat>=self.n).any():raise IndexError('Future Memory must use train-only indices')
         return torch.from_numpy(np.array(self.y[flat],np.float32,copy=True)).to(device).reshape(*shape,*self.y.shape[1:])
@@ -68,5 +73,7 @@ class FullTrainRepository:
         if self.future_valid is None:
             return torch.ones((*indices.shape,*self.y.shape[1:]),device=device,dtype=torch.bool)
         shape=tuple(indices.shape)
+        if self._device==str(torch.device(device)) and self.future_valid_device is not None:
+            return self.future_valid_device[indices.long().to(device)].reshape(*shape,*self.y.shape[1:]).bool()
         flat=indices.detach().cpu().numpy().astype(np.int64).reshape(-1)
         return torch.from_numpy(np.array(self.future_valid[flat],copy=True)).to(device).reshape(*shape,*self.y.shape[1:]).bool()

@@ -1,4 +1,4 @@
-version: 2.0.0
+version: 2.1.0
 project:
   root: ${SPEED_LLM_RAG_ROOT}
   backbone_root: ${SPEED_LLM_RAG_ROOT}/Backbone
@@ -22,7 +22,7 @@ retrieval:
   periods: [4, 2, 1]
   top_k: 12
   shortlist_per_period: 3
-  replay_batch_size: 24
+  replay_batch_size: 64
   temperature: 0.10
   coverage_gamma: 0.5
   query_batch_size: 128
@@ -38,7 +38,7 @@ model:
   latent_dim: 16
   max_normalized_correction: 3.0
 training:
-  batch_size: 16
+  batch_size: 32
   fallback_batch_sizes: [32, 16, 8]
   max_epochs: 80
   schedule: progressive
@@ -63,7 +63,13 @@ runtime:
   pin_memory: true
   persistent_workers: true
   prefetch_factor: 2
-  preload_retrieval_memory_gpu: false
+  preload_retrieval_memory_gpu: true
+  frozen_replay_teacher: true
+  replay_bank_dtype: float16
+  replay_bank_on_gpu: true
+  replay_query_batch_size: 12
   gpu_monitor_interval_sec: 30
-  amp: false
+  amp: true
+  amp_dtype: float16
+  save_each_epoch: true
   print_every: 100

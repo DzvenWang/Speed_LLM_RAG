@@ -90,3 +90,7 @@ The adapter-only `no_retrieval` run trains an independent correction model. A sh
 ## Validation status
 
 This release passed unit tests and an end-to-end **synthetic** Backbone/Cache CLI smoke (preflight → two training epochs → saved checkpoint/index → Test evaluation). That does not demonstrate improvement on Net-06 or compatibility with the unprovided real Backbone vendor. The research claim must be established by real GPU Formal runs and evidence/no-retrieval ablations.
+
+## v2.1.0 performance addendum
+
+See `../MASK_RETRIEVAL_v2.1.0_RELEASE_NOTES.md` from the combined package for deployment, new AMP and fixed-replay controls, whole-run estimates and resume instructions. Existing Train-only evidence, no historical imputation, explicit s40 checkpoint, four-severity automatic evaluation and 12 CPUs per V100 are preserved. Use `--resume /absolute/path/to/last.pt` to recover an interrupted run. Default 32-batch/AMP is **not** identical numerical optimization to the prior 16-batch FP32 version.

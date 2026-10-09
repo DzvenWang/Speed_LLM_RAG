@@ -13,6 +13,8 @@ zip -r Mask_RAFT-STLA_exps.zip Mask_RAFT-STLA_exps \
      "*.pkl" "*.pickle" "*.bin" "*.safetensors" \
      "*/__pycache__/*" "*.pyc"
 
+
+
 zip -r Backbone_exps.zip Backbone_exps \
   -x "*.pt" "*.pth" "*.ckpt" "*.npz" "*.npy" \
      "*.pkl" "*.pickle" "*.bin" "*.safetensors" \
@@ -22,3 +24,16 @@ zip -r Baseline_exps.zip Baseline_exps \
   -x "*.pt" "*.pth" "*.ckpt" "*.npz" "*.npy" \
      "*.pkl" "*.pickle" "*.bin" "*.safetensors" \
      "*/__pycache__/*" "*.pyc"
+
+
+
+zip -r FARE_exps.zip FARE_exps \
+  -x "*.pt" "*.pth" "*.ckpt" "*.npz" "*.npy" \
+     "*.pkl" "*.pickle" "*.bin" "*.safetensors" \
+     "*/__pycache__/*" "*.pyc"
+
+zip -r FARE_logs.zip FARE_logs \
+  -x "*.pt" "*.pth" "*.ckpt" "*.npz" "*.npy" \
+     "*.pkl" "*.pickle" "*.bin" "*.safetensors" \
+     "*/__pycache__/*" "*.pyc"
+

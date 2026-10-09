@@ -91,3 +91,7 @@ Best Checkpoint includes the exact v2 config and SHA256 of the referenced Backbo
 ## Research caution
 
 Residual replay uses the installed STLA backbone on training memory, which may have in-sample residual bias. It is a **working retrieval research implementation**, not an unbiased out-of-fold estimator. For publication-quality statements about historical residual distributions, add temporally blocked out-of-fold Backbone models and compare their utility. A future-derived ranking target is used **only in Train/Validation loss**; future truth is never supplied to the model forward in Test.
+
+## v2.1.0 performance addendum
+
+See `../MASK_RETRIEVAL_v2.1.0_RELEASE_NOTES.md` from the combined package for deployment, new AMP and fixed-replay controls, whole-run estimates and resume instructions. Existing Train-only evidence, no historical imputation, explicit s40 checkpoint, four-severity automatic evaluation and 12 CPUs per V100 are preserved. Use `--resume /absolute/path/to/last.pt` to recover an interrupted run. Default 32-batch/AMP is **not** identical numerical optimization to the prior 16-batch FP32 version.

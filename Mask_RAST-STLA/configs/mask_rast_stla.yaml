@@ -1,4 +1,4 @@
-version: 2.0.0
+version: 2.1.0
 project:
   root: ${SPEED_LLM_RAG_ROOT}
   backbone_root: ${SPEED_LLM_RAG_ROOT}/Backbone
@@ -41,7 +41,7 @@ model:
   max_normalized_correction: 3.0
   latent_gate_bias: -1.0
 training:
-  batch_size: 16
+  batch_size: 32
   fallback_batch_sizes: [24, 16, 8]
   max_epochs: 80
   schedule: progressive
@@ -69,6 +69,9 @@ runtime:
   persistent_workers: true
   prefetch_factor: 2
   preload_repository_gpu: true
+  gpu_future_store: true
   gpu_monitor_interval_sec: 30
-  amp: false
+  amp: true
+  amp_dtype: float16
+  save_each_epoch: true
   print_every: 100

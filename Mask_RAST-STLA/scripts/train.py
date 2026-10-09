@@ -10,6 +10,7 @@ def main():
     p.add_argument('--dataset');p.add_argument('--backbone-checkpoint');p.add_argument('--config');p.add_argument('--smoke',action='store_true')
     p.add_argument('--run-stamp');p.add_argument('--batch-size',type=int);p.add_argument('--num-workers',type=int)
     p.add_argument('--ablation',choices=['full','no_retrieval','no_future','no_regional','no_none','shuffled'])
+    p.add_argument('--resume',help='Path to last.pt from a prior v2.1 run')
     p.add_argument('--skip-evaluate',action='store_true');a=p.parse_args()
     if a.target:os.environ['TRAFFIDENT_TARGET']=a.target
     cfg=load_config(a.config);cfg['experiment']['seed']=a.seed
@@ -19,8 +20,8 @@ def main():
     if a.ablation:cfg['training']['ablation']=a.ablation
     cache=cache_path(cfg,'formal');ck=resolve_stla_checkpoint(cfg,a.backbone_checkpoint)
     tag='formal_smoke' if a.smoke else 'formal';stamp=a.run_stamp or datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    run=Path(cfg['project']['exp_root'])/cfg['experiment']['dataset']/tag/f'{stamp}_seed{a.seed}_{cfg["training"]["ablation"]}'
-    best=train(cfg,cache,ck,run,a.smoke);print(f'BEST_CHECKPOINT={best}',flush=True)
+    run=Path(a.resume).resolve().parent if a.resume else Path(cfg['project']['exp_root'])/cfg['experiment']['dataset']/tag/f'{stamp}_seed{a.seed}_{cfg["training"]["ablation"]}'
+    best=train(cfg,cache,ck,run,a.smoke,resume=a.resume);print(f'BEST_CHECKPOINT={best}',flush=True)
     if not a.smoke and not a.skip_evaluate:
         subprocess.check_call([sys.executable,'-u',str(ROOT/'scripts/evaluate.py'),'--checkpoint',str(best),'--severities',*[str(s) for s in cfg['experiment']['severities']]],cwd=ROOT)
         print('AUTO_EVALUATE_PASS',best,flush=True)

@@ -33,15 +33,25 @@ def main():
         raise RuntimeError('Incorrect STLA Backbone checkpoint: SHA256 differs from training')
     model,_=build_model(cfg,backbone_path,device)
     model.load_state_dict(ck['state_dict'],strict=True);model.eval()
+    # Train used an immutable reference teacher for cacheable mask-replay. Do
+    # not accidentally use the subsequently fine-tuned query backbone here.
+    teacher=None
+    if cfg['runtime'].get('frozen_replay_teacher',False) and (a.evidence_mode or cfg['training'].get('ablation','full'))!='no_retrieval':
+        initial,_=build_model(cfg,backbone_path,device)
+        teacher=initial.stla.eval()
+        for p in teacher.parameters():p.requires_grad_(False)
+        print('EVAL_REPLAY_TEACHER fixed_pretrained_backbone',flush=True)
     mean=float(ck['mean']);std=float(ck['std'])
     formal=cache_path(cfg,'formal');store=FutureMemory(formal)
+    if cfg['runtime'].get('preload_retrieval_memory_gpu',False):
+        print(f'EVAL_RETRIEVAL_MEMORY_GPU loaded={store.preload(device)}',flush=True)
     mode=a.evidence_mode or cfg['training'].get('ablation','full')
     rows=[]
     for sev in a.severities:
         c=cache_path(cfg,'evaluation',sev)
         r=ensure_cache(cfg,c,'test',severity=sev)
         ds=SupportSplit(c,'test');dl=_make_loader(ds,cfg['training']['batch_size'],False,cfg)
-        p=predict(model,dl,RetrievalCache(r),store,device,mean,std,cfg,mode)
+        p=predict(model,dl,RetrievalCache(r),store,device,mean,std,cfg,mode,teacher=teacher)
         fam=summarize_by_family(p['prediction'],p['true'],p['valid'],p['direct'],ds.meta)
         base=summarize_by_family(p['base'],p['true'],p['valid'],p['direct'],ds.meta)
         out=Path(a.checkpoint).resolve().parent/'evaluation'/f's{sev}'/mode;out.mkdir(parents=True,exist_ok=True)

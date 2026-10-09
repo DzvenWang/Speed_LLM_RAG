@@ -30,6 +30,7 @@ def main():
     if not store_path.is_file():raise FileNotFoundError(f'Index must accompany checkpoint: {store_path}')
     index=LatentMemoryIndex.load(store_path).to(dev)
     repo=FullTrainRepository(cache_path(cfg,'formal'))
+    if cfg['runtime'].get('preload_repository_gpu',True):repo.preload(dev)
     if len(repo)!=len(index.starts_np) or not np.array_equal(repo.starts,index.starts_np):
         raise RuntimeError('Index and Train-only repository fingerprints differ')
     mean=float(ck['mean']);std=float(ck['std']);mode=a.evidence_mode or cfg['training'].get('ablation','full')
@@ -37,7 +38,7 @@ def main():
     for sev in a.severities:
         ds=SupportSplit(cache_path(cfg,'evaluation',sev),'test')
         dl=make_loader(ds,int(cfg['training']['batch_size']),False,cfg)
-        pr=predict(model,dl,index,repo,dev,mean,std,mode)
+        pr=predict(model,dl,index,repo,dev,mean,std,mode,amp=bool(cfg['runtime'].get('amp',False)))
         fm=summarize_by_family(pr['prediction'],pr['true'],pr['valid'],pr['direct'],ds.meta)
         bm=summarize_by_family(pr['base'],pr['true'],pr['valid'],pr['direct'],ds.meta)
         out=Path(a.checkpoint).resolve().parent/'evaluation'/f's{sev}'/mode;out.mkdir(parents=True,exist_ok=True)
