@@ -115,9 +115,12 @@ Mask_RAFT-STLA_cache/
 Mask_RAFT-STLA_exps/
 Mask_RAFT-STLA_logs/
 
+
 Mask_RAST-STLA_cache/
 Mask_RAST-STLA_exps/
 Mask_RAST-STLA_logs/
+Mask_RAST-STLA_store/
+
 
 model_cache/
 
