@@ -45,16 +45,23 @@ class TargetRetriever(nn.Module):
         super().__init__();self.encoder=RetrievalEncoder(history,hidden,key_dim)
         self.coarse_topk=coarse_topk;self.topk=topk;self.overlap=overlap
         self.rerank=nn.Sequential(nn.Linear(5,hidden),nn.GELU(),nn.Linear(hidden,1))
+        self.utility_head=nn.Sequential(nn.Linear(7,hidden),nn.GELU(),nn.Linear(hidden,1))
+        nn.init.zeros_(self.utility_head[-1].weight)
+        nn.init.zeros_(self.utility_head[-1].bias)
         self.log_temperature=nn.Parameter(torch.tensor(math.log(.3)))
     @torch.no_grad()
     def refresh(self,memory,regions):
         was_training=self.encoder.training;self.encoder.eval()
         memory.keys=self.encoder.memory_keys(memory,regions)
+        if memory.future is not None:
+            memory.ensure_region_future(regions)
         self.encoder.train(was_training)
-    def forward(self,ctx,regions,memory,window_start,mode='full',observability=None):
+    def forward(self,ctx,regions,memory,window_start,mode='full',observability=None,diagnostics=False,demand=None,base_forecast=None):
         if memory.keys is None:raise RuntimeError('Memory index not built; call retriever.refresh')
         b,g,h,a=ctx['anchor_values'].shape
         query=self.encoder.query(ctx,observability)
+        if demand is not None:
+            query=F.normalize(query+0.1*torch.tanh(demand),dim=-1)
         # [B,G,M] from region-indexed keys, chunking avoided huge temporary 4D.
         if mode=='global_retrieval':
             global_query=F.normalize(query.mean(1),dim=-1)
@@ -72,12 +79,8 @@ class TargetRetriever(nn.Module):
             random_score=torch.frac(torch.sin((torch.arange(len(memory.x),device=scores.device)[None,None,:]+1)*12.9898+(window_start[:,None,None].float()+1)*78.233)*43758.5453)
             random_score=random_score.expand(b,g,-1).masked_fill(~allowable[:,None,:],-1e4)
             coarse,id64=random_score.topk(count,dim=-1)
-        xv,mv=memory.fetch(id64)  # [B,G,K,H,N] temporarily, freed after anchor gathering
-        # Query and candidate are compared at the identical actually visible positions.
-        aid=regions.anchor_ids
-        ar=torch.gather(xv, -1,aid[None,:,None,None,:].expand(b,g,count,h,a))
-        av=torch.gather(mv, -1,aid[None,:,None,None,:].expand(b,g,count,h,a))
-        del xv,mv
+        # Direct sparse gather: [B,G,K,H,A], never [B,G,K,H,N].
+        ar,av=memory.fetch_nodes(id64,regions.anchor_ids)
         valid=ctx['anchor_mask'][:,:,None] & av
         denom=valid.sum((-1,-2)).float()
         delta=ctx['anchor_values'][:,:,None]-ar
@@ -97,11 +100,39 @@ class TargetRetriever(nn.Module):
             raw=self.rerank(f).squeeze(-1)+coarse
         else:
             raw=self.rerank(f).squeeze(-1)+coarse-.25*mae-.1*trend_err
-        ok=(denom>=1)&(coarse>-1e3)
+        # Historical future trajectories are allowed only when their entire
+        # forecast horizon had finished before the current query was issued.
+        # Forecast target labels NEVER enter the inference features.
+        analog=None
+        if memory.future is not None:
+            horizon=memory.future.shape[1]
+            current_issue=window_start+self.overlap-horizon
+            legal_future=memory.starts[id64]+self.overlap<=current_issue[:,None,None]
+            raw=raw.masked_fill(~legal_future,-1e4)
+            # Valid-only region aggregates have already been cached by refresh().
+            # Exact same regional-mean evidence, without [B,G,K,P,N] gathers.
+            if memory.region_future is None:
+                memory.ensure_region_future(regions)
+            rg=torch.arange(g,device=id64.device)[None,:,None]
+            analog=memory.region_future[id64,rg]
+            if base_forecast is not None:
+                # Mean and trend agreement are observable-model forecasts, not labels.
+                breg=torch.einsum('bpn,gn->bgp',base_forecast,regions.target_mask)/regions.target_mask.sum(-1)[None,:,None].clamp_min(1)
+                d=(analog-breg[:,:,None,:]).abs().mean(-1)
+                features=torch.stack([mae,trend_err,coverage,coarse,margin,d,analog.std(-1,unbiased=False)],-1)
+                raw=raw+self.utility_head(features).squeeze(-1)
+        ok=(denom>=1)&(coarse>-1e3)&(raw>-1e3)
         ranked,idloc=raw.masked_fill(~ok,-1e4).topk(min(self.topk,count),dim=-1)
         ids=torch.gather(id64,-1,idloc)
         selok=torch.gather(ok,-1,idloc)
         w=masked_softmax(ranked/self.log_temperature.exp().clamp_min(.02),selok)
         entropy=-(w*w.clamp_min(1e-9).log()).sum(-1)
         confidence=torch.stack([ctx['coverage'],ctx['missing'],selok.any(-1).float(),entropy],-1)
-        return {'ids':ids,'weights':w,'valid':selok,'group_valid':selok.any(-1),'query':query,'confidence':confidence,'scores':ranked,'coverage':coverage.gather(-1,idloc)}
+        out={'ids':ids,'weights':w,'valid':selok,'group_valid':selok.any(-1),
+             'query':query,'confidence':confidence,'scores':ranked,'coverage':coverage.gather(-1,idloc),'utility_scores':ranked}
+        if analog is not None:
+            out['analog_future']=analog.gather(-2,idloc[...,None].expand(b,g,ids.shape[-1],analog.shape[-1]))
+        if diagnostics:
+            out.update({'coarse_ids':id64,'coarse_scores':coarse,'match_error':mae.gather(-1,idloc),
+                        'trend_error':trend_err.gather(-1,idloc)})
+        return out

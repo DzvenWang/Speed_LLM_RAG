@@ -3,6 +3,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 from .stla import missing_age
+from .graph import assign_connected_regions
 
 class StateEncoder(nn.Module):
     def __init__(self,num_nodes,history,temporal_dim=64,spatial_dim=64,query_dim=128,
@@ -22,6 +23,8 @@ class StateEncoder(nn.Module):
         self.node_query=nn.Sequential(nn.Linear(temporal_dim+spatial_dim,query_dim),nn.GELU(),nn.Linear(query_dim,query_dim))
         self.temporal_key=nn.Linear(temporal_dim,retrieval_dim)
         self.spatial_key=nn.Linear(spatial_dim,retrieval_dim)
+        self.region_proj=nn.Linear(query_dim,retrieval_dim)
+        self.register_buffer("region_assignment",torch.zeros(num_nodes,dtype=torch.long))
         self.register_buffer('neighbors',torch.arange(num_nodes).view(-1,1).expand(-1,min(graph_k,max(1,num_nodes-1))).clone())
 
     def set_graph(self,neighbors):
@@ -30,6 +33,7 @@ class StateEncoder(nn.Module):
             raise ValueError(f'Graph shape {tuple(neighbors.shape)} != configured {tuple(self.neighbors.shape)}')
         if neighbors.min()<0 or neighbors.max()>=self.N:raise ValueError('Graph has invalid node ids')
         self.neighbors.copy_(neighbors)
+        self.region_assignment.copy_(assign_connected_regions(neighbors))
 
     def forward(self,x,mask,tod,dow):
         B,H,N=x.shape
@@ -62,5 +66,19 @@ class StateEncoder(nn.Module):
         s_global=(spatial*wt[...,None]).sum(1)/wt.sum(1).clamp_min(1e-5)[...,None]
         tk=torch.nn.functional.normalize(self.temporal_key(t_global),dim=-1)
         sk=torch.nn.functional.normalize(self.spatial_key(s_global),dim=-1)
-        return {'temporal_node':tn,'spatial_node':spatial,'node_query':nq,
+        # Region queries are computed from the SAME node encoder for query and
+        # memory. Fully masked nodes still carry observed-neighbour features;
+        # their direct contribution is downweighted, not treated as observed.
+        rid=self.region_assignment
+        regions=int(rid.max().item())+1
+        # AMP-safe region pooling: the encoder output may be FP16 while
+        # coverage weights are FP32. Accumulate both numerator and denominator
+        # in FP32 to avoid index_add_ dtype errors and loss of precision.
+        regweight=(0.15+cov.float()).unsqueeze(-1)
+        regsum=torch.zeros((B,regions,nq.shape[-1]),device=nq.device,dtype=torch.float32)
+        regsum.index_add_(1,rid,nq.float()*regweight)
+        den=torch.zeros((B,regions,1),device=nq.device,dtype=torch.float32)
+        den.index_add_(1,rid,regweight)
+        rk=torch.nn.functional.normalize(self.region_proj(regsum/den.clamp_min(1e-6)),dim=-1)
+        return {'region_keys':rk,'temporal_node':tn,'spatial_node':spatial,'node_query':nq,
                 'temporal_key':tk,'spatial_key':sk,'node_coverage':cov,'neighbour_coverage':n_support}

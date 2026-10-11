@@ -1,5 +1,6 @@
-# Pilot: 8k time-spread train rows, ALL validation, legal 16k train-memory; no test for tuning.
-version: 1.3.2
+# FARE v2.0.2 PILOT: 8k time-spread TRAIN; full validation; 16k train-only memory.
+# Five-phase model + Forecast Utility + diagnostics. NO test for model selection.
+version: 2.0.2
 experiment:
   dataset: TraffiDent_Net_06
   target: speed
@@ -59,8 +60,8 @@ loss:
   correction_energy: 0.003
   ranking: 0.15
 training:
-  batch_size: 8
-  num_workers: 0
+  batch_size: 32
+  num_workers: 2
   grad_clip: 5.0
   weight_decay: 0.0001
   new_lr: 0.0001
@@ -83,3 +84,17 @@ evaluation:
   save_stage_predictions: false
   save_final_predictions: true
   auto_test: false
+forecast_utility:
+  enabled: true
+  loss_weight: 0.2
+  teacher_temperature: 0.35
+  strict_causal_historical_future: true
+performance:
+  retrieval_phase_fast: true
+  forecast_only_validation: true
+  strict_batch_diagnostics: false
+diagnostics:
+  enabled: true
+  sample_every_batches: 50
+  max_sampled_batches: 160
+  progress_every_batches: 500

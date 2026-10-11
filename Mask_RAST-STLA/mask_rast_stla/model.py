@@ -15,7 +15,7 @@ class MaskRASTSTLA(nn.Module):
         super().__init__()
         ec=cfg['encoder'];mc=cfg['model'];re=cfg['retrieval']
         self.H=int(history);self.P=int(horizon)
-        self.top_k=int(re['top_k']);self.temperature=float(re['temperature'])
+        self.top_k=int(re['top_k']);self.region_k=int(re.get('regional_top_k',2));self.temperature=float(re['temperature'])
         self.max_delta=float(mc.get('max_normalized_correction',3.0))
         td=int(ec['temporal_dim']);sd=int(ec['spatial_dim']);qd=int(ec['query_dim']);rd=int(ec['retrieval_dim'])
         graph_k=min(int(re.get('graph_neighbors',8)),max(int(num_nodes)-1,1))
@@ -36,6 +36,11 @@ class MaskRASTSTLA(nn.Module):
     def set_graph(self,neighbours):
         self.query_encoder.set_graph(neighbours)
         self.memory_encoder.set_graph(neighbours)
+
+    @torch.no_grad()
+    def sync_region_projector(self):
+        """Match regional query/memory embedding spaces before index rebuild."""
+        self.memory_encoder.region_proj.load_state_dict(self.query_encoder.region_proj.state_dict())
 
     def set_train_phase(self,phase,last_layers=2):
         self.stla.set_train_phase(phase,last_layers)
@@ -63,43 +68,73 @@ class MaskRASTSTLA(nn.Module):
                          batch['window_start'].long(),self.H+self.P,self.temperature)
             idx_list.append(ind);score_list.append(sc)
         idx=torch.cat(idx_list,1);scores=torch.cat(score_list,1)
-        C=idx.shape[1]
-        xs,ms,ts,ds=repo.fetch(idx,x.device)
-        futures=repo.fetch_future(idx,x.device)
-        future_valid=repo.fetch_future_valid(idx,x.device)
-        was_training=self.memory_encoder.training
-        # Candidate encoder remains trainable through the ranking / final forecast.
-        mem=self.memory_encoder(xs.reshape(B*C,H,N),ms.reshape(B*C,H,N),
-                                ts.reshape(B*C,H),ds.reshape(B*C,H))
-        mnode=mem['node_query'].reshape(B,C,N,-1)
-        local_sim=torch.nn.functional.cosine_similarity(q['node_query'][:,None],mnode,dim=-1)
+        G=idx.shape[1]
+        gx,gm,gt,gd=repo.fetch(idx,x.device)
+        gf=repo.fetch_future(idx,x.device)
+        gv=repo.fetch_future_valid(idx,x.device)
+        # Memory Encoder gradients exist only for the original global candidates.
+        mem=self.memory_encoder(gx.reshape(B*G,H,N),gm.reshape(B*G,H,N),
+                                gt.reshape(B*G,H),gd.reshape(B*G,H))
+        mnode=mem['node_query'].reshape(B,G,N,-1)
+        gsim=torch.nn.functional.cosine_similarity(q['node_query'][:,None],mnode,dim=-1)
+        # v2.2: first-stage region-specific retrieval, NOT merely regional
+        # reranking inside the global Top-K pool.
+        region_idx,region_scores=memory_index.search_regions(q['region_keys'],
+            self.region_k,batch['window_start'].long(),self.H+self.P)
+        R,K=region_idx.shape[1:]
+        rx,_,_,_=repo.fetch(region_idx,x.device)  # [B,R,K,H,N]
+        rf=repo.fetch_future(region_idx,x.device)
+        rv=repo.fetch_future_valid(region_idx,x.device)
+        region_for_node=self.query_encoder.region_assignment
+        chosen=region_for_node[None,None,None,None,:].expand(B,1,K,H,N)
+        region_x=rx.gather(1,chosen).squeeze(1)
+        chosen_future=region_for_node[None,None,None,None,:].expand(B,1,K,self.P,N)
+        region_f=rf.gather(1,chosen_future).squeeze(1)
+        region_v=rv.gather(1,chosen_future).squeeze(1)
+        # Node-specific first-stage region similarity, unlike global scores.
+        rs=region_scores[:,region_for_node,:].permute(0,2,1)
+        xs=torch.cat([gx,region_x],1)
+        futures=torch.cat([gf,region_f],1)
+        future_valid=torch.cat([gv,region_v],1)
+        C=G+K
+        local_sim=torch.cat([gsim,rs],1)
+        score_node=torch.cat([scores[:,:,None].expand(B,G,N),rs],1)
         # Transfer candidate FUTURE EVOLUTION, not an imputed historical sequence.
-        xk_last=xs[:,:,-1,:]
+        # Align each candidate's historical reference to the actual most recent
+        # observed query timestamp, not always the final history step.
+        rev=torch.argmax(mask.flip(1),dim=1);ix=(H-1-rev).clamp_min(0)
+        observed=mask.any(1)
+        aligned_idx=ix[:,None,None,:].expand(B,C,1,N)
+        xk_last=torch.gather(xs,2,aligned_idx).squeeze(2)
         future_delta=futures - xk_last[:,:,None,:]
         # Anchor with last OBSERVED query value; for a fully unobserved sensor,
         # use observed graph neighbours, otherwise fall back to STLA first-step.
-        rev=torch.argmax(mask.flip(1),dim=1);ix=(H-1-rev).clamp_min(0)
         last=torch.gather(x,1,ix[:,None]).squeeze(1)
-        observed=mask.any(1)
+
         neigh=self.query_encoder.neighbors
         neigh_cov=observed[:,neigh].float()
         local_last=last[:,neigh]
         local_anchor=(local_last*neigh_cov).sum(2)/neigh_cov.sum(2).clamp_min(1.)
         anchor=torch.where(observed,last,torch.where(neigh_cov.sum(2)>0,local_anchor,base[:,0].detach()))
         candidate_pred=anchor[:,None,None,:]+future_delta
+        # No actual observation exists for a fully missing node. Avoid treating
+        # a neighbouring sensor reading as the target node's observed anchor.
+        no_obs=~observed[:,None,None,:]
+        candidate_pred=torch.where(no_obs,base[:,None]+(futures-futures[:,:,:1,:]),candidate_pred)
         residual=candidate_pred-base[:,None]
-        if mode in ('shuffled','random_future') and B>1:
-            residual=residual[torch.roll(torch.arange(B,device=x.device),1)]
+        if mode in ('shuffled','random_future') and C>1:
+            # Same-query candidate-rank mismatch is deterministic across batch sizes.
+            residual=residual[:,torch.arange(C,device=x.device).roll(1)]
         if mode=='no_future':residual=torch.zeros_like(residual)
         d_obs=(xs-x[:,None]).abs()*mask[:,None]
         distance=d_obs.sum(2)/mask[:,None].sum(2).clamp_min(1.)
-        branch=torch.cat([torch.zeros(B,self.top_k,device=x.device),torch.ones(B,self.top_k,device=x.device)],1)
+        branch=torch.cat([torch.zeros(B,self.top_k,device=x.device),torch.ones(B,self.top_k,device=x.device),torch.full((B,K),2.,device=x.device)],1)
         bs=base[:,None,:,:,None].expand(B,C,P,N,1)
         ep=candidate_pred[...,None]
         resid=residual[...,None]
         delta=future_delta[...,None]
         def exp(v):return v[:, :, None,:,None].expand(B,C,P,N,1)
-        sco=scores[:,:,None,None,None].expand(B,C,P,N,1)
+        sco=score_node[:,:,None,:,None].expand(B,C,P,N,1)
         sim=exp(local_sim)
         dis=exp(distance)
         cov=n_cov[:,None,None,:,None].expand(B,C,P,N,1)
@@ -108,11 +143,16 @@ class MaskRASTSTLA(nn.Module):
         summ=qsum[:,None].expand(B,C,P,N,-1)
         hor=h[:,None].expand(B,C,P,N,-1)
         feats=torch.cat([bs,ep,resid,delta,dis,sco,sim,cov,nb,br,summ,hor],-1)
-        logits=self.scorer(feats).squeeze(-1)+scores[:,:,None,None]
-        if mode=='no_regional':logits=scores[:,:,None,None].expand_as(logits)
+        logits=self.scorer(feats).squeeze(-1)+score_node[:,:,None,:]
+        if mode=='no_regional':
+            logits=score_node[:,:,None,:].expand_as(logits).clone()
+            logits[:,G:]=-1e4
+        if mode=='global_only':
+            logits[:,G:]=-1e4
         null=self.none(ctx).squeeze(-1)
         if mode=='no_none':null=torch.full_like(null,-100.)
         logits=logits.masked_fill(~future_valid,-1e4)
+        residual=torch.where(future_valid,torch.nan_to_num(residual),torch.zeros_like(residual))
         all_scores=torch.cat([logits,null[:,None]],1)
         weights=torch.softmax(all_scores,1)
         evidence=(weights[:,:C]*residual).sum(1)
@@ -121,7 +161,8 @@ class MaskRASTSTLA(nn.Module):
         pred=base+correction
         # Three genuine competing actions: temporal, regional, no retrieval.
         router=torch.stack([weights[:,:self.top_k].sum(1),
-                            weights[:,self.top_k:2*self.top_k].sum(1),weights[:,-1]],-1)
+                            weights[:,self.top_k:2*self.top_k].sum(1),
+                            weights[:,G:G+K].sum(1),weights[:,-1]],-1)
         return {'prediction':pred,'base_prediction':base,
                 'retrieval_prediction':base+residual.mean(1),
                 'forecast_gate':1-weights[:,-1], 'candidate_weights':weights,

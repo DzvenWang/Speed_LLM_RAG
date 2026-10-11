@@ -16,6 +16,7 @@ from .evaluation import metrics, save_summary
 from .config import file_sha256
 from .checkpoint import persist_epoch,restore_training
 from .replay_cache import prepare_bank
+from .normal_teacher import prepare_normal_teacher_bank
 
 
 def seed_all(seed):
@@ -58,7 +59,7 @@ def _make_loader(ds,batch_size,shuffle,cfg,smoke=False):
     return DataLoader(ds,**kw)
 
 
-def evidence_for_batch(model,b,cache,memory,device,cfg,mode,bank=None,teacher=None):
+def evidence_for_batch(model,b,cache,memory,device,cfg,mode,bank=None,teacher=None,normal_bank=None):
     if mode=='no_retrieval':return {}
     indices=b['index'].detach().cpu().numpy()
     ids,scores,cov=shortlist(cache,indices,int(cfg['retrieval']['shortlist_per_period']),device)
@@ -72,7 +73,10 @@ def evidence_for_batch(model,b,cache,memory,device,cfg,mode,bank=None,teacher=No
     else:
         residual=counterfactual_residuals(teacher if teacher is not None else model.stla,
                   candidates,query_mask,int(cfg['retrieval']['replay_batch_size']),replay)
-    return dict(candidate_y=candidates['y'],candidate_valid=candidates['future_valid'],residual=residual,
+    normal=normal_bank.fetch(ids,device) if normal_bank is not None else None
+    with torch.no_grad():
+        teacher_base=teacher(query_x,query_mask,b['tod'].long(),b['dow'].long())[0] if teacher is not None else None
+    return dict(normal_residual=normal,teacher_base=teacher_base,candidate_y=candidates['y'],candidate_valid=candidates['future_valid'],residual=residual,
                 candidate_scores=scores,candidate_coverage=cov,hist_distance=dist)
 
 
@@ -102,14 +106,14 @@ def compute_losses(out,b,mean,std,cfg,mode):
                      gate=float(out['gate'].mean().detach()),loss=float(loss.detach()))
 
 
-def run_epoch(model,loader,rc,memory,device,mean,std,cfg,mode,opt=None,epoch=1,bank=None,teacher=None,scaler=None):
+def run_epoch(model,loader,rc,memory,device,mean,std,cfg,mode,opt=None,epoch=1,bank=None,teacher=None,scaler=None,normal_bank=None):
     tr=opt is not None;model.train(tr); model.stla.base.eval(); total={}; seen=0
     context=torch.enable_grad() if tr else torch.no_grad()
     with context:
         for bi,raw_batch in enumerate(loader,1):
             batch=_batch_to_device(raw_batch,device)
             if tr:opt.zero_grad(set_to_none=True)
-            ev=evidence_for_batch(model,batch,rc,memory,device,cfg,mode,bank=bank,teacher=teacher)
+            ev=evidence_for_batch(model,batch,rc,memory,device,cfg,mode,bank=bank,teacher=teacher,normal_bank=normal_bank)
             with torch.autocast(device_type=device.type,dtype=torch.float16,enabled=bool(cfg['runtime'].get('amp',False)) and device.type=='cuda'):
                 out=model(batch['x'].float(),batch['mask'].float(),batch['tod'].long(),batch['dow'].long(),mode=mode,**ev)
                 loss,ls=compute_losses(out,batch,mean,std,cfg,mode)
@@ -127,12 +131,12 @@ def run_epoch(model,loader,rc,memory,device,mean,std,cfg,mode,opt=None,epoch=1,b
     return {k:v/max(1,seen) for k,v in total.items()}
 
 
-def predict(model,loader,rc,memory,device,mean,std,cfg,mode='full',bank=None,teacher=None):
-    all_data={k:[] for k in ('prediction','base','true','valid','direct','correction')}; gates=[]
+def predict(model,loader,rc,memory,device,mean,std,cfg,mode='full',bank=None,teacher=None,normal_bank=None):
+    all_data={k:[] for k in ('prediction','base','true','valid','direct','correction')}; gates=[];cand_good=0.;cand_total=0.;weighted_gain=0.
     model.eval()
     with torch.no_grad():
         for bb in loader:
-            b=_batch_to_device(bb,device);ev=evidence_for_batch(model,b,rc,memory,device,cfg,mode,bank=bank,teacher=teacher)
+            b=_batch_to_device(bb,device);ev=evidence_for_batch(model,b,rc,memory,device,cfg,mode,bank=bank,teacher=teacher,normal_bank=normal_bank)
             with torch.autocast(device_type=device.type,dtype=torch.float16,enabled=bool(cfg['runtime'].get('amp',False)) and device.type=='cuda'):
                 o=model(b['x'].float(),b['mask'].float(),b['tod'].long(),b['dow'].long(),mode=mode,**ev)
             for k,v in [('prediction',o['prediction']),('base',o['base_prediction'])]:
@@ -141,7 +145,19 @@ def predict(model,loader,rc,memory,device,mean,std,cfg,mode='full',bank=None,tea
             all_data['direct'].append(b['direct_mask'].cpu().numpy())
             all_data['correction'].append((o['correction'].float()*std).cpu().numpy())
             gates.append(float(o['gate'].mean()))
+            if o.get('candidate_residuals') is not None:
+                with torch.no_grad():
+                    r=o['candidate_residuals'].float()
+                    residual_gain=(o['base_prediction'].detach()[:,None]-b['y_norm'][:,None]).abs()-(o['base_prediction'].detach()[:,None]+r-b['y_norm'][:,None]).abs()
+                    available=o['candidate_available'].bool()
+                    good=((residual_gain>0)&available).any(1)
+                    v=b['future_valid'].bool()
+                    cand_good+=float((good&v).sum());cand_total+=float(v.sum())
+                    w=o['candidate_weights'][:,:r.shape[1]].float()
+                    weighted_gain+=float(((w*residual_gain).sum(1)*v).sum())
     out={k:np.concatenate(v) for k,v in all_data.items()};out['gate_mean']=float(np.mean(gates))
+    out['useful_candidate_recall']=cand_good/max(1.,cand_total)
+    out['weighted_candidate_utility_normalized']=weighted_gain/max(1.,cand_total)
     return out
 
 
@@ -161,6 +177,8 @@ def train(cfg,cache,ckpt,retrieval_train,retrieval_val,run_dir,smoke=False,resum
     teacher=copy.deepcopy(model.stla).to(device).eval() if cfg['runtime'].get('frozen_replay_teacher',True) else None
     if teacher is not None:
         for p in teacher.parameters():p.requires_grad_(False)
+    normal_bank=(prepare_normal_teacher_bank(cfg,memory,teacher,ckpt,device,smoke=smoke)
+                 if teacher is not None and mode not in ('no_retrieval',) else None)
     banktrain=bankval=None
     if teacher is not None and mode not in ('no_retrieval','no_mask_replay'):
         banktrain=prepare_bank(cfg,'train',tr,rt,memory,teacher,ckpt,retrieval_train,device,smoke=smoke)
@@ -181,9 +199,9 @@ def train(cfg,cache,ckpt,retrieval_train,retrieval_val,run_dir,smoke=False,resum
         if ph!=prev_phase:
             stale=0;prev_phase=ph;print(f'TRAIN_PHASE epoch={ep} phase={ph}',flush=True)
         if device.type=='cuda':torch.cuda.reset_peak_memory_stats(device)
-        t0=time.time();a=run_epoch(model,tl,rt,memory,device,mean,std,cfg,mode,opt,ep,banktrain,teacher,scaler)
+        t0=time.time();a=run_epoch(model,tl,rt,memory,device,mean,std,cfg,mode,opt,ep,banktrain,teacher,scaler,normal_bank)
         train_seconds=time.time()-t0
-        v=run_epoch(model,vl,rv,memory,device,mean,std,cfg,mode,None,ep,bankval,teacher,scaler)
+        v=run_epoch(model,vl,rv,memory,device,mean,std,cfg,mode,None,ep,bankval,teacher,scaler,normal_bank)
         val_seconds=time.time()-t0-train_seconds
         rec={'epoch':ep,'phase':ph,**{f'train_{k}':x for k,x in a.items()},**{f'val_{k}':x for k,x in v.items()},
              'seconds':time.time()-t0,'train_seconds':train_seconds,'val_seconds':val_seconds,
@@ -201,10 +219,10 @@ def train(cfg,cache,ckpt,retrieval_train,retrieval_val,run_dir,smoke=False,resum
     if not best_path.is_file():raise RuntimeError('No completed best.pt checkpoint')
     saved=torch.load(best_path,map_location='cpu',weights_only=False)
     model.load_state_dict(saved['state_dict'],strict=True);model.to(device)
-    p=predict(model,vl,rv,memory,device,mean,std,cfg,mode,bankval,teacher)
+    p=predict(model,vl,rv,memory,device,mean,std,cfg,mode,bankval,teacher,normal_bank)
     vm=metrics(p['prediction'],p['true'],p['valid'],p['direct']);bm=metrics(p['base'],p['true'],p['valid'],p['direct'])
     np.savez_compressed(run_dir/'val_predictions.npz',**{k:v.astype(np.float32) for k,v in p.items() if isinstance(v,np.ndarray)})
-    save_summary(run_dir/'summary.json',{'model':'Mask_RAFT-STLA-v2.1','best_epoch':best_epoch,
+    save_summary(run_dir/'summary.json',{'model':'Mask_RAFT-STLA-v2.2','best_epoch':best_epoch,
                  'validation':vm,'base_validation':bm,'gate_mean':p['gate_mean'],
                  'backbone_checkpoint':str(ckpt),'ablation':mode,
                  'replay_mode':'frozen_cached' if teacher is not None else 'dynamic','test_evaluated':False})

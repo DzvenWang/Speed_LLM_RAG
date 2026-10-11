@@ -1,3 +1,7 @@
+# Mask_RAST-STLA v2.2.0
+
+**Current version**: See [docs/RETRIEVAL_V2.2.md](docs/RETRIEVAL_V2.2.md) for method, commands, audit and caveats.
+
 # Mask_RAST-STLA v2.0.0 — Observability-Conditioned Regional Future Evidence Retrieval
 
 **Complete v2 replacement of v1.1.2.** Deploy alongside `Backbone` and `Base_SupportBench` inside `Speed_LLM_RAG`. The project does **not** import FARE, Support_Oracle, STLA_DASR or Baseline, and has no history-imputation head.

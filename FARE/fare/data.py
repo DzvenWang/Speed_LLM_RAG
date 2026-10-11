@@ -12,6 +12,7 @@ class SupportSplit(Dataset):
         self.meta=pd.read_csv(self.root/f'{split}_manifest.csv')
         self.length=len(self.meta) if limit is None else min(int(limit),len(self.meta))
         if self.arr['x_obs_norm'].shape[0] != len(self.meta): raise ValueError('Manifest / data row mismatch')
+        self.window_starts=self.meta['window_start'].to_numpy(dtype=np.int64,copy=True)
         self.num_nodes=int(self.arr['x_obs_norm'].shape[-1]);self.history=int(self.arr['x_obs_norm'].shape[1])
         self.horizon=int(self.arr['y_norm'].shape[1]);self.family_column='family' if 'family' in self.meta else None
     def __len__(self): return self.length
@@ -22,12 +23,14 @@ class SupportSplit(Dataset):
         out['raw_valid']=(out['obs_mask'].bool() | out['artificial_mask'].bool())
         out['obs_mask']=out['obs_mask'].bool()
         out['artificial_mask']=out['artificial_mask'].bool()
-        out['window_start']=torch.tensor(int(self.meta.iloc[i]['window_start']),dtype=torch.long)
+        out['window_start']=torch.tensor(int(self.window_starts[i]),dtype=torch.long)
         out['row_id']=torch.tensor(i,dtype=torch.long)
         return out
 
 def loader(ds,batch_size,shuffle=False,workers=0):
-    return DataLoader(ds,batch_size=batch_size,shuffle=shuffle,num_workers=workers,pin_memory=torch.cuda.is_available(),drop_last=False)
+    return DataLoader(ds,batch_size=batch_size,shuffle=shuffle,num_workers=workers,
+                      pin_memory=torch.cuda.is_available(),persistent_workers=workers>0,
+                      prefetch_factor=2 if workers>0 else None,drop_last=False)
 
 def to_device(batch,device):
     return {k:v.to(device,non_blocking=True) if isinstance(v,torch.Tensor) else v for k,v in batch.items()}

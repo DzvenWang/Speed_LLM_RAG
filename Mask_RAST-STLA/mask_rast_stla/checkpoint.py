@@ -45,7 +45,7 @@ def persist_epoch(run_dir,model,opt,scaler,cfg,backbone,bc,model_name,epoch,best
 def restore_training(path,model,opt,scaler,cfg,backbone):
     ck=torch.load(path,map_location='cpu',weights_only=False)
     if ck.get('version')!=cfg['version']:
-        raise RuntimeError('Resume only compatible with exactly the same v2.1 version')
+        raise RuntimeError('Resume only compatible with exactly the same v2.2 version')
     if ck.get('backbone_sha256')!=file_sha256(backbone):
         raise RuntimeError('Resume backbone SHA256 mismatch')
     old=ck['config']

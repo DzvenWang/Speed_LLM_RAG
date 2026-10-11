@@ -67,9 +67,7 @@ def main():
             if args.max_batches and batch_no>=args.max_batches:break
             bt=to_device(batch,device)
             inp={key:bt[key] for key in INPUT_KEYS}
-            ctx=model.regions(inp['x_obs'],inp['obs_mask'])
-            obs=model.observability(ctx)
-            retrieved=model.retrieval(ctx,model.regions,memory,inp['window_start'],observability=obs)
+            ctx,retrieved=model.retrieve_for_diagnostics(inp,memory,diagnostics=False)
             errors,labels=target_candidate_errors(bt,retrieved,memory,model.regions)
             eligible=(labels.sum(-1)>=2)
             label_mass=(retrieved['weights'].detach()*labels.float()).sum(-1)

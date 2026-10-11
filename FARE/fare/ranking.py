@@ -17,23 +17,18 @@ def target_candidate_errors(batch, retrieved, memory, regions):
     """
     target = batch['artificial_mask'].bool() & batch['raw_valid'].bool()
     xfull = batch['x_full'].float()
-    b,h,n = xfull.shape
-    ids = retrieved['ids']; device = xfull.device
-    n_groups, k = ids.shape[1], ids.shape[2]
-    errors = xfull.new_zeros((b,n_groups,k))
-    valid = torch.zeros((b,n_groups,k), dtype=torch.bool, device=device)
-    for g in range(n_groups):
-        node_ids = torch.where(regions.owner == g)[0]
-        if not node_ids.numel(): continue
-        # Memory indices [B,K], recovered historical values [B,K,H,S].
-        hx = memory.x[ids[:,g]][:,:,:,node_ids]
-        hv = memory.valid[ids[:,g]][:,:,:,node_ids].bool()
-        wanted = target[:,:,node_ids][:,None,:,:] & hv
-        count = wanted.sum((-1,-2))
-        err = ((hx - xfull[:,:,node_ids][:,None,:,:]).abs() * wanted).sum((-1,-2))
-        errors[:,g] = err / count.clamp_min(1)
-        valid[:,g] = (count>0) & retrieved['valid'][:,g]
-    return errors,valid
+    ids = retrieved['ids']
+    nodes = regions.region_node_ids  # [G,S], padded
+    node_ok = regions.region_node_valid
+    with torch.no_grad():
+        hist, mem_ok = memory.fetch_nodes(ids,nodes)  # [B,G,K,H,S]
+        expected = xfull[:,:,nodes].permute(0,2,1,3)[:, :, None]
+        wanted = target[:,:,nodes].permute(0,2,1,3)[:, :, None]
+        valid = wanted & mem_ok & node_ok[None,:,None,None,:]
+        count = valid.sum((-1,-2))
+        error = ((hist-expected).abs()*valid).sum((-1,-2))/count.clamp_min(1)
+        eligible = (count>0) & retrieved['valid']
+    return error,eligible
 
 
 def target_recovery_ranking_loss(batch, retrieved, memory, regions,
@@ -81,3 +76,55 @@ def target_recovery_ranking_loss(batch, retrieved, memory, regions,
                  'ranking_oracle_error':oracle_error.detach(),
                  'ranking_uniform_error':uniform_error.detach(),
                  'ranking_target_valid_weight_mass':valid_mass.detach()}
+
+
+def forecast_utility_ranking_loss(batch, retrieved, memory, regions, temperature=0.35):
+    """Train-only forecast-utility supervision using legal historical futures.
+
+    Scores are compared within each group's selected candidates; candidate
+    historical futures are aligned by observed current-region mean.  Labels
+    never enter the model forward or the inference retrieval feature vector.
+    """
+    weights=retrieved['weights']
+    if memory.future is None:
+        return weights.sum()*0, {'utility_eligible_fraction':weights.new_zeros(())}
+    with torch.no_grad():
+        ids=retrieved['ids']
+        nodes=regions.region_node_ids
+        node_ok=regions.region_node_valid
+        b,g,k=ids.shape
+        target=batch['y_norm'].float()   # [B,P,N]
+        mask=batch['future_valid'].bool()
+        x=batch['x_obs'].float()
+        observed=batch['obs_mask'].bool()
+        # Only last-step history values and required region future nodes are read.
+        past,past_ok=memory.fetch_nodes(ids,nodes,time_index=-1) # [B,G,K,S]
+        cur=x[:,-1,nodes]        # [B,G,S]
+        obs=observed[:,-1,nodes] # [B,G,S]
+        common=past_ok & obs[:,:,None,:] & node_ok[None,:,None,:]
+        common_count=common.sum(-1)
+        shift=((cur[:,:,None,:]-past)*common).sum(-1)/common_count.clamp_min(1)
+        future,future_ok=memory.fetch_nodes(ids,nodes,kind='future') # [B,G,K,P,S]
+        y=target[:,:,nodes].permute(0,2,1,3)[:, :, None]
+        ym=mask[:,:,nodes].permute(0,2,1,3)[:, :, None]
+        valid=future_ok & ym & node_ok[None,:,None,None,:]
+        valid_count=valid.sum((-1,-2))
+        error=((future+shift[...,None,None]-y).abs()*valid).sum((-1,-2))/valid_count.clamp_min(1)
+        # Keep the exact persistence-reference denominator used in v2.0.0.
+        # A candidate axis is intentionally not present in the reference.
+        ref_y=target[:,:,nodes].permute(0,2,1,3)
+        ref_m=mask[:,:,nodes].permute(0,2,1,3) & node_ok[None,:,None,:]
+        reference=((cur[:,:,None,:]-ref_y).abs()*ref_m).sum((-1,-2))/ref_m.sum((-1,-2)).clamp_min(1)
+        utility=reference[:,:,None]-error
+        eligible=(valid_count>0)&(common_count>0)&retrieved['valid']
+        teacher=torch.softmax((utility/temperature).masked_fill(~eligible,-1e4),-1)*eligible.float()
+        teacher=teacher/teacher.sum(-1,keepdim=True).clamp_min(1e-9)
+        ok=(eligible.sum(-1)>=2)
+    q=weights*eligible.float()
+    q=q/q.sum(-1,keepdim=True).clamp_min(1e-9)
+    ce=-(teacher*q.clamp_min(1e-9).log()).sum(-1)
+    loss=(ce*ok).sum()/ok.sum().clamp_min(1)
+    # All-ineligible groups have zero CE by construction.
+    positive=(utility>0)&eligible
+    return loss,{'utility_eligible_fraction':ok.float().mean().detach(),
+                 'utility_positive_fraction':positive.float().sum().div(eligible.float().sum().clamp_min(1)).detach()}

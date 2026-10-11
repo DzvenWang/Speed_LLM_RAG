@@ -73,6 +73,15 @@ class GraphRegions(nn.Module):
         self.register_buffer('owner',torch.from_numpy(own))
         self.register_buffer('anchor_ids',torch.from_numpy(anchor))
         self.register_buffer('anchor_valid',torch.from_numpy(av))
+        # Non-persistent derived indices: no change to checkpoint state_dict.
+        max_region = max(map(len, parts))
+        region_ids = np.zeros((r, max_region), dtype=np.int64)
+        region_valid = np.zeros((r, max_region), dtype=bool)
+        for region_id, nodes in enumerate(parts):
+            region_ids[region_id, :len(nodes)] = nodes
+            region_valid[region_id, :len(nodes)] = True
+        self.register_buffer('region_node_ids', torch.from_numpy(region_ids), persistent=False)
+        self.register_buffer('region_node_valid', torch.from_numpy(region_valid), persistent=False)
         self.n=n;self.g=r;self.a=max_anchors
     def forward(self,x,obs_mask):
         b,h,n=x.shape

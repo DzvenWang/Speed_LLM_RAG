@@ -78,9 +78,12 @@ def losses(out,b,mean,std,cfg,mode):
         targets=torch.softmax(torch.cat([utility,torch.zeros_like(utility[:,:1])],1),1).detach()
         mask=valid[:,None].expand_as(targets)
         rank=-(targets*out['candidate_weights'].float().clamp_min(1e-9).log())[mask].sum()/valid.sum().clamp_min(1)
-    total=main+float(cfg['training'].get('rmse_weight',0))*rmse+float(cfg['training'].get('rank_weight',0))*rank
+    base_error=(out['base_prediction'].float()*std+mean)[valid]-y[valid]
+    base_loss=base_error.abs().mean()
+    base_weight=(float(cfg['training'].get('base_preserve_weight',0.0)) if mode=='full' else 0.0)
+    total=main+float(cfg['training'].get('rmse_weight',0))*rmse+float(cfg['training'].get('rank_weight',0))*rank+base_weight*base_loss
     return total,{'mae':float(e.abs().mean().detach()),'rmse':float(rmse.detach()),
-                  'ranking':float(rank.detach()),'gate':float(out['forecast_gate'].mean().detach()),
+                  'ranking':float(rank.detach()),'base_loss':float(base_loss.detach()),'gate':float(out['forecast_gate'].mean().detach()),
                   'loss':float(total.detach())}
 
 
@@ -107,7 +110,7 @@ def run_epoch(model,loader,index,repo,device,mean,std,cfg,mode,opt=None,ep=1,sca
 
 
 def predict(model,loader,index,repo,device,mean,std,mode='full',amp=False):
-    arrays={k:[] for k in ('prediction','base','true','valid','direct','correction')};g=[];model.eval()
+    arrays={k:[] for k in ('prediction','base','true','valid','direct','correction')};g=[];model.eval();cand_good=0.;cand_total=0.;weighted_gain=0.
     with torch.no_grad():
         for bb in loader:
             b=move(bb,device)
@@ -118,7 +121,20 @@ def predict(model,loader,index,repo,device,mean,std,mode='full',amp=False):
             arrays['true'].append(b['y_raw'].cpu().numpy());arrays['valid'].append(b['future_valid'].cpu().numpy())
             arrays['direct'].append(b['direct_mask'].cpu().numpy());arrays['correction'].append((o['correction'].float()*std).cpu().numpy())
             g.append(float(o['forecast_gate'].mean()))
-    result={k:np.concatenate(v) for k,v in arrays.items()};result['gate_mean']=float(np.mean(g));return result
+            if o.get('candidate_residuals') is not None:
+                with torch.no_grad():
+                    r=o['candidate_residuals'].float()
+                    base=o['base_prediction'].detach()
+                    util=(base[:,None]-b['y_norm'][:,None]).abs()-(base[:,None]+r-b['y_norm'][:,None]).abs()
+                    usable=o['candidate_available'].bool()
+                    v=b['future_valid'].bool()
+                    cand_good+=float((((util>0)&usable).any(1)&v).sum())
+                    cand_total+=float(v.sum())
+                    weighted_gain+=float(((o['candidate_weights'][:,:r.shape[1]]*util).sum(1)*v).sum())
+    result={k:np.concatenate(v) for k,v in arrays.items()};result['gate_mean']=float(np.mean(g))
+    result['useful_candidate_recall']=cand_good/max(1.,cand_total)
+    result['weighted_candidate_utility_normalized']=weighted_gain/max(1.,cand_total)
+    return result
 
 
 def train(cfg,cache,checkpoint,run_dir,smoke=False,resume=None):
@@ -144,13 +160,13 @@ def train(cfg,cache,checkpoint,run_dir,smoke=False,resume=None):
         ph=phase(ep,cfg);model.set_train_phase(ph,int(cfg['training']['partial_last_layers']))
         if ph!=prev:stale=0;prev=ph;print(f'TRAIN_PHASE epoch={ep} phase={ph}',flush=True)
         if index is None or ((ep-1)%interval==0):
-            t0=time.time();index=build_memory_index(model.memory_encoder,repo,dev,
+            t0=time.time();model.sync_region_projector();index=build_memory_index(model.memory_encoder,repo,dev,
                                                       16 if smoke else int(cfg['retrieval']['store_batch_size']));index.to(dev)
             print(f'MEMORY_REFRESH epoch={ep} time={time.time()-t0:.1f}s',flush=True)
         if dev.type=='cuda':torch.cuda.reset_peak_memory_stats(dev)
         t0=time.time();a=run_epoch(model,tl,index,repo,dev,mean,std,cfg,mode,opt,ep,scaler)
         train_seconds=time.time()-t0
-        val_index=build_memory_index(model.memory_encoder,repo,dev,
+        model.sync_region_projector();val_index=build_memory_index(model.memory_encoder,repo,dev,
                    16 if smoke else int(cfg['retrieval']['store_batch_size']))
         val_index.to(dev)
         v=run_epoch(model,vl,val_index,repo,dev,mean,std,cfg,mode,None,ep,scaler)
@@ -176,14 +192,14 @@ def train(cfg,cache,checkpoint,run_dir,smoke=False,resume=None):
     if not best_path.is_file():raise RuntimeError('No completed best checkpoint')
     saved=torch.load(best_path,map_location='cpu',weights_only=False)
     model.load_state_dict(saved['state_dict'],strict=True);model.to(dev)
-    index=build_memory_index(model.memory_encoder,repo,dev,16 if smoke else int(cfg['retrieval']['store_batch_size']))
+    model.sync_region_projector();index=build_memory_index(model.memory_encoder,repo,dev,16 if smoke else int(cfg['retrieval']['store_batch_size']))
     index.to(dev);index.save(run_dir/'best_memory_index.npz',{'version':cfg['version'],'memory_rows':len(repo),
         'dataset':cfg['experiment']['dataset'],'target':cfg['experiment']['target'],'graph':str(graph_path)})
     pred=predict(model,vl,index,repo,dev,mean,std,mode,amp=scaler.is_enabled())
     vm=metrics(pred['prediction'],pred['true'],pred['valid'],pred['direct'])
     bm=metrics(pred['base'],pred['true'],pred['valid'],pred['direct'])
     np.savez_compressed(run_dir/'val_predictions.npz',**{k:v.astype(np.float32) for k,v in pred.items() if isinstance(v,np.ndarray)})
-    save_summary(run_dir/'summary.json',{'model':'Mask_RAST-STLA-v2.1','best_epoch':best_ep,
+    save_summary(run_dir/'summary.json',{'model':'Mask_RAST-STLA-v2.2','best_epoch':best_ep,
         'validation':vm,'base_validation':bm,'gate_mean':pred['gate_mean'],
         'backbone_checkpoint':str(checkpoint),'ablation':mode,'test_evaluated':False})
     print(f'TRAIN_PASS run_dir={run_dir} best_epoch={best_ep} val_MAE={vm["MAE"]:.6f}',flush=True)

@@ -11,9 +11,9 @@ def _metrics(pred,true,valid,direct):
     return backbone_metric_summary(pred,true,valid,direct)
 
 @torch.no_grad()
-def evaluate(model,memory,dataset,device,batch_size,mean,std,run_dir=None,tag='val',save_arrays=False,workers=0,mode='full'):
+def evaluate(model,memory,dataset,device,batch_size,mean,std,run_dir=None,tag='val',save_arrays=False,workers=0,mode='full',refresh_memory=True):
     model.eval()
-    if mode!='no_memory':model.refresh(memory)
+    if mode!='no_memory' and refresh_memory:model.refresh(memory)
     p=[];b=[];c=[];y=[];v=[];d=[];rows=[];all_gates=[];all_states=[];all_art=[];all_full=[];retrieval_ids=[];retrieval_weights=[];retrieval_valid=[];diag=[];effective_gates=[]
     for batch in loader(dataset,batch_size,workers=workers):
         bt=to_device(batch,device)

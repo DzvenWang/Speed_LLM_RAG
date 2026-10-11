@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse,gc,json,subprocess,sys
+import argparse,gc,json,subprocess,sys,os
 from pathlib import Path
 import _bootstrap
 import torch
@@ -13,6 +13,10 @@ def main():
     a.add_argument('--seed',type=int,default=None);a.add_argument('--config');a.add_argument('--backbone-checkpoint');a.add_argument('--memory')
     a.add_argument('--variant',choices=['full','no_memory'],default='full');a.add_argument('--smoke',action='store_true');a.add_argument('--run-dir');a.add_argument('--resume');a.add_argument('--phases',nargs='+',default=None)
     a.add_argument('--auto-evaluate',action='store_true');a.add_argument('--batch-size',type=int);a.add_argument('--num-workers',type=int)
+    a.add_argument('--diag-interval',type=int,default=None,help='Sample every N training/validation batches')
+    a.add_argument('--diag-max-batches',type=int,default=None,help='Maximum diagnostic samples per epoch (0=unlimited)')
+    a.add_argument('--progress-every',type=int,default=None,help='Log progress heartbeat every N batches (0=off)')
+    a.add_argument('--no-online-diagnostics',action='store_true')
     a.add_argument('--eval-splits',nargs='+',choices=['val','test'],default=None,
                    help='Post-train evaluation split(s). Default: pilot=val, formal=test.')
     a.add_argument('--eval-severities',nargs='+',type=int,choices=[20,40,60,90],default=[20,40,60,90])
@@ -43,6 +47,11 @@ def main():
     args.seed=cfg['experiment']['seed']
     if args.batch_size:cfg['training']['batch_size']=args.batch_size
     if args.num_workers is not None:cfg['training']['num_workers']=args.num_workers
+    diag=cfg.setdefault('diagnostics',{})
+    if args.diag_interval is not None:diag['sample_every_batches']=args.diag_interval
+    if args.diag_max_batches is not None:diag['max_sampled_batches']=args.diag_max_batches
+    if args.progress_every is not None:diag['progress_every_batches']=args.progress_every
+    if args.no_online_diagnostics:diag['enabled']=False
     seed_all(args.seed)
     backbone_to_use=args.backbone_checkpoint
     memory_to_use=args.memory
@@ -66,6 +75,11 @@ def main():
         memory_path=Path(memory_to_use)
     if args.variant=='no_memory' and args.phases is None:
         args.phases=['injection','partial','full']
+    print('FARE_DIAGNOSTICS_CONFIG '+json.dumps({'run_dir':str(run_dir),
+         'interval':diag.get('sample_every_batches',50),
+         'max_batches':diag.get('max_sampled_batches',160),
+         'resource_monitor':os.environ.get('FARE_RESOURCE_OUTPUT_PREFIX'),
+         'enabled':diag.get('enabled',True)}),flush=True)
     trainer=FARETrainer(model,memory,train,val,cfg,meta,device,run_dir,memory_path)
     best=trainer.train(args.phases,args.smoke,args.resume)
     print(f'FARE_TRAIN_PASS run_dir={run_dir} candidate_checkpoint={best}',flush=True)

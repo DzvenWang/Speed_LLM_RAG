@@ -13,7 +13,7 @@ from mask_rast_stla.evaluation import summarize_by_family,save_summary
 def main():
     p=argparse.ArgumentParser();p.add_argument('--checkpoint',required=True);p.add_argument('--target',choices=['speed','flow'])
     p.add_argument('--severities',nargs='+',type=int,default=[20,40,60,90])
-    p.add_argument('--backbone-checkpoint');p.add_argument('--evidence-mode',choices=['full','no_retrieval','no_future','no_regional','no_none','shuffled','random_future']);a=p.parse_args()
+    p.add_argument('--backbone-checkpoint');p.add_argument('--evidence-mode',choices=['full','no_retrieval','no_future','no_regional','global_only','no_none','shuffled','random_future']);a=p.parse_args()
     ck=torch.load(a.checkpoint,map_location='cpu',weights_only=False)
     if not str(ck.get('version','')).startswith('2.'):raise RuntimeError('v2 evaluator requires v2 checkpoint')
     cfg=relocate_saved_config(ck['config'])
@@ -44,7 +44,7 @@ def main():
         out=Path(a.checkpoint).resolve().parent/'evaluation'/f's{sev}'/mode;out.mkdir(parents=True,exist_ok=True)
         np.savez_compressed(out/'test_predictions.npz',prediction=pr['prediction'].astype(np.float32),
                             base_prediction=pr['base'].astype(np.float32),correction=pr['correction'].astype(np.float32))
-        save_summary(out/'summary.json',{'severity':sev,'mode':mode,'metrics':fm,'backbone':bm,'gate_mean':pr['gate_mean']})
+        save_summary(out/'summary.json',{'severity':sev,'mode':mode,'checkpoint_sha256':file_sha256(a.checkpoint),'metrics':fm,'backbone':bm,'gate_mean':pr['gate_mean'],'useful_candidate_recall':pr['useful_candidate_recall'],'weighted_candidate_utility_normalized':pr['weighted_candidate_utility_normalized']})
         rows.append({'severity':sev,'mode':mode,**fm['ALL'],**{'base_'+k:v for k,v in bm['ALL'].items()}})
         print('EVAL '+json.dumps(rows[-1]),flush=True)
     edir=Path(a.checkpoint).resolve().parent/'evaluation';edir.mkdir(exist_ok=True)

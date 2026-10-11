@@ -12,7 +12,8 @@ def main():
     p.add_argument('--dataset');p.add_argument('--backbone-checkpoint');p.add_argument('--config');p.add_argument('--smoke',action='store_true')
     p.add_argument('--run-stamp');p.add_argument('--batch-size',type=int);p.add_argument('--num-workers',type=int)
     p.add_argument('--ablation',choices=['full','no_retrieval','no_evidence','no_mask_replay','no_rerank','standard_future','shuffled'])
-    p.add_argument('--resume',help='Path to last.pt from a prior v2.1 run')
+    p.add_argument('--resume',help='Path to last.pt from a prior compatible v2.2 run')
+    p.add_argument('--skip-retrieval-audit',action='store_true')
     p.add_argument('--skip-evaluate',action='store_true')
     a=p.parse_args()
     if a.target:os.environ['TRAFFIDENT_TARGET']=a.target
@@ -32,5 +33,10 @@ def main():
              '--severities',*[str(s) for s in cfg['experiment']['severities']]]
         subprocess.check_call(cmd,cwd=ROOT)
         print('AUTO_EVALUATE_PASS',best,flush=True)
+        if cfg['training'].get('ablation','full')=='full' and not a.skip_retrieval_audit:
+            subprocess.check_call([sys.executable,'-u',str(ROOT/'scripts/evaluate_retrieval.py'),
+                '--checkpoint',str(best),'--reuse','--severities',
+                *[str(s) for s in cfg['experiment']['severities']]],cwd=ROOT)
+            print('AUTO_RETRIEVAL_AUDIT_PASS',best,flush=True)
     else:print('AUTO_EVALUATE_SKIP reason=smoke_or_cli',flush=True)
 if __name__=='__main__':main()

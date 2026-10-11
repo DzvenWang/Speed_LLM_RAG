@@ -1,4 +1,4 @@
-version: 2.1.0
+version: 2.2.0
 project:
   root: ${SPEED_LLM_RAG_ROOT}
   backbone_root: ${SPEED_LLM_RAG_ROOT}/Backbone
@@ -38,8 +38,8 @@ model:
   latent_dim: 16
   max_normalized_correction: 3.0
 training:
-  batch_size: 32
-  fallback_batch_sizes: [32, 16, 8]
+  batch_size: 64
+  fallback_batch_sizes: [64, 48, 32, 16]
   max_epochs: 80
   schedule: progressive
   ablation: full
@@ -67,6 +67,7 @@ runtime:
   frozen_replay_teacher: true
   replay_bank_dtype: float16
   replay_bank_on_gpu: true
+  normal_teacher_on_gpu: true
   replay_query_batch_size: 12
   gpu_monitor_interval_sec: 30
   amp: true

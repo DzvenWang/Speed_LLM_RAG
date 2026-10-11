@@ -27,3 +27,29 @@ def graph_neighbours(cache, out, neighbours=8, sampled_rows=1200, force=False):
     meta.write_text(json.dumps({'fingerprint':ident,'nodes':n,'neighbours':k,
        'source':'train_x_full_norm only','note':'statistical association, not directed traffic topology'},indent=2))
     return torch.from_numpy(nn)
+
+
+def assign_connected_regions(neighbors, target_size=32):
+    """Deterministic undirected connectivity groups over TRAIN-only statistical graph.
+
+    An isolated node starts its own group; no fixed Net-06 node indices.
+    """
+    a=np.asarray(neighbors.cpu() if isinstance(neighbors,torch.Tensor) else neighbors,dtype=np.int64)
+    n=int(a.shape[0]);target_size=max(1,int(target_size))
+    adj=[set() for _ in range(n)]
+    for i in range(n):
+        for j in a[i]:
+            j=int(j)
+            if 0<=j<n and i!=j:adj[i].add(j);adj[j].add(i)
+    assignment=np.full(n,-1,dtype=np.int64);r=0
+    for origin in range(n):
+        if assignment[origin]>=0:continue
+        frontier=[origin];assignment[origin]=r;count=1
+        for node in frontier:
+            if count>=target_size:break
+            for nxt in sorted(adj[node]):
+                if assignment[nxt]<0:
+                    assignment[nxt]=r;frontier.append(nxt);count+=1
+                    if count>=target_size:break
+        r+=1
+    return torch.from_numpy(assignment)

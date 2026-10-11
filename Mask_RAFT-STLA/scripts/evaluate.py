@@ -7,6 +7,7 @@ ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 from mask_raft_stla.config import cache_path,relocate_saved_config,file_sha256
 from mask_raft_stla.data import SupportSplit,RetrievalCache
 from mask_raft_stla.evidence import FutureMemory
+from mask_raft_stla.normal_teacher import prepare_normal_teacher_bank
 from mask_raft_stla.trainer import build_model,_make_loader,predict
 from mask_raft_stla.evaluation import summarize_by_family,save_summary
 from scripts.build_retrieval_cache import ensure_cache
@@ -46,18 +47,19 @@ def main():
     if cfg['runtime'].get('preload_retrieval_memory_gpu',False):
         print(f'EVAL_RETRIEVAL_MEMORY_GPU loaded={store.preload(device)}',flush=True)
     mode=a.evidence_mode or cfg['training'].get('ablation','full')
+    normal_bank=prepare_normal_teacher_bank(cfg,store,teacher,backbone_path,device) if teacher is not None and mode!='no_retrieval' else None
     rows=[]
     for sev in a.severities:
         c=cache_path(cfg,'evaluation',sev)
         r=ensure_cache(cfg,c,'test',severity=sev)
         ds=SupportSplit(c,'test');dl=_make_loader(ds,cfg['training']['batch_size'],False,cfg)
-        p=predict(model,dl,RetrievalCache(r),store,device,mean,std,cfg,mode,teacher=teacher)
+        p=predict(model,dl,RetrievalCache(r),store,device,mean,std,cfg,mode,teacher=teacher,normal_bank=normal_bank)
         fam=summarize_by_family(p['prediction'],p['true'],p['valid'],p['direct'],ds.meta)
         base=summarize_by_family(p['base'],p['true'],p['valid'],p['direct'],ds.meta)
         out=Path(a.checkpoint).resolve().parent/'evaluation'/f's{sev}'/mode;out.mkdir(parents=True,exist_ok=True)
         np.savez_compressed(out/'test_predictions.npz',prediction=p['prediction'].astype(np.float32),
              base_prediction=p['base'].astype(np.float32),correction=p['correction'].astype(np.float32))
-        save_summary(out/'summary.json',{'severity':sev,'mode':mode,'metrics':fam,'backbone':base,'gate_mean':p['gate_mean']})
+        save_summary(out/'summary.json',{'severity':sev,'mode':mode,'checkpoint_sha256':file_sha256(a.checkpoint),'metrics':fam,'backbone':base,'gate_mean':p['gate_mean'],'useful_candidate_recall':p['useful_candidate_recall'],'weighted_candidate_utility_normalized':p['weighted_candidate_utility_normalized']})
         rows.append({'severity':sev,'mode':mode,**fam['ALL'],**{'base_'+k:v for k,v in base['ALL'].items()}})
         print('EVAL '+json.dumps(rows[-1]),flush=True)
     out=Path(a.checkpoint).resolve().parent/'evaluation';out.mkdir(exist_ok=True)

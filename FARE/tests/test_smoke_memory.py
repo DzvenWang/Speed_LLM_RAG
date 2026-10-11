@@ -38,7 +38,7 @@ def test_train_memory_spread_and_formal_unchanged():
         assert legal.any(dim=1).all()
         assert int(memory.starts.max())==int(starts.max())
         formal=load_config()
-        assert formal['memory']['sampling']=='head'
+        assert formal['memory']['sampling']=='stratified_temporal'
         assert formal['memory']['max_rows']==50000
         print('FARE_SMOKE_MEMORY_SPREAD_PASS legal_candidates=',legal.sum(-1).tolist())
     finally:

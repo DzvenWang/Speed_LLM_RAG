@@ -16,10 +16,9 @@ class RetrievedStateRecovery(nn.Module):
         nn.init.constant_(self.gater[-1].bias,-1.5)
     def forward(self,batch,ctx,retrieval,regions,memory,observability=None):
         x=batch['x_obs'];m=batch['obs_mask'];b,h,n=x.shape;g=regions.g;k=retrieval['ids'].shape[-1]
-        hist,valid=memory.fetch(retrieval['ids']) # [B,G,K,H,N]
+        ids=retrieval.get('state_ids',retrieval['ids'])
         aid=regions.anchor_ids;ac=regions.a
-        hx=torch.gather(hist,-1,aid[None,:,None,None,:].expand(b,g,k,h,ac))
-        hv=torch.gather(valid,-1,aid[None,:,None,None,:].expand(b,g,k,h,ac))
+        hx,hv=memory.fetch_nodes(ids,aid)  # [B,G,K,H,A]
         cm=ctx['anchor_mask'][:,:,None] & hv
         residual=(ctx['anchor_values'][:,:,None]-hx)
         anchor_delta=(residual*cm).sum(-1)/cm.sum(-1).clamp_min(1)
@@ -33,17 +32,23 @@ class RetrievedStateRecovery(nn.Module):
         shift,logscale=self.adapter(feats).unbind(-1) # [B,G,K,H]
         # Transfer observed candidate discrepancies to each target node via graph walks.
         aligned_residual=residual*cm.float()
-        graph_delta=torch.einsum('bgkha,gna->bgkhn',aligned_residual,regions.graph_transfer)
-        altered=hist+shift[...,None]+graph_delta
-        weights=retrieval['weights'][...,None,None]*valid.float()
-        weighted=(altered*weights).sum(2)/weights.sum(2).clamp_min(1e-6)
-        var=((altered-weighted[:,:,None]).square()*weights).sum(2)/weights.sum(2).clamp_min(1e-6)
-        # target regions are disjoint; one region per node
+        # Each node belongs to exactly one region: gather ONLY its region's
+        # candidate evidence. Avoid a dense [B,G,K,H,N] intermediate.
         owner=regions.owner
-        # [B,G,H,N] -> select region per node -> [B,H,N]
-        idx=owner.view(1,1,n,1).expand(b,h,n,1)
-        recovered=weighted.permute(0,2,3,1).gather(-1,idx).squeeze(-1)
-        uncertainty=torch.sqrt(var.permute(0,2,3,1).gather(-1,idx).squeeze(-1).clamp_min(1e-6))
+        node_id=torch.arange(n,device=x.device)
+        node_ids=ids[:,owner,:]  # [B,N,K]
+        own_hist=memory.x[node_ids,: ,node_id[None,:,None]]  # [B,N,K,H]
+        own_valid=memory.valid[node_ids,: ,node_id[None,:,None]]
+        own_residual=aligned_residual[:,owner]  # [B,N,K,H,A]
+        transfer=regions.graph_transfer[owner,node_id]  # [N,A]
+        graph_delta=torch.einsum('bnkha,na->bnkh',own_residual,transfer)
+        altered=own_hist+shift[:,owner]+graph_delta
+        weights=retrieval['weights'][:,owner,:,None]*own_valid.float()
+        denom=weights.sum(2).clamp_min(1e-6)
+        weighted=(altered*weights).sum(2)/denom  # [B,N,H]
+        var=((altered-weighted[:,:,None,:]).square()*weights).sum(2)/denom
+        recovered=weighted.transpose(1,2)
+        uncertainty=torch.sqrt(var.transpose(1,2).clamp_min(1e-6))
         coverage=ctx['coverage'][:,owner][:,None,:].expand(b,h,n)
         target_missing=ctx['missing'][:,owner][:,None,:].expand(b,h,n)
         exist=retrieval['group_valid'][:,owner][:,None,:].expand(b,h,n)
@@ -74,10 +79,10 @@ class InnovationStudent(nn.Module):
     def forward(self,batch,state,retrieval,regions,memory,base_hidden):
         b,h,n=batch['x_obs'].shape;k=retrieval['ids'].shape[-1];owner=regions.owner
         if memory.latent is not None:
-            candidate=memory.latent[retrieval['ids']] # B,G,K,N,Dm
+            candidate=memory.latent[retrieval.get('latent_ids',retrieval['ids'])] # B,G,K,N,Dm
         else:
             # Missing latent cache is explicit; this baseline path retains history evidence.
-            hx,_=memory.fetch(retrieval['ids']); candidate=hx.mean(-2)[...,None].expand(-1,-1,-1,-1,self.memory_projection.in_features)
+            hx,_=memory.fetch(retrieval.get('latent_ids',retrieval['ids'])); candidate=hx.mean(-2)[...,None].expand(-1,-1,-1,-1,self.memory_projection.in_features)
         # Select the region appropriate to each target node without B,G,K,N duplication in attention.
         candidate=candidate.permute(0,3,1,2,4).gather(2,owner[None,:,None,None,None].expand(b,n,1,k,candidate.shape[-1])).squeeze(2)
         w=retrieval['weights'][:,owner,:] # B,N,K

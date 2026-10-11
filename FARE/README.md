@@ -1,3 +1,9 @@
+# Current release: v2.0.2 (resources + online diagnostics). See README_V202_START_HERE.md and RELEASE_2.0.2.md.
+
+# FARE v2.0.1 performance release
+
+Start with [README_V201_START_HERE.md](README_V201_START_HERE.md) and [RELEASE_2.0.1.md](RELEASE_2.0.1.md).
+
 > **v1.3.2 Same-Allocation Gadi Pilot & Formal Evaluate (2026-10-08):**
 > A normal `submit_gadi.py train` now submits **one PBS job per target**.
 > The selected `candidate_best.pt` is evaluated immediately after training,
@@ -338,3 +344,15 @@ bash --noprofile --norc -c 'set -euo pipefail; source FARE/pbs/_activate_tfp.sh;
 Expected: `FARE_CONDA_INIT_OK`, `FARE_CONDA_READY ... env=TFP`, and the correct Python executable. If auto-discovery fails, set `export FARE_CONDA_SH=/scratch/mh20/zw1165/miniconda/etc/profile.d/conda.sh` in the login environment to test it; `submit_gadi.py` will forward it in the PBS `-v` environment, including manual Evaluate and optional finalization jobs.
 
 **Already-submitted failed PBS jobs cannot be restarted by editing source files.** After installing v1.3.3, submit a fresh Pilot. This still creates exactly **one Train + in-allocation Val/Test Evaluate PBS job per target**. Train and Evaluate share the same GPU allocation and walltime. No model architecture or checkpoint format changes.
+
+
+## v1.3.4 — P0.1 evidence-attribution diagnostic (single PBS job)
+
+See [RELEASE_1.3.4_P01.md](RELEASE_1.3.4_P01.md). The **complete unchanged
+training pipeline** is retained. P0.1 is a frozen-checkpoint, validation-only
+research diagnostic run sequentially for Speed and Flow within one Gadi V100
+allocation. It validates s40 mask parity and never changes existing weights.
+
+```bash
+qsub -N FARE_P01 -v SEED=10,PILOT_STAMP=20261009_140229_322315_seed10 FARE/pbs/p01_diagnostic.pbs
+```

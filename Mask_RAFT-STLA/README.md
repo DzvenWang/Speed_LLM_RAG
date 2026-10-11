@@ -1,3 +1,7 @@
+# Mask_RAFT-STLA v2.2.0
+
+**Current version**: See [docs/RETRIEVAL_V2.2.md](docs/RETRIEVAL_V2.2.md) for method, commands, audit and caveats.
+
 # Mask_RAFT-STLA v2.0.0 — Failure-Conditioned Predictive Residual Retrieval
 
 **A full replacement of Mask_RAFT-STLA v1.1.2.** The project is intended to live directly next to `Backbone` and `Base_SupportBench` in the `Speed_LLM_RAG` repository. It does **not** use FARE, Support_Oracle, STLA_DASR, the Baseline project, or a historical-imputation head.
