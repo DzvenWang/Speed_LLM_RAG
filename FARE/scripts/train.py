@@ -12,15 +12,23 @@ def main():
     a.add_argument('--dataset',default=None);a.add_argument('--target',choices=['speed','flow'],default=None)
     a.add_argument('--seed',type=int,default=None);a.add_argument('--config');a.add_argument('--backbone-checkpoint');a.add_argument('--memory')
     a.add_argument('--variant',choices=['full','no_memory'],default='full');a.add_argument('--smoke',action='store_true');a.add_argument('--run-dir');a.add_argument('--resume');a.add_argument('--phases',nargs='+',default=None)
-    a.add_argument('--auto-evaluate',action='store_true');a.add_argument('--batch-size',type=int);a.add_argument('--num-workers',type=int)
+    a.add_argument('--auto-evaluate',action='store_true');a.add_argument('--auto-ablations',action='store_true');a.add_argument('--batch-size',type=int);a.add_argument('--num-workers',type=int)
+    a.add_argument('--ablation-splits',nargs='+',choices=['val','test'],default=None,
+                   help='Auto-ablation splits. Defaults to evaluated splits, pilot=val+test.')
     a.add_argument('--diag-interval',type=int,default=None,help='Sample every N training/validation batches')
     a.add_argument('--diag-max-batches',type=int,default=None,help='Maximum diagnostic samples per epoch (0=unlimited)')
     a.add_argument('--progress-every',type=int,default=None,help='Log progress heartbeat every N batches (0=off)')
     a.add_argument('--no-online-diagnostics',action='store_true')
     a.add_argument('--eval-splits',nargs='+',choices=['val','test'],default=None,
-                   help='Post-train evaluation split(s). Default: pilot=val, formal=test.')
+                   help='Post-train evaluation split(s). Default: pilot=val+test, formal=test.')
     a.add_argument('--eval-severities',nargs='+',type=int,choices=[20,40,60,90],default=[20,40,60,90])
     args=a.parse_args()
+    if args.ablation_splits and not args.auto_ablations:
+        raise ValueError('--ablation-splits requires --auto-ablations')
+    if args.ablation_splits and len(set(args.ablation_splits)) != len(args.ablation_splits):
+        raise ValueError('Duplicate --ablation-splits are not permitted')
+    if args.auto_ablations and not args.auto_evaluate:
+        raise ValueError('--auto-ablations requires --auto-evaluate (to free training GPU memory first)')
     if args.eval_splits and not args.auto_evaluate:
         raise ValueError('--eval-splits requires --auto-evaluate')
     if args.eval_splits and len(set(args.eval_splits))!=len(args.eval_splits):
@@ -86,7 +94,7 @@ def main():
     if args.auto_evaluate and not args.smoke:
         # The next subprocess remains in the CURRENT PBS allocation / GPU.
         # Free the parent's training CUDA buffers before starting evaluation.
-        splits=args.eval_splits or (['val'] if cfg['experiment'].get('run_tag')=='pilot' else ['test'])
+        splits=args.eval_splits or (['val','test'] if cfg['experiment'].get('run_tag')=='pilot' else ['test'])
         if cfg['experiment'].get('run_tag')=='pilot' and 'test' in splits:
             print('FARE_PILOT_TEST_EXPLORATORY: Validation selects the checkpoint; '
                   'Pilot Test is not an unbiased final comparison if used for tuning.',flush=True)
@@ -124,4 +132,41 @@ def main():
         json_write(report_path,results)
         print(f'FARE_IN_JOB_EVALUATION_PASS completed={":".join(results["completed_splits"])}',flush=True)
         print(f'FARE_AUTO_EVALUATE_PASS checkpoint={best}',flush=True)
+        if cfg['experiment'].get('run_tag') == 'pilot':
+            summary_cmd=[sys.executable,'-u',str(Path(__file__).with_name('report_pilot_val_test.py')),
+                         '--run-dir',str(run_dir)]
+            subprocess.run(summary_cmd,check=True)
+        # Same selected checkpoint; separate intervention reports for Val and each Test severity.
+        # Test results are exploratory diagnostics only and NEVER drive checkpoint selection.
+        if args.auto_ablations:
+            modes=['full','similarity_memory','utility_off','random_memory','no_memory']
+            ablation_splits=args.ablation_splits or splits
+            if not set(ablation_splits).issubset(set(splits)):
+                raise ValueError('Ablation splits must be included in the evaluated splits')
+            ablation_root=run_dir/'retrieval_attribution'
+            combined=[]
+            for split in ablation_splits:
+                ablation_dir=ablation_root/split
+                cmd=[sys.executable,'-u',str(Path(__file__).with_name('ablate.py')),
+                     '--checkpoint',str(best),'--split',split,'--output',str(ablation_dir),
+                     '--modes',*modes]
+                if split=='test':cmd+=['--severities',*map(str,args.eval_severities)]
+                print('FARE_RETRIEVAL_ATTRIBUTION_START '+json.dumps({'modes':modes,'split':split,
+                       'severities':(args.eval_severities if split=='test' else ['training_s40_val'])}),flush=True)
+                subprocess.run(cmd,check=True)
+                split_rows=json.loads((ablation_dir/'ablation_summary.json').read_text(encoding='utf-8'))
+                combined.extend(split_rows)
+                report_cmd=[sys.executable,'-u',str(Path(__file__).with_name('report_retrieval_attribution.py')),
+                            '--input',str(ablation_dir/'ablation_summary.json'),
+                            '--output',str(ablation_dir/'retrieval_gain.md')]
+                subprocess.run(report_cmd,check=True)
+                print(f'FARE_RETRIEVAL_ATTRIBUTION_SPLIT_PASS split={split} output={ablation_dir}',flush=True)
+            json_write(ablation_root/'combined_ablation_summary.json',combined)
+            if len(ablation_splits)>1:
+                report_cmd=[sys.executable,'-u',str(Path(__file__).with_name('report_retrieval_attribution.py')),
+                            '--input',str(ablation_root/'combined_ablation_summary.json'),
+                            '--output',str(ablation_root/'retrieval_gain_val_test.md')]
+                subprocess.run(report_cmd,check=True)
+            print(f'FARE_RETRIEVAL_ATTRIBUTION_PASS splits={":".join(ablation_splits)} '
+                  f'output={ablation_root}',flush=True)
 if __name__=='__main__':main()

@@ -19,10 +19,10 @@ def main():
     ap.add_argument('--target',choices=['speed','flow'])
     ap.add_argument('--severities',nargs='+',type=int,default=[20,40,60,90])
     ap.add_argument('--backbone-checkpoint')
-    ap.add_argument('--evidence-mode',choices=['full','no_evidence','shuffled','random_future','standard_future','no_mask_replay','no_rerank','no_retrieval'])
+    ap.add_argument('--evidence-mode',choices=['full','no_evidence','shuffled','random_future','cross_history','no_risk','standard_future','no_mask_replay','no_rerank','no_retrieval'])
     a=ap.parse_args()
     ck=torch.load(a.checkpoint,map_location='cpu',weights_only=False)
-    if not str(ck.get('version','')).startswith('2.'):
+    if str(ck.get('version',''))!='2.3.0':
         raise RuntimeError('Only v2 checkpoints can be evaluated by v2 scripts')
     cfg=relocate_saved_config(ck['config'])
     if a.target and a.target!=cfg['experiment']['target']:raise RuntimeError('Target must match saved checkpoint')
@@ -48,12 +48,13 @@ def main():
         print(f'EVAL_RETRIEVAL_MEMORY_GPU loaded={store.preload(device)}',flush=True)
     mode=a.evidence_mode or cfg['training'].get('ablation','full')
     normal_bank=prepare_normal_teacher_bank(cfg,store,teacher,backbone_path,device) if teacher is not None and mode!='no_retrieval' else None
+    os.environ['BACKBONE_CHECKPOINT']=str(backbone_path)
     rows=[]
     for sev in a.severities:
         c=cache_path(cfg,'evaluation',sev)
-        r=ensure_cache(cfg,c,'test',severity=sev)
+        r=None if mode=='no_retrieval' else ensure_cache(cfg,c,'test',severity=sev)
         ds=SupportSplit(c,'test');dl=_make_loader(ds,cfg['training']['batch_size'],False,cfg)
-        p=predict(model,dl,RetrievalCache(r),store,device,mean,std,cfg,mode,teacher=teacher,normal_bank=normal_bank)
+        p=predict(model,dl,RetrievalCache(r) if r else None,store,device,mean,std,cfg,mode,teacher=teacher,normal_bank=normal_bank)
         fam=summarize_by_family(p['prediction'],p['true'],p['valid'],p['direct'],ds.meta)
         base=summarize_by_family(p['base'],p['true'],p['valid'],p['direct'],ds.meta)
         out=Path(a.checkpoint).resolve().parent/'evaluation'/f's{sev}'/mode;out.mkdir(parents=True,exist_ok=True)

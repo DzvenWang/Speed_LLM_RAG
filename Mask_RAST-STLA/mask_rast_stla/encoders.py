@@ -24,6 +24,7 @@ class StateEncoder(nn.Module):
         self.temporal_key=nn.Linear(temporal_dim,retrieval_dim)
         self.spatial_key=nn.Linear(spatial_dim,retrieval_dim)
         self.region_proj=nn.Linear(query_dim,retrieval_dim)
+        self.support_gate=nn.Sequential(nn.Linear(3,16),nn.GELU(),nn.Linear(16,1))
         self.register_buffer("region_assignment",torch.zeros(num_nodes,dtype=torch.long))
         self.register_buffer('neighbors',torch.arange(num_nodes).view(-1,1).expand(-1,min(graph_k,max(1,num_nodes-1))).clone())
 
@@ -74,11 +75,26 @@ class StateEncoder(nn.Module):
         # AMP-safe region pooling: the encoder output may be FP16 while
         # coverage weights are FP32. Accumulate both numerator and denominator
         # in FP32 to avoid index_add_ dtype errors and loss of precision.
-        regweight=(0.15+cov.float()).unsqueeze(-1)
+        # Region embeddings are supported only by observed nodes or their
+        # observed graph neighbours. No nonzero pseudo-observation floor.
+        regweight=(cov.float()+0.5*n_support.float()).unsqueeze(-1)
         regsum=torch.zeros((B,regions,nq.shape[-1]),device=nq.device,dtype=torch.float32)
         regsum.index_add_(1,rid,nq.float()*regweight)
         den=torch.zeros((B,regions,1),device=nq.device,dtype=torch.float32)
         den.index_add_(1,rid,regweight)
         rk=torch.nn.functional.normalize(self.region_proj(regsum/den.clamp_min(1e-6)),dim=-1)
+        internal=torch.zeros((B,regions,1),device=nq.device,dtype=torch.float32)
+        boundary=torch.zeros_like(internal)
+        total=torch.zeros_like(internal)
+        internal.index_add_(1,rid,cov.float().unsqueeze(-1))
+        # Neighbour coverage approximates observable boundary support; it is
+        # not asserted to be a physical road-topology boundary.
+        boundary.index_add_(1,rid,n_support.float().unsqueeze(-1))
+        total.index_add_(1,rid,torch.ones_like(cov.float().unsqueeze(-1)))
+        ic=internal/total.clamp_min(1)
+        bc=boundary/total.clamp_min(1)
+        rs=torch.sigmoid(self.support_gate(torch.cat([ic,bc,(1-ic).clamp_min(0)],-1))).squeeze(-1)
+        rs=rs*(ic.squeeze(-1)+bc.squeeze(-1)).clamp(max=1.)
         return {'region_keys':rk,'temporal_node':tn,'spatial_node':spatial,'node_query':nq,
-                'temporal_key':tk,'spatial_key':sk,'node_coverage':cov,'neighbour_coverage':n_support}
+                'temporal_key':tk,'spatial_key':sk,'node_coverage':cov,'neighbour_coverage':n_support,
+                'region_support':rs,'region_internal_coverage':ic.squeeze(-1), 'region_boundary_support':bc.squeeze(-1)}

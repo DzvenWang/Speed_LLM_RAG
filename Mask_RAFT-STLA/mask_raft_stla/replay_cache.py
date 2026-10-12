@@ -3,8 +3,7 @@
 Training masks are fixed in Base_SupportBench. A frozen STLA replay teacher makes
 candidate residuals deterministic across epochs, so expensive teacher forward
 passes can be amortized without reducing training queries or candidate counts.
-This is an explicit method variant: dynamic v2.0 replay remains available by
-setting runtime.frozen_replay_teacher=false.
+This is an explicit method variant: cache is keyed to v2.3 and the precise forecast-conditioned shortlist.
 """
 from __future__ import annotations
 import json, os, time, hashlib
@@ -52,15 +51,15 @@ def prepare_bank(cfg,split,dataset,cache,memory,teacher,checkpoint_path,retrieva
     dtype=str(cfg['runtime'].get('replay_bank_dtype','float16'))
     if dtype not in ('float16','float32'):raise ValueError('replay_bank_dtype must be float16 or float32')
     shortlist_per=int(cfg['retrieval']['shortlist_per_period'])
-    k=min(shortlist_per,int(cache.indices.shape[-1]))*int(cache.indices.shape[1])
+    k=int(cache.candidate_count)
     n=len(dataset) if num_queries is None else min(int(num_queries),len(dataset))
     h=int(cfg['experiment']['horizon']);nodes=int(memory.arrays['x'].shape[-1])
     name=f'{split}.teacher_replay_k{k}_{dtype}.npy'
-    folder=Path(cfg['project']['retrieval_root'])/cfg['experiment']['dataset']/'formal'/'teacher_replay_v21'
+    folder=Path(cfg['project']['retrieval_root'])/cfg['experiment']['dataset']/'formal'/'teacher_replay_v23'
     folder.mkdir(parents=True,exist_ok=True)
     path=folder/name;meta_file=folder/(name+'.json')
     source={
-        'schema':1,'split':split,'target':cfg['experiment']['target'],
+        'schema':23,'split':split,'target':cfg['experiment']['target'],
         'dataset':cfg['experiment']['dataset'],'num_queries':n,'num_candidates':k,
         'horizon':h,'nodes':nodes,'dtype':dtype,
         'pretrained_backbone_sha256':file_sha256(checkpoint_path),

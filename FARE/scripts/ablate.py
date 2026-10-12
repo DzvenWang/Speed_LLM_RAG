@@ -10,7 +10,7 @@ from pathlib import Path
 import _bootstrap
 
 MODES=('full','retrieval_off','no_memory','global_retrieval',
-       'no_mask_alignment','no_learned_reranker','no_observation_distance',
+       'no_mask_alignment','no_learned_reranker','utility_off','similarity_memory','no_observation_distance',
        'random_memory','state_only','innovation_only','no_risk','no_utility',
        'constant_alpha')
 

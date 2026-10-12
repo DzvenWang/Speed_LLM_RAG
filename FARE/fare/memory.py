@@ -4,7 +4,7 @@ from pathlib import Path
 from .config import json_write,sha256
 
 class TrainMemory:
-    """Train-only historical window store, no stored or fetched future truth."""
+    """Train-only historical windows, optionally with strictly historical observed outcomes."""
     def __init__(self,x,valid,starts,latent=None,device='cpu',tod=None,dow=None,future=None,future_valid=None):
         self.x=torch.as_tensor(np.asarray(x),dtype=torch.float32,device=device)
         self.valid=torch.as_tensor(np.asarray(valid),dtype=torch.bool,device=device)

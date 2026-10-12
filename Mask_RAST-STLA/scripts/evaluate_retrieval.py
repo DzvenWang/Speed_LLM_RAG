@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Paired attribution audit for a full Retrieval checkpoint (v2.2).
+"""Paired attribution audit for a full Retrieval checkpoint (v2.3).
 
 Distinguishes: within-model base/full, intervention with wrong evidence,
 and independently optimized no-retrieval control. Never relabels a
@@ -14,7 +14,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from mask_rast_stla.config import relocate_saved_config,cache_path,file_sha256
 
-MODES=['full','shuffled','no_future','global_only']
+MODES=['full','shuffled','cross_history','no_future','global_only']
 BASE_MODE='no_future'
 MECHANISM_MODE='global_only'
 
@@ -65,18 +65,26 @@ def record(model,sev,group,horizon,subset,truth,valid,full,base,wrong,no_ev,inde
 
 def main():
     ap=argparse.ArgumentParser()
-    ap.add_argument('--checkpoint',required=True,help='v2.2 FULL best.pt')
+    ap.add_argument('--checkpoint',required=True,help='v2.3 FULL best.pt')
     ap.add_argument('--no-retrieval-checkpoint',help='separately trained no_retrieval best.pt')
     ap.add_argument('--backbone-checkpoint')
     ap.add_argument('--severities',nargs='+',type=int,default=[20,40,60,90])
     ap.add_argument('--reuse',action='store_true',help='reuse previously exported predictions')
     args=ap.parse_args()
+    # subprocesses run with project cwd: resolve CLI paths before dispatch.
+    args.checkpoint=str(Path(args.checkpoint).expanduser().resolve())
+    if args.no_retrieval_checkpoint:
+        args.no_retrieval_checkpoint=str(Path(args.no_retrieval_checkpoint).expanduser().resolve())
+    if args.backbone_checkpoint:
+        args.backbone_checkpoint=str(Path(args.backbone_checkpoint).expanduser().resolve())
     full_ck=torch.load(args.checkpoint,map_location='cpu',weights_only=False)
+    if full_ck.get('version')!='2.3.0':raise RuntimeError('v2.3 Retrieval Audit requires v2.3 checkpoint')
     if full_ck['config']['training'].get('ablation','full')!='full':raise ValueError('Audit requires full-mode checkpoint')
     cfg=relocate_saved_config(full_ck['config'])
     os.environ['TRAFFIDENT_TARGET']=cfg['experiment']['target']
     if args.no_retrieval_checkpoint:
         ctrl=torch.load(args.no_retrieval_checkpoint,map_location='cpu',weights_only=False)
+        if ctrl.get('version')!='2.3.0':raise RuntimeError('No-retrieval control version mismatch')
         if ctrl['config']['training'].get('ablation')!='no_retrieval':raise ValueError('Independent control must be trained with no_retrieval')
         if ctrl['backbone_sha256']!=full_ck['backbone_sha256'] or ctrl['config']['experiment']!=full_ck['config']['experiment']:
             raise RuntimeError('Independent control must share backbone SHA and experiment protocol')
@@ -103,7 +111,7 @@ def main():
         direct=np.load(dsroot/'test_direct_mask.npy',mmap_mode='r')
         manifest=pd.read_csv(dsroot/'test_manifest.csv')
         full,base=get_data(args.checkpoint,sev,'full')
-        wrong,_=get_data(args.checkpoint,sev,'shuffled')
+        wrong,_=get_data(args.checkpoint,sev,'cross_history')
         no_ev,_=get_data(args.checkpoint,sev,BASE_MODE)
         mechanism,_=get_data(args.checkpoint,sev,MECHANISM_MODE)
         no_ret=get_data(args.no_retrieval_checkpoint,sev,'no_retrieval')[0] if args.no_retrieval_checkpoint else None
@@ -118,7 +126,7 @@ def main():
         observed=~masked
         for group,subset in subsets.items():
             for h in range(y.shape[1]):
-                vv=np.asarray(v[:,h:h+1],bool)
+                vv=np.asarray(v,bool)
                 if group=='ALL':
                     for name,condition in [('direct_masked',masked),('not_direct_masked',observed)]:
                         valid_subset=vv & condition[:,None,:]
@@ -153,11 +161,11 @@ def main():
         res['independent_gain_pct']=gain(res['independent_no_retrieval_MAE'],res['MAE'])
         agg.append(res)
     pd.DataFrame(agg).to_csv(audit/'paired_summary.csv',index=False)
-    manifest={'schema':1,'model':'Mask_RAST-STLA','full_checkpoint':str(Path(args.checkpoint).resolve()),
+    manifest={'schema':23,'model':'Mask_RAST-STLA','full_checkpoint':str(Path(args.checkpoint).resolve()),
               'full_backbone_sha256':full_ck.get('backbone_sha256'),
               'no_retrieval_checkpoint':args.no_retrieval_checkpoint,
               'warning':'Within-checkpoint interventions are not independent retrained controls.',
-              'wrong_evidence':'fixed cyclic permutation of candidate rank within each query; not randomly sampled across history',
+              'wrong_evidence':'cross_history: deterministic batch-invariant, nonoverlapping Train future controls; original retrieval rank_shuffle exported separately',
               'mechanism_ablation':MECHANISM_MODE,'severities':args.severities}
     (audit/'audit_manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
     print('RETRIEVAL_AUDIT_PASS',audit/'paired_summary.csv',flush=True)

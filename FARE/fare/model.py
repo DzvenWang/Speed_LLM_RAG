@@ -19,7 +19,7 @@ class FARE(nn.Module):
         self.analog_adapter=nn.Sequential(nn.Linear(self.p*2+1,self.stla.d),nn.GELU(),nn.Linear(self.stla.d,self.p))
         nn.init.zeros_(self.analog_adapter[-1].weight);nn.init.zeros_(self.analog_adapter[-1].bias)
         self.observability=ObservabilityEncoder(cfg['model']['hidden'])
-        self.retrieval=TargetRetriever(self.h,cfg['model']['hidden'],r['key_dim'],r['coarse_topk'],r['topk'],overlap=self.h+self.p)
+        self.retrieval=TargetRetriever(self.h,cfg['model']['hidden'],r['key_dim'],r['coarse_topk'],r['topk'],overlap=self.h+self.p,utility_score_weight=r.get('utility_score_weight',.8),alignment_steps=r.get('alignment_steps',3))
         self.state_recovery=RetrievedStateRecovery(cfg['model']['hidden'])
         self.innovation=InnovationStudent(self.h,self.stla.d,inc['memory_dim'],inc['rank'],inc['heads'])
         self.reliability=Reliability(cfg['model']['hidden'])
@@ -55,6 +55,12 @@ class FARE(nn.Module):
                 for p in getattr(self,name).parameters():p.requires_grad=False
             for name in ('retrieval_cross','retrieval_cross_out','cross_adapter'):
                 for p in getattr(self.stla,name).parameters():p.requires_grad=False
+        if (phase in ('partial','full') and
+                self.cfg.get('training',{}).get('freeze_retrieval_on_finetune',False)):
+            # Protect the proven injection-stage retrieval index from drift
+            # while adapting a subset of STLAformer layers.
+            for name in ('support_demand','observability','retrieval'):
+                for p in getattr(self,name).parameters():p.requires_grad=False
         if phase=='calibration':
             for name in ('retrieval','observability','state_recovery','innovation'):
                 for p in getattr(self,name).parameters():p.requires_grad=False
@@ -150,6 +156,8 @@ class FARE(nn.Module):
         # are not in its objective. Preserve full forward for normal inference.
         if phase_fast=='retrieval':
             return {'recovered_state':state['recovered'],
+                    'retrieval_evidence':retrieved,
+
                     'retrieved_ids':retrieved['ids'],
                     'retrieved_weights':retrieved['weights'],
                     'retrieved_valid_candidates':retrieved['valid'],
@@ -224,6 +232,9 @@ class FARE(nn.Module):
                 'final_gate':effective_gate,
                 'correction_delta':candidate-base['prediction'],
                 'retrieval_query':retrieved['query'],'support_demand':demand,'retrieval_utility_scores':retrieved.get('utility_scores',retrieved['weights']),
+                'retrieval_evidence':retrieved,
+                'predicted_retrieval_utility':retrieved.get('predicted_candidate_utility'),
+
                 'observability_embedding':observability,
                 'innovation_delta_abs':delta_norm,
                 'retrieved_token_abs':token_norm,**diagnostic_fields}

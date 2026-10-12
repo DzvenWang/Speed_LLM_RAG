@@ -1,6 +1,6 @@
-# FARE v2.0.2 PILOT: 8k time-spread TRAIN; full validation; 16k train-only memory.
-# Five-phase model + Forecast Utility + diagnostics. NO test for model selection.
-version: 2.0.2
+# FARE v2.0.3 PILOT: 8k time-spread TRAIN; full validation; 16k train-only memory.
+# Full model components + Forecast Utility + diagnostics. Validation selects checkpoint; Pilot Test is report-only.
+version: 2.0.4
 experiment:
   dataset: TraffiDent_Net_06
   target: speed
@@ -30,6 +30,8 @@ retrieval:
   key_dim: 128
   coarse_topk: 64
   topk: 8
+  utility_score_weight: 0.8
+  alignment_steps: 3
   match_on_observed_anchors_only: true
   exclude_overlapping_history_forecast: true
 memory:
@@ -65,14 +67,17 @@ training:
   grad_clip: 5.0
   weight_decay: 0.0001
   new_lr: 0.0001
-  partial_backbone_lr: 1.0e-05
-  full_backbone_lr: 5.0e-06
+  partial_backbone_lr: 2.0e-06
+  full_backbone_lr: 1.0e-06
+  stop_after_phase: injection
+  freeze_retrieval_on_finetune: true
+  finetune_new_lr: 2.0e-05
   patience: 4
   min_phase_epochs: 2
   phase_epochs:
-    retrieval: 5
+    retrieval: 8
     recovery: 5
-    injection: 10
+    injection: 12
     partial: 5
     full: 5
   oof_folds: 3
@@ -83,11 +88,13 @@ training:
 evaluation:
   save_stage_predictions: false
   save_final_predictions: true
-  auto_test: false
+  auto_test: true  # report-only in Pilot; does not participate in model selection
 forecast_utility:
   enabled: true
   loss_weight: 0.2
   teacher_temperature: 0.35
+  coarse_loss_weight: 0.35
+  coarse_temperature: 0.7
   strict_causal_historical_future: true
 performance:
   retrieval_phase_fast: true

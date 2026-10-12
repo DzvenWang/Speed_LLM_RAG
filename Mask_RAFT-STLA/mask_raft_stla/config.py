@@ -27,6 +27,16 @@ def load_config(path: str|Path|None=None) -> dict:
     cfg['experiment']['target']=target
     for k,v in list(cfg['project'].items()):
         if isinstance(v,str): cfg['project'][k]=v.replace('${SPEED_LLM_RAG_ROOT}',str(root)).replace('${TRAFFIDENT_TARGET}',target)
+    # Isolate parallel complete/incomplete STLA initialization experiments.
+    # The Base_SupportBench input cache remains unchanged and read-only.
+    mode=os.environ.get('BACKBONE_MODE','incomplete').strip().lower()
+    if mode not in ('incomplete','complete'):
+        raise ValueError(f'BACKBONE_MODE must be incomplete/complete, got {mode!r}')
+    cfg['backbone']['training_mode']=mode
+    cfg['experiment']['backbone_mode']=mode
+    for key in ('exp_root','log_root','retrieval_root','store_root'):
+        if key in cfg['project']:
+            cfg['project'][key]=str(Path(cfg['project'][key])/mode)
     return cfg
 
 def add_repo_paths(cfg: dict) -> None:

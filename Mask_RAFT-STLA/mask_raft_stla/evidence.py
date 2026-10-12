@@ -62,18 +62,14 @@ class FutureMemory:
         return out
 
 
-def shortlist(cache, query_indices, per_period: int, device):
-    """Preserve evidence across temporal resolutions instead of early averaging."""
-    idx = np.asarray(query_indices, dtype=np.int64)
-    if idx.size == 0 or int(idx.max()) >= cache.indices.shape[0]:
-        raise IndexError('Retrieval cache is shorter than requested dataset split')
-    k = min(int(per_period), cache.indices.shape[-1])
-    ids = np.asarray(cache.indices[idx, :, :k], dtype=np.int64)
-    scores = np.asarray(cache.scores[idx, :, :k], dtype=np.float32)
-    coverage = np.repeat(np.asarray(cache.coverage[idx], dtype=np.float32)[:, :, None], k, axis=2)
-    return (torch.as_tensor(ids.reshape(len(idx), -1), device=device),
-            torch.as_tensor(scores.reshape(len(idx), -1), device=device),
-            torch.as_tensor(coverage.reshape(len(idx), -1), device=device))
+def shortlist(cache, query_indices, per_period, device):
+    """Read v2.3 forecast-conditioned unique shortlist; no legacy cache format."""
+    idx=np.asarray(query_indices,dtype=np.int64)
+    if not len(idx) or int(idx.max())>=len(cache.selected_indices):
+        raise IndexError('v2.3 shortlist indices out of range')
+    return (torch.as_tensor(cache.selected_indices[idx],device=device,dtype=torch.long),
+            torch.as_tensor(cache.selected_scores[idx],device=device,dtype=torch.float32),
+            torch.as_tensor(cache.selected_coverage[idx],device=device,dtype=torch.float32))
 
 
 def counterfactual_residuals(stla, candidates, query_mask, chunk_size=32,

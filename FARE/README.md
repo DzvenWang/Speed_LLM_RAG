@@ -1,3 +1,5 @@
+**Current development version: FARE v2.0.3.** See [README_PILOT_V203.md](README_PILOT_V203.md) and [RELEASE_2.0.3.md](RELEASE_2.0.3.md).
+
 # Current release: v2.0.2 (resources + online diagnostics). See README_V202_START_HERE.md and RELEASE_2.0.2.md.
 
 # FARE v2.0.1 performance release

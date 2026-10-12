@@ -11,8 +11,8 @@ def main():
     p.add_argument('--target',choices=['speed','flow']);p.add_argument('--seed',type=int,default=10)
     p.add_argument('--dataset');p.add_argument('--backbone-checkpoint');p.add_argument('--config');p.add_argument('--smoke',action='store_true')
     p.add_argument('--run-stamp');p.add_argument('--batch-size',type=int);p.add_argument('--num-workers',type=int)
-    p.add_argument('--ablation',choices=['full','no_retrieval','no_evidence','no_mask_replay','no_rerank','standard_future','shuffled'])
-    p.add_argument('--resume',help='Path to last.pt from a prior compatible v2.2 run')
+    p.add_argument('--ablation',choices=['full','no_retrieval','no_evidence','no_mask_replay','no_rerank','standard_future','shuffled','no_risk'])
+    p.add_argument('--resume',help='Path to last.pt from the SAME v2.3 experiment')
     p.add_argument('--skip-retrieval-audit',action='store_true')
     p.add_argument('--skip-evaluate',action='store_true')
     a=p.parse_args()
@@ -24,7 +24,11 @@ def main():
     if a.num_workers is not None:cfg['runtime']['num_workers']=a.num_workers
     if a.ablation:cfg['training']['ablation']=a.ablation
     cache=cache_path(cfg,'formal');backbone=resolve_stla_checkpoint(cfg,a.backbone_checkpoint)
-    rt=ensure_cache(cfg,cache,'train',smoke=a.smoke);rv=ensure_cache(cfg,cache,'val',smoke=a.smoke)
+    backbone=resolve_stla_checkpoint(cfg,a.backbone_checkpoint)
+    os.environ['BACKBONE_CHECKPOINT']=str(backbone)
+    is_control=cfg['training'].get('ablation')=='no_retrieval'
+    rt=None if is_control else ensure_cache(cfg,cache,'train',smoke=a.smoke)
+    rv=None if is_control else ensure_cache(cfg,cache,'val',smoke=a.smoke)
     stage='formal_smoke' if a.smoke else 'formal';stamp=a.run_stamp or datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     run=Path(a.resume).resolve().parent if a.resume else Path(cfg['project']['exp_root'])/cfg['experiment']['dataset']/stage/f'{stamp}_seed{a.seed}_{cfg["training"]["ablation"]}'
     best=train(cfg,cache,backbone,rt,rv,run,a.smoke,resume=a.resume);print(f'BEST_CHECKPOINT={best}',flush=True)

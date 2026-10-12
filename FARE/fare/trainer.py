@@ -52,7 +52,8 @@ class FARETrainer:
             (base if name.startswith('stla.base.') else new).append(p)
         if not new and not base:raise RuntimeError('No trainable parameters')
         lr=self.cfg['training'];groups=[]
-        if new:groups.append({'params':new,'lr':lr['new_lr']})
+        new_lr=(lr.get('finetune_new_lr',lr['new_lr']) if phase in ('partial','full') else lr['new_lr'])
+        if new:groups.append({'params':new,'lr':new_lr})
         if base:groups.append({'params':base,'lr':lr['partial_backbone_lr'] if phase=='partial' else lr['full_backbone_lr']})
         return torch.optim.AdamW(groups,weight_decay=lr['weight_decay'])
     def _epoch(self,phase,optimizer=None,max_batches=None):
@@ -143,7 +144,13 @@ class FARETrainer:
     def _snapshot(self,path,phase,epoch,opt=None,val=None):
         save_ckpt(path,self.model,opt,self.cfg,self.meta,epoch,phase,val,self.memory_path)
     def train(self,phases=None,smoke=False,resume=None):
-        phases=phases or PHASE_ORDER
+        phases=list(phases) if phases is not None else list(PHASE_ORDER)
+        stop_at=self.cfg.get('training',{}).get('stop_after_phase')
+        if stop_at is not None and stop_at not in PHASE_ORDER:
+            raise ValueError(f'Invalid stop_after_phase: {stop_at}')
+        if stop_at is not None and phases==list(PHASE_ORDER):
+            phases=phases[:phases.index(stop_at)+1]
+            print(f'FARE_PHASE_CAP stop_after={stop_at} phases={phases}',flush=True)
         resume_ck=None
         if resume:
             resume_ck=load_ckpt(resume,self.model,self.device,True)
@@ -163,6 +170,13 @@ class FARETrainer:
         index_is_fresh=False
         for phase in phases:
             if phase not in PHASE_ORDER:raise ValueError(phase)
+            if (phase in ('partial','full') and resume_ck is None and
+                    self.cfg['training'].get('rollback_to_best_before_finetune',False)):
+                previous=self.run_dir/'candidate_best.pt'
+                if previous.exists():
+                    load_ckpt(previous,self.model,self.device)
+                    print(f'FARE_FINETUNE_ROLLBACK phase={phase} checkpoint={previous}',flush=True)
+                    index_is_fresh=False
             self.model.set_phase(phase);opt=self._optimizer(phase)
             epochs=self.cfg['training']['phase_epochs'][phase]
             best=float('inf');stale=0;best_ep=0;best_ck=None;start_ep=1
@@ -229,7 +243,15 @@ class FARETrainer:
                     for metric in ('total','forecast','direct','state','innovation',
                                    'ranking','ranking_selected_error','ranking_oracle_error',
                                    'ranking_uniform_error','forecast_utility_rank',
-                                   'utility_eligible_fraction','utility_positive_fraction'):
+                                   'utility_eligible_fraction','utility_positive_fraction',
+                                   'coarse_utility_loss','coarse_utility_eligible_fraction',
+                                   'coarse_utility_true_positive_fraction',
+                                   'coarse_utility_pred_positive_fraction',
+                                   'coarse_utility_sign_accuracy',
+                                   'coarse_utility_oracle_positive_groups',
+                                   'coarse_utility_expected_gain',
+                                   'coarse_utility_oracle_gain',
+                                   'coarse_utility_pairwise','coarse_utility_regret'):
                         if metric in objective:
                             split_stats[f'objective_{metric}']=objective[metric]
                 diagnostic_record=append_diagnostics(self.run_dir,phase,ep,train_diag,val_diag,resource_rec)

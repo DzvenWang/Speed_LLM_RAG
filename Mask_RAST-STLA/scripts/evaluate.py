@@ -13,9 +13,9 @@ from mask_rast_stla.evaluation import summarize_by_family,save_summary
 def main():
     p=argparse.ArgumentParser();p.add_argument('--checkpoint',required=True);p.add_argument('--target',choices=['speed','flow'])
     p.add_argument('--severities',nargs='+',type=int,default=[20,40,60,90])
-    p.add_argument('--backbone-checkpoint');p.add_argument('--evidence-mode',choices=['full','no_retrieval','no_future','no_regional','global_only','no_none','shuffled','random_future']);a=p.parse_args()
+    p.add_argument('--backbone-checkpoint');p.add_argument('--evidence-mode',choices=['full','no_retrieval','no_future','no_regional','global_only','no_none','shuffled','random_future','cross_history','no_innovation','no_risk']);a=p.parse_args()
     ck=torch.load(a.checkpoint,map_location='cpu',weights_only=False)
-    if not str(ck.get('version','')).startswith('2.'):raise RuntimeError('v2 evaluator requires v2 checkpoint')
+    if str(ck.get('version',''))!='2.3.0':raise RuntimeError('v2.3 evaluator requires a v2.3 checkpoint')
     cfg=relocate_saved_config(ck['config'])
     if a.target and a.target!=cfg['experiment']['target']:raise RuntimeError('Target does not match saved checkpoint')
     os.environ['TRAFFIDENT_TARGET']=cfg['experiment']['target']
@@ -26,14 +26,17 @@ def main():
         raise RuntimeError('Incorrect STLA Backbone checkpoint: SHA256 differs from training')
     model,_=build_model(cfg,backbone_path,dev)
     model.load_state_dict(ck['state_dict'],strict=True);model.eval()
+    mode=a.evidence_mode or cfg['training'].get('ablation','full')
     store_path=Path(a.checkpoint).resolve().parent/'best_memory_index.npz'
-    if not store_path.is_file():raise FileNotFoundError(f'Index must accompany checkpoint: {store_path}')
-    index=LatentMemoryIndex.load(store_path).to(dev)
+    if mode!='no_retrieval':
+        if not store_path.is_file():raise FileNotFoundError(f'Index must accompany checkpoint: {store_path}')
+        index=LatentMemoryIndex.load(store_path).to(dev)
+    else:index=None
     repo=FullTrainRepository(cache_path(cfg,'formal'))
     if cfg['runtime'].get('preload_repository_gpu',True):repo.preload(dev)
-    if len(repo)!=len(index.starts_np) or not np.array_equal(repo.starts,index.starts_np):
+    if index is not None and (len(repo)!=len(index.starts_np) or not np.array_equal(repo.starts,index.starts_np)):
         raise RuntimeError('Index and Train-only repository fingerprints differ')
-    mean=float(ck['mean']);std=float(ck['std']);mode=a.evidence_mode or cfg['training'].get('ablation','full')
+    mean=float(ck['mean']);std=float(ck['std'])
     rows=[]
     for sev in a.severities:
         ds=SupportSplit(cache_path(cfg,'evaluation',sev),'test')

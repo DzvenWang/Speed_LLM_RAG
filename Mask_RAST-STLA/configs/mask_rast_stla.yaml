@@ -1,4 +1,4 @@
-version: 2.2.0
+version: 2.3.0
 project:
   root: ${SPEED_LLM_RAG_ROOT}
   backbone_root: ${SPEED_LLM_RAG_ROOT}/Backbone
@@ -26,9 +26,11 @@ encoder:
   dropout: 0.10
 retrieval:
   top_k: 6
-  regional_top_k: 2
+  regional_top_k: 4
+  region_support_floor: 0.1
   graph_neighbors: 8
   graph_sampled_rows: 1200
+  graph_lag_steps: [0, 1, 2, 3]
   temperature: 0.10
   store_refresh_epochs: 5
   store_batch_size: 256
@@ -58,6 +60,10 @@ training:
   forecast_loss: mae
   rank_weight: 0.05
   base_preserve_weight: 0.15
+  utility_margin: 0.02
+  score_margin: 0.0
+  risk_weight: 0.03
+  memory_momentum: 0.995
   utility_temperature: 0.25
   rmse_weight: 0.05
   alignment_weight: 0.10

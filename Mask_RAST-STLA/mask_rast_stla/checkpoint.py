@@ -1,4 +1,4 @@
-"""Atomic per-epoch checkpoints for Gadi walltime-safe v2.1 Formal jobs."""
+"""Atomic per-epoch checkpoints for Gadi walltime-safe v2.3 Formal jobs."""
 from __future__ import annotations
 import os, random
 from pathlib import Path
@@ -45,7 +45,7 @@ def persist_epoch(run_dir,model,opt,scaler,cfg,backbone,bc,model_name,epoch,best
 def restore_training(path,model,opt,scaler,cfg,backbone):
     ck=torch.load(path,map_location='cpu',weights_only=False)
     if ck.get('version')!=cfg['version']:
-        raise RuntimeError('Resume only compatible with exactly the same v2.2 version')
+        raise RuntimeError('Resume only compatible with exactly the same v2.3 version')
     if ck.get('backbone_sha256')!=file_sha256(backbone):
         raise RuntimeError('Resume backbone SHA256 mismatch')
     old=ck['config']

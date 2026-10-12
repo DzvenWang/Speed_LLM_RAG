@@ -11,6 +11,7 @@ from .stla import load_pretrained_stla,MaskSupportSTLAformer
 from .model import MaskRASTSTLA
 from .memory import build_memory_index
 from .graph import graph_neighbours
+from .seasonal import train_future_reference
 from .evaluation import metrics,save_summary
 from .config import file_sha256
 from .checkpoint import persist_epoch,restore_training
@@ -37,9 +38,10 @@ def build_model(cfg,checkpoint,device):
 
 
 def setup_graph(model,cfg,cache,force=False):
-    path=Path(cfg['project']['store_root'])/cfg['experiment']['dataset']/'train_only_graph.npz'
+    path=Path(cfg['project']['store_root'])/cfg['experiment']['dataset']/'train_only_graph_v23.npz'
     graph=graph_neighbours(cache,path,int(cfg['retrieval']['graph_neighbors']),
-                           int(cfg['retrieval'].get('graph_sampled_rows',1200)),force=force)
+                           int(cfg['retrieval'].get('graph_sampled_rows',1200)),force=force,
+                           lag_steps=cfg['retrieval'].get('graph_lag_steps',[0,1,2,3]))
     model.set_graph(graph)
     return path
 
@@ -64,28 +66,82 @@ def make_loader(ds,bs,shuffle,cfg,smoke=False):
     return DataLoader(ds,**kw)
 
 
-def losses(out,b,mean,std,cfg,mode):
-    valid=b['future_valid'].bool();y=b['y_raw'].float();p=out['prediction'].float()*std+mean
+def losses(out,b,mean,std,cfg,mode,alignment_loss=None):
+    valid=b['future_valid'].bool(); y=b['y_raw'].float();p=out['prediction'].float()*std+mean
     e=p[valid]-y[valid]
     if not e.numel():raise RuntimeError('No valid future labels in batch')
     main=e.abs().mean() if cfg['training'].get('forecast_loss','mae')=='mae' else F.smooth_l1_loss(p[valid],y[valid])
     rmse=torch.sqrt(e.square().mean()+1e-8)
-    rank=main.new_zeros(())
-    if out['candidate_weights'] is not None and mode!='no_future':
-        base=out['base_prediction'].detach();r=out['candidate_residuals'].detach();yn=b['y_norm'].float()
-        utility=((base[:,None]-yn[:,None]).abs()-(base[:,None]+r-yn[:,None]).abs()) / max(float(cfg['training'].get('utility_temperature',.25)),1e-6)
-        utility=utility.masked_fill(~out['candidate_available'],-1e4)
-        targets=torch.softmax(torch.cat([utility,torch.zeros_like(utility[:,:1])],1),1).detach()
-        mask=valid[:,None].expand_as(targets)
-        rank=-(targets*out['candidate_weights'].float().clamp_min(1e-9).log())[mask].sum()/valid.sum().clamp_min(1)
+    rank=main.new_zeros(());risk_loss=main.new_zeros(())
+    if out['candidate_weights'] is not None and mode=='full':
+        base=out['base_prediction'].detach().float()
+        residual=out['candidate_residuals'].detach().float();yn=b['y_norm'].float()
+        utility=(base[:,None]-yn[:,None]).abs()-(base[:,None]+residual-yn[:,None]).abs()
+        available=out['candidate_available'].bool() & valid[:,None]
+        margin=float(cfg['training'].get('utility_margin',0.02))
+        positive=(utility>margin)&available
+        negative=(utility<-margin)&available
+        logits=out['candidate_logits'].float()
+        relative=logits[:,:-1]-logits[:,-1:]
+        sm=float(cfg['training'].get('score_margin',0.0))
+        count=(positive.sum()+negative.sum()).clamp_min(1)
+        rank=(F.softplus(sm-relative)*positive).sum()/count + (F.softplus(sm+relative)*negative).sum()/count
+        proposal=base+out['ungated_correction'].detach().float()
+        gain=(base-yn).abs()-(proposal-yn).abs()
+        # Logit-space BCE is autocast-safe on V100 AMP and keeps the original sigmoid gate.
+        risk_loss=F.binary_cross_entropy_with_logits(out['risk_logit'].float()[valid],(gain>margin).float()[valid])
     base_error=(out['base_prediction'].float()*std+mean)[valid]-y[valid]
     base_loss=base_error.abs().mean()
     base_weight=(float(cfg['training'].get('base_preserve_weight',0.0)) if mode=='full' else 0.0)
-    total=main+float(cfg['training'].get('rmse_weight',0))*rmse+float(cfg['training'].get('rank_weight',0))*rank+base_weight*base_loss
+    alignment=main.new_zeros(()) if alignment_loss is None else alignment_loss
+    total=(main+float(cfg['training'].get('rmse_weight',0))*rmse
+           +float(cfg['training'].get('rank_weight',0))*rank
+           +float(cfg['training'].get('risk_weight',0))*risk_loss
+           +base_weight*base_loss
+           +(float(cfg['training'].get('alignment_weight',0)) if mode=='full' else 0)*alignment)
     return total,{'mae':float(e.abs().mean().detach()),'rmse':float(rmse.detach()),
-                  'ranking':float(rank.detach()),'base_loss':float(base_loss.detach()),'gate':float(out['forecast_gate'].mean().detach()),
+                  'ranking':float(rank.detach()),'risk':float(risk_loss.detach()),'alignment':float(alignment.detach()),
+                  'base_loss':float(base_loss.detach()),'gate':float(out['forecast_gate'].mean().detach()),
                   'loss':float(total.detach())}
 
+
+def compute_alignment(model,b,repo,device,temperature=.1,out=None):
+    """Train-only paired incomplete-query / complete-history InfoNCE.
+
+    Pair identity is exact historical window_start, never current target future.
+    If a training window lacks a complete-history counterpart, skip it.
+    """
+    if not hasattr(repo,'row_by_start'):
+        repo.row_by_start={int(t):i for i,t in enumerate(repo.starts)}
+    starts=b['window_start'].detach().cpu().tolist()
+    paired=[(j,repo.row_by_start[int(w)]) for j,w in enumerate(starts) if int(w) in repo.row_by_start]
+    if len(paired)<2:return torch.zeros((),device=device)
+    rows=torch.tensor([p[0] for p in paired],device=device,dtype=torch.long)
+    memory_ids=torch.tensor([p[1] for p in paired],device=device,dtype=torch.long)
+    mx,mm,mt,md=repo.fetch(memory_ids,device)
+    with torch.no_grad(), torch.autocast(device_type=torch.device(device).type, enabled=False):
+        memory_repr=model.memory_encoder(mx.float(),mm.float(),mt,md)
+    if out is None or 'query_temporal_keys' not in out:
+        with torch.autocast(device_type=torch.device(device).type, enabled=False):
+            query=model.query_encoder(b['x'][rows].float(),b['mask'][rows].float(),
+                                      b['tod'][rows].long(),b['dow'][rows].long())
+        q={k:query[k] for k in ('temporal_key','spatial_key')}
+    else:
+        q={'temporal_key':out['query_temporal_keys'][rows],
+           'spatial_key':out['query_spatial_keys'][rows]}
+    t=float(temperature)
+    loss=torch.zeros((),device=device)
+    qstarts=b['window_start'][rows].long()
+    overlap=(qstarts[:,None]-qstarts[None,:]).abs()<model.H+model.P
+    # Do not treat near-identical or overlapping windows as negatives.
+    for key in ('temporal_key','spatial_key'):
+        a=F.normalize(q[key].float(),dim=-1);m=F.normalize(memory_repr[key].float().detach(),dim=-1)
+        with torch.autocast(device_type=torch.device(device).type, enabled=False):
+            logits=(a.float()@m.float().T)/max(t,1e-5)
+        diag=torch.eye(len(rows),device=device,dtype=torch.bool)
+        logits=logits.masked_fill(overlap & ~diag,-1e4)
+        loss=loss+F.cross_entropy(logits,torch.arange(len(rows),device=device))
+    return loss/2.
 
 def run_epoch(model,loader,index,repo,device,mean,std,cfg,mode,opt=None,ep=1,scaler=None):
     training=opt is not None;model.train(training);model.stla.base.eval();cum={};size=0
@@ -94,14 +150,26 @@ def run_epoch(model,loader,index,repo,device,mean,std,cfg,mode,opt=None,ep=1,sca
             b=move(bb,device)
             if training:opt.zero_grad(set_to_none=True)
             with torch.autocast(device_type=device.type,dtype=torch.float16,enabled=bool(cfg['runtime'].get('amp',False)) and device.type=='cuda'):
-                out=model(b,index,repo,mode=mode);loss,parts=losses(out,b,mean,std,cfg,mode)
+                out=model(b,index,repo,mode=mode)
+                align=(compute_alignment(model,b,repo,device,float(cfg['training'].get('alignment_temperature',.1)),out=out)
+                       if training and mode=='full' and float(cfg['training'].get('alignment_weight',0))>0 else None)
+                loss,parts=losses(out,b,mean,std,cfg,mode,align)
+            if not bool(torch.isfinite(loss).item()):
+                raise RuntimeError(f'Non-finite training loss at epoch={ep} batch={step} '
+                                   f'mode={mode}; inspect encoder and retrieval health logs')
             if training:
                 if scaler is not None and scaler.is_enabled():
                     scaler.scale(loss).backward();scaler.unscale_(opt)
                     nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad],float(cfg['training']['grad_clip']))
+                    scale_before=scaler.get_scale()
                     scaler.step(opt);scaler.update()
+                    # GradScaler skips the optimizer step when FP16 gradients
+                    # overflow; do not advance the EMA teacher on that batch.
+                    if mode=='full' and scaler.get_scale() >= scale_before:
+                        model.momentum_update(float(cfg['training'].get('memory_momentum',0.995)))
                 else:
                     loss.backward();nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad],float(cfg['training']['grad_clip']));opt.step()
+                    if mode=='full':model.momentum_update(float(cfg['training'].get('memory_momentum',0.995)))
             bs=int(b['x'].shape[0]);size+=bs
             for k,v in parts.items():cum[k]=cum.get(k,0)+v*bs
             if training and step%int(cfg['runtime']['print_every'])==0:
@@ -143,6 +211,8 @@ def train(cfg,cache,checkpoint,run_dir,smoke=False,resume=None):
     graph_path=setup_graph(model,cfg,cache)
     mean=float(ck['mean']);std=float(ck['std']);limit=24 if smoke else None
     tr=SupportSplit(cache,'train',limit);va=SupportSplit(cache,'val',limit);repo=FullTrainRepository(cache,256 if smoke else None)
+    model.set_future_reference(train_future_reference(repo,model.P,model.query_encoder.N))
+    print('TRAIN_ONLY_FUTURE_REFERENCE_PASS shape='+str(tuple(model.future_reference.shape)),flush=True)
     if not smoke and cfg['runtime'].get('preload_repository_gpu',True):repo.preload(dev)
     bs=3 if smoke else int(cfg['training']['batch_size'])
     tl=make_loader(tr,bs,True,cfg,smoke);vl=make_loader(va,bs,False,cfg,smoke)
@@ -159,16 +229,16 @@ def train(cfg,cache,checkpoint,run_dir,smoke=False,resume=None):
     for ep in range(start_epoch,maxep+1):
         ph=phase(ep,cfg);model.set_train_phase(ph,int(cfg['training']['partial_last_layers']))
         if ph!=prev:stale=0;prev=ph;print(f'TRAIN_PHASE epoch={ep} phase={ph}',flush=True)
-        if index is None or ((ep-1)%interval==0):
+        if mode!='no_retrieval' and (index is None or ((ep-1)%interval==0)):
             t0=time.time();model.sync_region_projector();index=build_memory_index(model.memory_encoder,repo,dev,
                                                       16 if smoke else int(cfg['retrieval']['store_batch_size']));index.to(dev)
             print(f'MEMORY_REFRESH epoch={ep} time={time.time()-t0:.1f}s',flush=True)
         if dev.type=='cuda':torch.cuda.reset_peak_memory_stats(dev)
         t0=time.time();a=run_epoch(model,tl,index,repo,dev,mean,std,cfg,mode,opt,ep,scaler)
         train_seconds=time.time()-t0
-        model.sync_region_projector();val_index=build_memory_index(model.memory_encoder,repo,dev,
-                   16 if smoke else int(cfg['retrieval']['store_batch_size']))
-        val_index.to(dev)
+        model.sync_region_projector();val_index=(build_memory_index(model.memory_encoder,repo,dev,
+                   16 if smoke else int(cfg['retrieval']['store_batch_size'])) if mode!='no_retrieval' else None)
+        if val_index is not None:val_index.to(dev)
         v=run_epoch(model,vl,val_index,repo,dev,mean,std,cfg,mode,None,ep,scaler)
         val_seconds=time.time()-t0-train_seconds
         rec={'epoch':ep,'phase':ph,**{f'train_{k}':x for k,x in a.items()},
@@ -182,7 +252,7 @@ def train(cfg,cache,checkpoint,run_dir,smoke=False,resume=None):
         else:stale+=1
         pd.DataFrame(history).to_csv(run_dir/'history.csv',index=False)
         persist_epoch(run_dir,model,opt,scaler,cfg,checkpoint,ck,'Mask_RAST-STLA',ep,best,best_ep,history,stale,ph,improved)
-        if improved:
+        if improved and val_index is not None:
             val_index.save(run_dir/'best_memory_index.npz',{
                 'version':cfg['version'],'memory_rows':len(repo),'dataset':cfg['experiment']['dataset'],
                 'target':cfg['experiment']['target'],'graph':str(graph_path)})
@@ -192,14 +262,16 @@ def train(cfg,cache,checkpoint,run_dir,smoke=False,resume=None):
     if not best_path.is_file():raise RuntimeError('No completed best checkpoint')
     saved=torch.load(best_path,map_location='cpu',weights_only=False)
     model.load_state_dict(saved['state_dict'],strict=True);model.to(dev)
-    model.sync_region_projector();index=build_memory_index(model.memory_encoder,repo,dev,16 if smoke else int(cfg['retrieval']['store_batch_size']))
-    index.to(dev);index.save(run_dir/'best_memory_index.npz',{'version':cfg['version'],'memory_rows':len(repo),
-        'dataset':cfg['experiment']['dataset'],'target':cfg['experiment']['target'],'graph':str(graph_path)})
+    if mode!='no_retrieval':
+        model.sync_region_projector();index=build_memory_index(model.memory_encoder,repo,dev,16 if smoke else int(cfg['retrieval']['store_batch_size']))
+        index.to(dev);index.save(run_dir/'best_memory_index.npz',{'version':cfg['version'],'memory_rows':len(repo),
+            'dataset':cfg['experiment']['dataset'],'target':cfg['experiment']['target'],'graph':str(graph_path)})
+    else:index=None
     pred=predict(model,vl,index,repo,dev,mean,std,mode,amp=scaler.is_enabled())
     vm=metrics(pred['prediction'],pred['true'],pred['valid'],pred['direct'])
     bm=metrics(pred['base'],pred['true'],pred['valid'],pred['direct'])
     np.savez_compressed(run_dir/'val_predictions.npz',**{k:v.astype(np.float32) for k,v in pred.items() if isinstance(v,np.ndarray)})
-    save_summary(run_dir/'summary.json',{'model':'Mask_RAST-STLA-v2.2','best_epoch':best_ep,
+    save_summary(run_dir/'summary.json',{'model':'Mask_RAST-STLA-v2.3','best_epoch':best_ep,
         'validation':vm,'base_validation':bm,'gate_mean':pred['gate_mean'],
         'backbone_checkpoint':str(checkpoint),'ablation':mode,'test_evaluated':False})
     print(f'TRAIN_PASS run_dir={run_dir} best_epoch={best_ep} val_MAE={vm["MAE"]:.6f}',flush=True)

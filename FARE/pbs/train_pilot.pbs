@@ -11,7 +11,7 @@ source FARE/pbs/_activate_tfp.sh
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-3}"
 DATASET="${DATASET:-TraffiDent_Net_06}"
-# Force the dedicated v2.0.2 PILOT config unless explicitly overridden.
+# Use the v2.0.3 PILOT config unless explicitly overridden.
 FARE_CONFIG="${FARE_CONFIG:-FARE/configs/pilot.yaml}"
 BATCH_SIZE="${BATCH_SIZE:-32}"
 TARGET="${TARGET:-speed}"
@@ -19,7 +19,7 @@ SEED="${SEED:-10}"
 # Evaluation runs in THIS GPU allocation, after training has finished.
 # No held Evaluate PBS job is submitted by submit_gadi.py.
 AUTO_EVALUATE="${AUTO_EVALUATE:-1}"
-EVAL_SPLITS="${EVAL_SPLITS:-val}"
+EVAL_SPLITS="${EVAL_SPLITS:-val:test}"
 SEVERITIES="${SEVERITIES:-20:40:60:90}"
 mkdir -p "FARE_logs/${TARGET}/${DATASET}"
 STAMP=$(date '+%Y%m%d_%H%M%S')
@@ -28,6 +28,13 @@ LOG="FARE_logs/${TARGET}/${DATASET}/FARE.${TARGET}.${DATASET}.seed${SEED}.${JOB}
 cmd=(python -u FARE/scripts/train.py --dataset "$DATASET" --target "$TARGET" --seed "$SEED" --variant "${FARE_VARIANT:-full}")
 if [[ -n "${BATCH_SIZE:-}" ]]; then cmd+=(--batch-size "$BATCH_SIZE"); fi
 if [[ -n "${NUM_WORKERS:-}" ]]; then cmd+=(--num-workers "$NUM_WORKERS"); fi
+if [[ "${FARE_AUTO_ABLATIONS:-1}" == "1" ]]; then cmd+=(--auto-ablations); fi
+# Defaults to the requested post-train evaluation splits (val:test for Pilot).
+# May be overridden (e.g. FARE_ABLATION_SPLITS=val) to reduce inference cost.
+if [[ -n "${FARE_ABLATION_SPLITS:-}" ]]; then
+    IFS=':' read -r -a ablation_split_array <<< "$FARE_ABLATION_SPLITS"
+    cmd+=(--ablation-splits "${ablation_split_array[@]}")
+fi
 if [[ -n "${FARE_DIAG_INTERVAL:-}" ]]; then cmd+=(--diag-interval "$FARE_DIAG_INTERVAL"); fi
 if [[ -n "${FARE_DIAG_MAX_BATCHES:-}" ]]; then cmd+=(--diag-max-batches "$FARE_DIAG_MAX_BATCHES"); fi
 if [[ -n "${FARE_PROGRESS_EVERY:-}" ]]; then cmd+=(--progress-every "$FARE_PROGRESS_EVERY"); fi
@@ -37,7 +44,8 @@ if [[ -n "${FARE_CONFIG:-}" ]]; then cmd+=(--config "$FARE_CONFIG"); fi
 if [[ -n "${BACKBONE_CHECKPOINT:-}" ]]; then cmd+=(--backbone-checkpoint "$BACKBONE_CHECKPOINT"); fi
 # Hardware resource sampling continues through train and automatic evaluation.
 # Logs are stored beside the PBS live log and are independent of checkpoints.
-printf 'FARE_PILOT_CONFIG config=%s batch_size=%s splits=%s\n' "$FARE_CONFIG" "$BATCH_SIZE" "$EVAL_SPLITS"
+printf 'FARE_PILOT_CONFIG config=%s batch_size=%s splits=%s ablation_splits=%s\n' \
+    "$FARE_CONFIG" "$BATCH_SIZE" "$EVAL_SPLITS" "${FARE_ABLATION_SPLITS:-same_as_eval}"
 MONITOR_INTERVAL="${FARE_RESOURCE_INTERVAL:-30}"
 MONITOR_ENABLED="${FARE_RESOURCE_MONITOR:-1}"
 MONITOR_PREFIX="${LOG%.train.live.log}.resources"

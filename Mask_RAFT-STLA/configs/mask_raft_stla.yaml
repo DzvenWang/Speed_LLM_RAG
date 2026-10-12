@@ -1,4 +1,4 @@
-version: 2.2.0
+version: 2.3.0
 project:
   root: ${SPEED_LLM_RAG_ROOT}
   backbone_root: ${SPEED_LLM_RAG_ROOT}/Backbone
@@ -21,7 +21,10 @@ backbone:
 retrieval:
   periods: [4, 2, 1]
   top_k: 12
-  shortlist_per_period: 3
+  shortlist_per_period: 4
+  final_candidates: 12
+  forecast_pool_batch_size: 16
+  history_similarity_weight: 0.55
   replay_batch_size: 64
   temperature: 0.10
   coverage_gamma: 0.5
@@ -53,6 +56,9 @@ training:
   grad_clip: 5.0
   forecast_loss: mae
   rank_weight: 0.05
+  utility_margin: 0.02
+  score_margin: 0.0
+  risk_weight: 0.03
   utility_temperature: 0.25
   rmse_weight: 0.05
   retrieval_aux_weight: 0.20

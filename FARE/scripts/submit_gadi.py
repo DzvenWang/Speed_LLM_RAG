@@ -82,7 +82,7 @@ def submit_train(args):
         raise ValueError('--eval-splits requires --auto-evaluate (omit --no-auto-evaluate)')
     if args.eval_splits is not None and len(set(args.eval_splits)) != len(args.eval_splits):
         raise ValueError('Duplicate entries in --eval-splits')
-    splits = list(args.eval_splits) if args.eval_splits is not None else (['val'] if pilot else ['test'])
+    splits = list(args.eval_splits) if args.eval_splits is not None else (['val','test'] if pilot else ['test'])
     if pilot and 'test' in splits and args.auto_evaluate:
         print('FARE_PILOT_TEST_EXPLORATORY: Test is evaluated strictly after training and '
               'checkpoint selection on Validation. Do not use Pilot Test to tune or '
@@ -214,7 +214,7 @@ def main():
     train.add_argument('--no-auto-evaluate', dest='auto_evaluate', action='store_false')
     train.add_argument('--eval-splits', nargs='+', choices=['val', 'test'],
                        help='Post-train evaluation splits, e.g. --eval-splits val test. '
-                            'Default: pilot=val; formal=test. Test is never used for training.')
+                            'Default: pilot=val+test; formal=test. Test is never used for training or checkpoint selection.')
     train.add_argument('--finalize', action='store_true',
                        help='Also chain OOF -> calibration -> best.pt final Evaluate')
     train.add_argument('--dry-run', action='store_true')

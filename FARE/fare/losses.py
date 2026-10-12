@@ -3,6 +3,7 @@ import os
 import torch
 from torch.nn import functional as F
 from .ranking import target_recovery_ranking_loss,forecast_utility_ranking_loss
+from .forecast_utility import coarse_forecast_utility_loss
 
 def masked_mean(x,mask):
     selected=x.masked_select(mask.bool().expand_as(x))
@@ -42,6 +43,9 @@ def retrieval_phase_loss(model,batch,out,memory,mean,std,cfg):
             batch,{'ids':out['retrieved_ids'],'valid':out['retrieved_valid_candidates'],
                    'weights':out['retrieved_weights']},memory,model.regions,
             float(cfg['forecast_utility'].get('teacher_temperature',.35)))
+    coarse_loss,coarse_diag=coarse_forecast_utility_loss(
+        batch,out.get('retrieval_evidence'),model.regions,
+        cfg.get('forecast_utility',{}).get('coarse_temperature',.7))
     ctx=model.regions(batch['x_full'].float(),batch['raw_valid'].bool())
     enc=model.retrieval.encoder
     features=enc._features(ctx['anchor_values'],ctx['anchor_mask'],
@@ -51,12 +55,15 @@ def retrieval_phase_loss(model,batch,out,memory,mean,std,cfg):
     wanted=batch['artificial_mask'].bool()&batch['raw_valid'].bool()
     state=masked_mean((ref-batch['x_full']).abs(),wanted)
     w=cfg['loss']
-    total=w['retrieval']*r+w.get('ranking',.15)*rank+.05*state+cfg.get('forecast_utility',{}).get('loss_weight',.20)*utility
+    total=(w['retrieval']*r+w.get('ranking',.15)*rank+.05*state+
+           cfg.get('forecast_utility',{}).get('loss_weight',.20)*utility+
+           cfg.get('forecast_utility',{}).get('coarse_loss_weight',.35)*coarse_loss)
     return {'total':total,'retrieval':r.detach(),'ranking':rank.detach(),
             'forecast_utility_rank':utility.detach(),'state':state.detach(),
             'forecast':z.detach(),'direct':z.detach(),'tail':z.detach(),
             'candidate':z.detach(),'correction_energy':z.detach(),
-            'innovation':z.detach(),'gate':z.detach(),**rank_diag,**utility_diag}
+            'innovation':z.detach(),'gate':z.detach(),
+            'coarse_utility_loss':coarse_loss.detach(),**coarse_diag,**rank_diag,**utility_diag}
 
 def losses(model,batch,out,memory,phase,mean,std,cfg):
     if phase=='retrieval' and cfg['experiment'].get('training_mode','full')!='no_memory':
@@ -99,6 +106,9 @@ def losses(model,batch,out,memory,phase,mean,std,cfg):
             batch,{'ids':out['retrieved_ids'],'valid':out['retrieved_valid_candidates'],
                    'weights':out['retrieved_weights']},memory,model.regions,
             cfg['forecast_utility'].get('teacher_temperature',.35))
+    coarse_loss,coarse_diag=coarse_forecast_utility_loss(
+        batch,out.get('retrieval_evidence'),model.regions,
+        cfg.get('forecast_utility',{}).get('coarse_temperature',.7))
     if phase=='retrieval':
         ctx=model.regions(batch['x_full'].float(),batch['raw_valid'].bool())
         enc=model.retrieval.encoder
@@ -116,7 +126,8 @@ def losses(model,batch,out,memory,phase,mean,std,cfg):
     innov=masked_mean(F.smooth_l1_loss(out['latent_innovation'],dz_target,reduction='none'),innov_weight.expand_as(dz_target))
     ctrl=(out['final_gate']**2).mean()
     w=cfg['loss']
-    utility_term=cfg.get('forecast_utility',{}).get('loss_weight',.20)*utility_rank
+    utility_term=(cfg.get('forecast_utility',{}).get('loss_weight',.20)*utility_rank+
+                  cfg.get('forecast_utility',{}).get('coarse_loss_weight',.35)*coarse_loss)
     if phase=='retrieval':
         total=w['retrieval']*retrieval+w.get('ranking',.15)*ranking+.05*state+utility_term
     elif phase=='recovery':
@@ -127,7 +138,8 @@ def losses(model,batch,out,memory,phase,mean,std,cfg):
                w.get('candidate',.08)*candidate_loss+
                w.get('correction_energy',.003)*correction_energy+
                w.get('ranking',.15)*ranking+utility_term)
-    return {'total':total,'ranking':ranking.detach(),'forecast_utility_rank':utility_rank.detach(),**utility_diag,**rank_diag,'forecast':forecast.detach(),'direct':missing_forecast.detach(),
+    return {'total':total,'ranking':ranking.detach(),'forecast_utility_rank':utility_rank.detach(),
+            'coarse_utility_loss':coarse_loss.detach(),**coarse_diag,**utility_diag,**rank_diag,'forecast':forecast.detach(),'direct':missing_forecast.detach(),
             'tail':tail.detach(),'candidate':candidate_loss.detach(),
             'correction_energy':correction_energy.detach(),
             'retrieval':retrieval.detach(),'state':state.detach(),

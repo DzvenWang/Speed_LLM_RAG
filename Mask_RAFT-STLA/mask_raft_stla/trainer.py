@@ -17,6 +17,7 @@ from .config import file_sha256
 from .checkpoint import persist_epoch,restore_training
 from .replay_cache import prepare_bank
 from .normal_teacher import prepare_normal_teacher_bank
+from .wrong_evidence import legal_wrong_indices
 
 
 def seed_all(seed):
@@ -63,12 +64,20 @@ def evidence_for_batch(model,b,cache,memory,device,cfg,mode,bank=None,teacher=No
     if mode=='no_retrieval':return {}
     indices=b['index'].detach().cpu().numpy()
     ids,scores,cov=shortlist(cache,indices,int(cfg['retrieval']['shortlist_per_period']),device)
+    if mode=='cross_history':
+        import pandas as pd
+        # Deterministic across batch sizes; no Query future information used.
+        from pathlib import Path
+        starts=pd.read_csv(Path(memory.arrays['x'].filename).parent/'train_manifest.csv').window_start.to_numpy(dtype=np.int64)
+        wrong=legal_wrong_indices(b['window_start'],ids.shape[1],starts[:len(memory)],
+                    int(cfg['experiment']['history'])+int(cfg['experiment']['horizon']),device)
+        ids=wrong
     candidates=memory.fetch(ids,device)
     query_mask=b['mask'].float();query_x=b['x'].float()
     # Only features available in the actual query participate in reranking.
     dist=((candidates['x']-query_x[:,None]).abs()*query_mask[:,None]).sum(2) / query_mask[:,None].sum(2).clamp_min(1.)
     replay='full' if mode=='no_mask_replay' else 'matched'
-    if bank is not None and replay=='matched':
+    if bank is not None and replay=='matched' and mode!='cross_history':
         residual=bank.fetch(b['index'],device)
     else:
         residual=counterfactual_residuals(teacher if teacher is not None else model.stla,
@@ -88,21 +97,33 @@ def compute_losses(out,b,mean,std,cfg,mode):
     main=err.abs().mean() if kind=='mae' else F.smooth_l1_loss(raw[valid],y[valid])
     risk=torch.sqrt((err.square()).mean()+1e-8)
     rank=main.new_zeros(())
-    if out['candidate_weights'] is not None and mode not in ('no_retrieval','no_evidence'):
-        # Supervision uses training/validation future ONLY for loss, never as a
-        # feature of the predictor at test time.
-        residual=out['candidate_residuals'].float()
-        base=out['base_prediction'].detach()
+    risk_loss=main.new_zeros(())
+    if out['candidate_weights'] is not None and mode=='full':
+        residual=out['candidate_residuals'].float().detach()
+        base=out['base_prediction'].float().detach()
         yt=b['y_norm'].float()
-        gain=(base[:,None]-yt[:,None]).abs() - (base[:,None]+residual.detach()-yt[:,None]).abs()
-        gain=gain / max(float(cfg['training'].get('utility_temperature',0.25)),1e-5)
-        availability=out['candidate_available']
-        gain=gain.masked_fill(~availability,-1e4)
-        null=torch.zeros_like(gain[:,:1]); target=torch.softmax(torch.cat([gain,null],1),1).detach()
-        target_mask=valid[:,None]
-        rank=-(target*out['candidate_weights'].float().clamp_min(1e-9).log())[target_mask.expand_as(target)].sum()/valid.sum().clamp_min(1)
-    loss=main+float(cfg['training'].get('rmse_weight',0.0))*risk+float(cfg['training'].get('rank_weight',0.0))*rank
-    return loss,dict(mae=float(err.abs().mean().detach()),rmse=float(risk.detach()),ranking=float(rank.detach()),
+        utility=(base[:,None]-yt[:,None]).abs()-(base[:,None]+residual-yt[:,None]).abs()
+        avail=out['candidate_available'].bool()&valid[:,None]
+        margin=float(cfg['training'].get('utility_margin',0.02))
+        positive=(utility>margin)&avail
+        negative=(utility<-margin)&avail
+        logits=out['candidate_logits'].float()
+        relative=logits[:,:-1]-logits[:,-1:]
+        score_margin=float(cfg['training'].get('score_margin',0.0))
+        p=F.softplus(score_margin-relative)
+        n=F.softplus(score_margin+relative)
+        count=(positive.sum()+negative.sum()).clamp_min(1)
+        rank=((p*positive).sum()+(n*negative).sum())/count
+        # A paired, forecast-space risk target checks *combined* evidence,
+        # rather than treating individually good candidates as additive.
+        ungated=out['ungated_correction'].detach().float()
+        proposed=base+ungated
+        gain=(base-yt).abs()-(proposed-yt).abs()
+        target=(gain>margin).float()
+        # Logit-space BCE is autocast-safe on V100 AMP and keeps the original sigmoid gate.
+        risk_loss=F.binary_cross_entropy_with_logits(out['risk_logit'].float()[valid],target[valid])
+    loss=main+float(cfg['training'].get('rmse_weight',0.0))*risk+float(cfg['training'].get('rank_weight',0.0))*rank+float(cfg['training'].get('risk_weight',0.0))*risk_loss
+    return loss,dict(mae=float(err.abs().mean().detach()),rmse=float(risk.detach()),ranking=float(rank.detach()),risk=float(risk_loss.detach()),
                      gate=float(out['gate'].mean().detach()),loss=float(loss.detach()))
 
 
@@ -169,7 +190,7 @@ def train(cfg,cache,ckpt,retrieval_train,retrieval_val,run_dir,smoke=False,resum
     if not smoke and cfg['runtime'].get('preload_retrieval_memory_gpu',False):
         loaded=memory.preload(device);print(f'RETRIEVAL_MEMORY_GPU loaded={loaded}',flush=True)
     mode=str(cfg['training'].get('ablation','full'))
-    rt=RetrievalCache(retrieval_train);rv=RetrievalCache(retrieval_val)
+    rt=RetrievalCache(retrieval_train) if retrieval_train else None;rv=RetrievalCache(retrieval_val) if retrieval_val else None
     bs=3 if smoke else int(cfg['training']['batch_size'])
     tl=_make_loader(tr,bs,True,cfg,smoke);vl=_make_loader(va,bs,False,cfg,smoke)
     # A frozen teacher is a deliberate v2.1 algorithm setting. Its residual
@@ -222,7 +243,7 @@ def train(cfg,cache,ckpt,retrieval_train,retrieval_val,run_dir,smoke=False,resum
     p=predict(model,vl,rv,memory,device,mean,std,cfg,mode,bankval,teacher,normal_bank)
     vm=metrics(p['prediction'],p['true'],p['valid'],p['direct']);bm=metrics(p['base'],p['true'],p['valid'],p['direct'])
     np.savez_compressed(run_dir/'val_predictions.npz',**{k:v.astype(np.float32) for k,v in p.items() if isinstance(v,np.ndarray)})
-    save_summary(run_dir/'summary.json',{'model':'Mask_RAFT-STLA-v2.2','best_epoch':best_epoch,
+    save_summary(run_dir/'summary.json',{'model':'Mask_RAFT-STLA-v2.3','best_epoch':best_epoch,
                  'validation':vm,'base_validation':bm,'gate_mean':p['gate_mean'],
                  'backbone_checkpoint':str(ckpt),'ablation':mode,
                  'replay_mode':'frozen_cached' if teacher is not None else 'dynamic','test_evaluated':False})

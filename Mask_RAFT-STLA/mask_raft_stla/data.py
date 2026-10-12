@@ -26,47 +26,13 @@ class SupportSplit(Dataset):
         }
 
 class RetrievalCache:
-    def __init__(self,path: str|Path):
-        z=np.load(path,mmap_mode='r',allow_pickle=False)
-        self.indices=np.asarray(z['indices'])
-        self.scores=np.asarray(z['scores'])
-        self.coverage=np.asarray(z['coverage'])
-        self.periods=[int(x) for x in z['periods'].tolist()]; self.top_k=int(self.indices.shape[-1])
-        self._device=None; self.indices_t=None; self.scores_t=None; self.coverage_t=None
-    def to(self,device):
-        device=torch.device(device)
-        if device.type=='cuda' and self._device!=str(device):
-            self.indices_t=torch.from_numpy(self.indices.astype(np.int64,copy=False)).to(device)
-            self.scores_t=torch.from_numpy(self.scores.astype(np.float32,copy=False)).to(device)
-            self.coverage_t=torch.from_numpy(self.coverage.astype(np.float32,copy=False)).to(device)
-            self._device=str(device)
-        return self
-    def batch_evidence(self, batch_indices, memory_y, temperature: float):
-        # Fast path: full training future memory and retrieval metadata resident on GPU.
-        if torch.is_tensor(memory_y) and memory_y.is_cuda:
-            self.to(memory_y.device)
-            idx=torch.as_tensor(np.asarray(batch_indices,dtype=np.int64),device=memory_y.device)
-            top=self.indices_t[idx]  # B,G,K
-            scores=self.scores_t[idx]
-            cov=self.coverage_t[idx]
-            with torch.no_grad():
-                gathered=memory_y[top]  # B,G,K,P,N
-                w=torch.softmax(scores/max(float(temperature),1e-6),dim=-1)
-                ev=(gathered*w[...,None,None]).sum(dim=2)
-                p=w.clamp_min(1e-12); ent=-(p*p.log()).sum(dim=-1)/np.log(max(self.top_k,2))
-                top1=scores[...,0]; margin=top1-scores[...,1] if self.top_k>1 else torch.zeros_like(top1)
-                conf=torch.stack([top1,margin,1.0-ent,cov],dim=-1)
-            return ev,conf
-        # Portable CPU fallback.
-        idx=np.asarray(batch_indices,dtype=np.int64)
-        top=np.asarray(self.indices[idx],np.int64)
-        scores=np.asarray(self.scores[idx],np.float32)
-        cov=np.asarray(self.coverage[idx],np.float32)
-        gathered=np.asarray(memory_y[top],np.float32)
-        logits=scores/max(float(temperature),1e-6); logits=logits-logits.max(axis=-1,keepdims=True)
-        w=np.exp(logits); w/=np.maximum(w.sum(axis=-1,keepdims=True),1e-12)
-        ev=(gathered*w[...,None,None]).sum(axis=2).astype(np.float32)
-        p=np.clip(w,1e-12,1.0); ent=-(p*np.log(p)).sum(axis=-1)/np.log(max(self.top_k,2))
-        top1=scores[...,0]; margin=top1-scores[...,1] if self.top_k>1 else np.zeros_like(top1)
-        conf=np.stack([top1,margin,1.0-ent,cov],axis=-1).astype(np.float32)
-        return torch.from_numpy(ev), torch.from_numpy(conf)
+    """New-format forecast-conditioned shortlist; incompatible with pre-v2.3 files."""
+    def __init__(self, path):
+        with np.load(path,allow_pickle=False) as z:
+            if int(z['version'])!=23:raise RuntimeError('Use v2.3 forecast pool cache')
+            self.selected_indices=np.asarray(z['indices'],np.int32)
+            self.selected_scores=np.asarray(z['scores'],np.float32)
+            self.selected_coverage=np.asarray(z['coverage'],np.float32)
+            if not (self.selected_indices.shape==self.selected_scores.shape==self.selected_coverage.shape):
+                raise ValueError('v2.3 shortlist arrays disagree')
+            self.candidate_count=self.selected_indices.shape[1]

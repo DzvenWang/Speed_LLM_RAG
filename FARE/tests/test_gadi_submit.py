@@ -73,7 +73,7 @@ def run_test():
             assert job['evaluation_in_train_allocation']
             assert job['eval_splits']==['test']
             assert set(job['jobs'])=={'train'}
-        # Pilot: no second PBS job, default Validation only.
+        # Pilot: no second PBS job, default Validation+Test.
         before=len(records)
         pilot_cfg=root/'pilot.yaml'
         pilot_cfg.write_text('experiment:\n  run_tag: pilot\n')
@@ -82,7 +82,7 @@ def run_test():
         assert result.returncode==0,(result.stdout,result.stderr)
         records=[json.loads(x) for x in log.read_text().splitlines()]
         assert len(records)==before+2,records
-        assert all('EVAL_SPLITS=val' in rec[rec.index('-v')+1] for rec in records[-2:])
+        assert all('EVAL_SPLITS=val:test' in rec[rec.index('-v')+1] for rec in records[-2:])
         # Explicit Pilot Test: still only one qsub; passes split list + severities.
         before=len(records)
         result=run('train','--dataset','TraffiDent_Net_06','--targets','speed',

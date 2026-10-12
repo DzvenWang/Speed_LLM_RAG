@@ -1,101 +1,76 @@
-# Mask_RAFT-STLA v2.2.0
+# Mask_RAFT-STLA v2.3.0
 
-**Current version**: See [docs/RETRIEVAL_V2.2.md](docs/RETRIEVAL_V2.2.md) for method, commands, audit and caveats.
+Independent, complete forecast-space historical-residual retrieval project for incomplete traffic sensing. **Breaking release**: old v2.1/v2.2 checkpoints and caches are deliberately unsupported. The project does **not** depend on Baseline, FARE or Support_Oracle; it depends on `Backbone` and its `Base_SupportBench` shared cache.
 
-# Mask_RAFT-STLA v2.0.0 — Failure-Conditioned Predictive Residual Retrieval
+## New method
 
-**A full replacement of Mask_RAFT-STLA v1.1.2.** The project is intended to live directly next to `Backbone` and `Base_SupportBench` in the `Speed_LLM_RAG` repository. It does **not** use FARE, Support_Oracle, STLA_DASR, the Baseline project, or a historical-imputation head.
+1. Mask-aware frozen STLA queries three scales of observed history for legal, non-overlapping historical Train-only windows.
+2. `forecast_pool.py` computes a **forecast-conditioned shortlist**: historical similarity plus correspondence between **query STLA prediction** and **historical Train future**. It removes repeated Train indices, keeping `final_candidates=12` of the top-36 initial entries. At no point does it access query validation/test labels. Its selection key is the initial frozen STLA, not the fine-tuned student.
+3. `normal_teacher.py` saves frozen-model normal prediction residuals. `replay_cache.py` computes the same Teacher's current-mask historical residuals *for the finalized shortlist only*. Both caches have new v2.3 names and strict file/backbone/index fingerprints.
+4. `model.py` separately weights normal/failure residual components, ranks cases per node/horizon, computes disagreement, and applies a learned **risk gate** to the actual historical residual aggregate. There is **no unconstrained future head** in Full mode. The unrestricted adapter exists only in the separately trained No-retrieval control.
+5. `trainer.py` supervises positive/negative candidate utility relative to None plus risk of the *combined* candidate correction, in addition to MAE/RMSE. The loss uses training truth for supervision only.
 
-## Research mechanism
+## Protocol
 
-For an incomplete query $(X_q^{obs},M_q)$, STLAformer produces $\hat Y_q^0$. Multi-resolution observed-feature Pearson search retrieves nonoverlapping **Train-only** examples $(X_k^{full},Y_k)$. We apply the **query's mask** to each shortlisted historical example, replay the current STLAformer and calculate the historical failure-conditional residual:
+- `TraffiDent_Net_01/02/03/04/06` supported by dynamic node count; smoke/real formal available where the corresponding Backbone/SupportBench cache and pretrained STLA checkpoint exist.
+- `speed` and `flow`, history/horizon `12/12`, Train s40; Test `s20/s40/s60/s90`, Seed 10 by default.
+- Train-only `train_x_full_norm` plus `train_y_norm` is legal historical evidence. Evaluation query *future* labels are used only for metrics and offline audit, never to choose Retrieval candidates or produce predictions.
+- Forecast-conditioned retrieval changes the historical candidate ranking; the improvement target of **≥6% Avg(s20–s90) MAE relative to RAFT-STLA** is a research objective, not an established result.
+- Still uses the single s40 Validation MAE for checkpoint selection. An all-severity Validation selector would require actual Val views under a separate protocol; never select on Test.
 
-$$R_{k\mid q}=Y_k-f_{\mathrm{STLA}}(M_q\odot X_k^{full},M_q).$$
+## Gadi
 
-A differentiable horizon/node-level candidate reranker uses query observable context, historical masked distance, candidate future, residual, coverage and STLA features. A learnable **None** action can reject all candidates. The final correction is a bounded weighted sum of actual retrieved residuals, not an unconstrained correction MLP:
-
-$$\hat Y_q=\hat Y_q^0 + c\tanh\!\bigl(\sum_k w_{q,k}R_{k\mid q}/c\bigr).$$
-
-The saved config controls correction bound, ranking loss, MAE/RMSE balance, STLA finetuning, Top-K and replay chunk size. This is a **forecasting** model: no historical-reconstruction target or loss.
-
-## Supported experimental protocol
-
-- Datasets: `TraffiDent_Net_01/02/03/04/06`; node counts are resolved dynamically from STLA checkpoint and cache. Backbone shared-cache selection is made through its installed protocol config; generate the respective shared caches before running.
-- Tasks: `speed` and `flow`; history/horizon 12/12, complete **training** history+future is used **only** as retrieval memory; incomplete query inputs and observation mask come from Base_SupportBench.
-- Primary fair comparison: same **s40 incomplete-trained STLA checkpoint** as RAFT-STLA and RAST-STLA, Test s20/s40/s60/s90, five missingness families, seed 10 initially.
-- Secondary study: complete-trained STLA, frozen/pretrained Backbone and the **same** retrieval-adaptation budget for all competing methods. Pass its exact checkpoint explicitly; do not mix primary/secondary tables.
-- Every cached candidate search excludes overlapping temporal windows. Future targets in the evaluation split are used for metrics only, not retrieval or model forward.
-- The Train Memory may contain rows with invalid future targets; those candidate positions are masked out of retrieval scoring.
-
-## Folder structure
-
-`mask_raft_stla/evidence.py`: Train-only memory, candidate shortlist, query-mask historical replay.
-`mask_raft_stla/retrieval.py`: multi-resolution complete-history masked-Pearson search and time-overlap exclusion.
-`mask_raft_stla/model.py`: horizon/node-level outcome-aware scoring, None action, evidence-only correction.
-`mask_raft_stla/trainer.py`: train/val/eval losses, progressive or frozen schedule, MAE checkpoint selection, candidate ranking, RMSE risk term.
-`scripts/build_retrieval_cache.py`: versioned/cache-input fingerprint validation.
-`scripts/train.py`, `scripts/evaluate.py`: end-to-end formal run and automatic evaluation.
-`pbs/formal.pbs`, `pbs/evaluate.pbs`: Gadi V100 submission.
-`tests/test_raft_v2.py`: unit tests using dummy STLA only.
-
-## Prerequisites
-
-- Installed project `Backbone` (including the official STLAformer vendor module), pre-trained STLA checkpoint, and initialized shared Base_SupportBench dataset caches.
-- PyTorch, NumPy, pandas, PyYAML and all dependencies required by the existing Backbone.
-- STLA and cache dimensions, normalization and dataset ID must match. `preflight.py` verifies main shapes.
-- Existing v1 Checkpoints are **not** compatible with v2. Old retrieval caches are rebuilt upon version or input change.
-
-## Local PowerShell example
-
-```powershell
-cd C:\Users\zwan0652\ResearchProgram\Speed_LLM_RAG
-conda activate TFP
-$env:SPEED_LLM_RAG_ROOT = (Get-Location).Path
-$env:TRAFFIDENT_TARGET = 'speed'
-$env:BACKBONE_CHECKPOINT = 'C:\path\to\your\s40_STLAformer\best.pt'
-python -u Mask_RAFT-STLA\scripts\preflight.py --target speed
-python -u Mask_RAFT-STLA\scripts\train.py --target speed --seed 10 --smoke
-python -u Mask_RAFT-STLA\scripts\train.py --target speed --seed 10
-```
-
-For Flow, change `TRAFFIDENT_TARGET`, `BACKBONE_CHECKPOINT` and `--target` to `flow`. For other networks use `--dataset TraffiDent_Net_01` etc., with the matching STLA checkpoint/cache. `--batch-size` and `--num-workers` override defaults.
-
-## Gadi commands
-
-`pbs/formal.pbs` requests gpuvolta, **1 V100 + 12 CPUs**, 32GB, 48h; every output line is timestamped in the project's `*_logs/<target>` directory. Formal training automatically evaluates all four severities and saves independent per-severity predictions and metrics.
+Place this folder directly under `/scratch/mh20/zw1165/Speed_LLM_RAG`. Jobs need **1 V100, 12 CPUs, 32 GB host memory, 48h**, PyTorch environment `TFP`.
 
 ```bash
 cd /scratch/mh20/zw1165/Speed_LLM_RAG
-qsub -N MRAFT2_speed -v TARGET=speed,SEED=10,DATASET=TraffiDent_Net_06,BACKBONE_CHECKPOINT=/absolute/path/to/s40_STLA_best.pt Mask_RAFT-STLA/pbs/formal.pbs
-qsub -N MRAFT2_flow -v TARGET=flow,SEED=10,DATASET=TraffiDent_Net_06,BACKBONE_CHECKPOINT=/absolute/path/to/flow_s40_STLA_best.pt Mask_RAFT-STLA/pbs/formal.pbs
+export STLA_S40_SPEED="$(pwd)/Backbone_exps/speed/STLAformer/TraffiDent_Net_06/formal/20260930_215233_seed10/best.pt"
+export STLA_S40_FLOW="$(pwd)/Backbone_exps/flow/STLAformer/TraffiDent_Net_06/formal/20260930_220624_seed10/best.pt"
+python -u Mask_RAFT-STLA/scripts/preflight.py --target speed --backbone-checkpoint "$STLA_S40_SPEED"
+qsub -N MRAFT23_speed -v TARGET=speed,SEED=10,DATASET=TraffiDent_Net_06,BATCH_SIZE=64,BACKBONE_CHECKPOINT="$STLA_S40_SPEED" Mask_RAFT-STLA/pbs/formal.pbs
+qsub -N MRAFT23_flow  -v TARGET=flow,SEED=10,DATASET=TraffiDent_Net_06,BATCH_SIZE=64,BACKBONE_CHECKPOINT="$STLA_S40_FLOW" Mask_RAFT-STLA/pbs/formal.pbs
+# Independently fitted no-retrieval controls (separate best.pt outputs)
+qsub -N MRAFT23_noret_s -v TARGET=speed,SEED=10,DATASET=TraffiDent_Net_06,ABLATION=no_retrieval,BATCH_SIZE=64,BACKBONE_CHECKPOINT="$STLA_S40_SPEED" Mask_RAFT-STLA/pbs/formal.pbs
+qsub -N MRAFT23_noret_f -v TARGET=flow,SEED=10,DATASET=TraffiDent_Net_06,ABLATION=no_retrieval,BATCH_SIZE=64,BACKBONE_CHECKPOINT="$STLA_S40_FLOW" Mask_RAFT-STLA/pbs/formal.pbs
 ```
 
-If the exact checkpoint is already the correct `LATEST_CHECKPOINT.txt`, `BACKBONE_CHECKPOINT` may be omitted, but explicitly specifying it is strongly recommended when complete/s40 variants coexist.
+A Formal run executes Train → `best.pt` / `last.pt` → four-severity Evaluate → Retrieval Audit. You may resume **this same v2.3 experiment only** using PBS `RESUME_CHECKPOINT=/absolute/path/last.pt`. Logs carry timestamps and GPU CSV; test metrics are under `Mask_RAFT-STLA_exps/<target>/<dataset>/formal/<stamp>/evaluation`.
 
-## Manual evaluation and ablations
+## Re-running the independent attribution audit
+
+The automatic audit has no independent control until that control is trained. Supply it afterward:
 
 ```bash
-python -u Mask_RAFT-STLA/scripts/evaluate.py --checkpoint /path/to/best.pt --severities 20 40 60 90
-python -u Mask_RAFT-STLA/scripts/evaluate.py --checkpoint /path/to/best.pt --severities 40 --evidence-mode no_evidence
-python -u Mask_RAFT-STLA/scripts/evaluate.py --checkpoint /path/to/best.pt --severities 40 --evidence-mode shuffled
-python -u Mask_RAFT-STLA/scripts/evaluate.py --checkpoint /path/to/best.pt --severities 40 --evidence-mode no_mask_replay
-python -u Mask_RAFT-STLA/scripts/train.py --target speed --seed 10 --ablation no_retrieval
-python -u Mask_RAFT-STLA/scripts/train.py --target speed --seed 10 --ablation no_rerank
-python -u Mask_RAFT-STLA/scripts/train.py --target speed --seed 10 --ablation standard_future
+python -u Mask_RAFT-STLA/scripts/evaluate_retrieval.py \
+  --checkpoint /absolute/full_run/best.pt \
+  --no-retrieval-checkpoint /absolute/noret_run/best.pt \
+  --severities 20 40 60 90 --reuse
 ```
 
-Supported training ablations: `full`, `no_retrieval` (separately trained forecast adapter), `no_evidence`, `no_mask_replay`, `no_rerank`, `standard_future`, `shuffled`. Inference-only evidence removal/shuffling proves dependence on evidence but **does not** substitute for the train-matched `no_retrieval` control. For an equivalent parameter-budget control, adjust the adapter width and report parameter counts explicitly.
+The audit generates `retrieval_audit/paired_summary.csv`, `paired_horizon_family.csv` and `audit_manifest.json`. It tests `full`, `no_evidence`, `no_mask_replay`, **deterministic cross-history wrong Train cases**, and separately trained `no_retrieval`. `shuffled` remains as an additional same-query rank-mismatch diagnostic. Direct-masked and observed subsets cover all 12 prediction horizons (fixed from prior release).
 
-Best Checkpoint includes the exact v2 config and SHA256 of the referenced Backbone checkpoint. If evaluating on another machine, set `SPEED_LLM_RAG_ROOT` and provide `--backbone-checkpoint /local/equivalent/best.pt` (matching SHA256). Evaluation writes `severity_summary.<evidence-mode>.csv` and per-severity family metrics and prediction NPZ files.
+## Repository files
 
-## What is tested and what is not
+- `mask_raft_stla/forecast_pool.py`: forecast-conditioned Train-future candidate selection and fingerprints.
+- `mask_raft_stla/retrieval.py`: three-scale masked Pearson temporal-safe initial retrieval.
+- `mask_raft_stla/evidence.py`, `normal_teacher.py`, `replay_cache.py`: legal historical future and fixed mask-conditioned residual banks.
+- `mask_raft_stla/model.py`: per-node/per-horizon residual decomposition, scoring, risk gate.
+- `mask_raft_stla/trainer.py`: progressive STLA finetuning, utility/risk losses, AMP, checkpointing.
+- `scripts/evaluate_retrieval.py`: causal-intervention diagnostics and external No-retrieval comparison.
 
-`pytest -q Mask_RAFT-STLA/tests` exercises evidence replay, candidate scoring and gradients. Additionally, the v2 code was executed against a **synthetic** STLA/Cache with the real CLI (`preflight`, two-epoch smoke, evaluation). These tests do **not** validate actual checkpoint compatibility with your unprovided Backbone source, Gadi V100 runtime, or improvements over the original RAFT/RAST-STLA. Formal Speed/Flow results and retrieval attribution are still required.
+## Tested / limitations
 
-## Research caution
+Run `python -m pytest Mask_RAFT-STLA/tests -q`. Unit tests cover v2.3 shortlist, Train legal mismatch, mask-replay, neural gradients and toy cache generation. Real full Net-06 training and V100 peak memory have **not** been run in this release environment. v2.3 caches should not be mixed with earlier versions. In-sample normal residuals can still be optimistically biased; blocked out-of-fold historical residuals remain a research ablation, not a feature claimed here.
 
-Residual replay uses the installed STLA backbone on training memory, which may have in-sample residual bias. It is a **working retrieval research implementation**, not an unbiased out-of-fold estimator. For publication-quality statements about historical residual distributions, add temporally blocked out-of-fold Backbone models and compare their utility. A future-derived ranking target is used **only in Train/Validation loss**; future truth is never supplied to the model forward in Test.
 
-## v2.1.0 performance addendum
+## Parallel STLA initialization modes (2026-10-11)
 
-See `../MASK_RETRIEVAL_v2.1.0_RELEASE_NOTES.md` from the combined package for deployment, new AMP and fixed-replay controls, whole-run estimates and resume instructions. Existing Train-only evidence, no historical imputation, explicit s40 checkpoint, four-severity automatic evaluation and 12 CPUs per V100 are preserved. Use `--resume /absolute/path/to/last.pt` to recover an interrupted run. Default 32-batch/AMP is **not** identical numerical optimization to the prior 16-batch FP32 version.
+Submit with `BACKBONE_MODE=incomplete` (STLA path contains `/formal/`) or
+`BACKBONE_MODE=complete` (STLA path contains `/formal_complete/`).
+Both modes use the **same incomplete-sensing Base_SupportBench inputs**; only
+the initial STLA checkpoint changes. Experiment roots, live logs and
+retrieval caches
+are separated by the mode component. Run the provided repository-root
+`submit_mask_retrieval_dual_backbone.sh` to submit eight independent PBS jobs.
+Do not interpret differences between complete/incomplete initializations as
+Retrieval-only gains: compare independently trained NoRetrieval controls.

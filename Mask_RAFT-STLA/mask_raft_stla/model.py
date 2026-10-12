@@ -32,6 +32,10 @@ class MaskRAFTSTLA(nn.Module):
         nn.init.zeros_(self.component_scale[-1].bias)
         self.none_scorer = nn.Sequential(nn.Linear(2 + d + 8, hid//2), nn.GELU(),
                                         nn.Linear(hid//2, 1))
+        # Risk gate is an evidence-only scalar, never a free future forecast head.
+        self.risk_gate=nn.Sequential(nn.Linear(7+d+8,hid//2),nn.GELU(),nn.Linear(hid//2,1))
+        nn.init.zeros_(self.risk_gate[-1].weight)
+        nn.init.constant_(self.risk_gate[-1].bias,1.5)
         self.control_adapter = nn.Sequential(nn.Linear(2 + d + 8, hid), nn.GELU(),
                                              nn.Linear(hid, 1))
         nn.init.constant_(self.none_scorer[-1].bias, float(mc.get('none_bias', 1.0)))
@@ -112,7 +116,18 @@ class MaskRAFTSTLA(nn.Module):
         scores_all = torch.cat([logits, none[:,None]],dim=1)
         weights_all = torch.softmax(scores_all, dim=1)
         evidence = (weights_all[:,:K] * effective_residual).sum(1)
-        correction = self.max_delta * torch.tanh(evidence / self.max_delta)
+        # Full correction is explicitly decomposed into: historical evidence
+        # and probability that this evidence improves the current prediction.
+        residual_var=(weights_all[:,:K]*(effective_residual-evidence[:,None]).square()).sum(1)
+        reliability_features=torch.cat([base[...,None],evidence.abs()[...,None],
+            residual_var.sqrt().clamp_max(10)[...,None],cover,
+            (1-weights_all[:,-1])[...,None],weights_all[:,-1][...,None],
+            dteacher.abs()[...,None],ctx,h],-1)
+        risk_logit=self.risk_gate(reliability_features).squeeze(-1)
+        reliability=torch.sigmoid(risk_logit)
+        if mode=='no_risk':reliability=torch.ones_like(reliability)
+        ungated=self.max_delta*torch.tanh(evidence/self.max_delta)
+        correction = reliability*ungated
         if mode == 'no_evidence':
             correction = torch.zeros_like(correction)
         pred = base + correction
@@ -120,5 +135,6 @@ class MaskRAFTSTLA(nn.Module):
                 'retrieval_prediction': base+residual.mean(1),
                 'gate': 1-weights_all[:,-1], 'candidate_weights': weights_all,
                 'candidate_logits': scores_all, 'correction': correction,
+                'risk_probability':reliability, 'risk_logit':risk_logit, 'ungated_correction':ungated,
                 'candidate_residuals': effective_residual,'normal_component':normal_residual,
                 'failure_component':failure_residual,'teacher_discrepancy':dteacher,'candidate_available':candidate_valid.bool()}

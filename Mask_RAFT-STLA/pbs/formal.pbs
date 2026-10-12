@@ -13,7 +13,16 @@ TARGET=${TARGET:-${TRAFFIDENT_TARGET:-speed}}
 SEED=${SEED:-10}
 DATASET=${DATASET:-TraffiDent_Net_06}
 ABLATION=${ABLATION:-full}
+BACKBONE_MODE=${BACKBONE_MODE:?BACKBONE_MODE is required for dual-backbone formal jobs}
+BACKBONE_CHECKPOINT=${BACKBONE_CHECKPOINT:?BACKBONE_CHECKPOINT is required for dual-backbone formal jobs}
 case "$TARGET" in speed|flow) ;; *) echo "ERROR TARGET=$TARGET (expected speed|flow)"; exit 2;; esac
+case "$BACKBONE_MODE" in complete|incomplete) ;; *) echo "ERROR BACKBONE_MODE must be complete/incomplete"; exit 2;; esac
+[[ -f "$BACKBONE_CHECKPOINT" ]] || { echo "ERROR missing STLA checkpoint: $BACKBONE_CHECKPOINT"; exit 2; }
+# Fail fast on the common mistake of labeling the wrong STLA initialization.
+case "$BACKBONE_MODE:$BACKBONE_CHECKPOINT" in
+  complete:*/formal_complete/*|incomplete:*/formal/*) ;;
+  *) echo "ERROR checkpoint does not match BACKBONE_MODE=$BACKBONE_MODE: $BACKBONE_CHECKPOINT"; exit 2;;
+esac
 [[ "$SEED" =~ ^[0-9]+$ ]] || { echo "ERROR SEED must be a nonnegative integer"; exit 2; }
 
 ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
@@ -23,16 +32,17 @@ PYTHON="$ENVROOT/bin/python"
 
 export SPEED_LLM_RAG_ROOT="$ROOT"
 export TRAFFIDENT_TARGET="$TARGET"
+export BACKBONE_MODE BACKBONE_CHECKPOINT
 export PYTHONUNBUFFERED=1
 export PYTHONDONTWRITEBYTECODE=1
 export PYTHONPATH="$ROOT/Mask_RAFT-STLA:$ROOT/Base_SupportBench:${PYTHONPATH:-}"
 export PATH="$ENVROOT/bin:$PATH"
 
 cd "$ROOT"
-mkdir -p "Mask_RAFT-STLA_logs/$TARGET"
+mkdir -p "Mask_RAFT-STLA_logs/$TARGET/$BACKBONE_MODE"
 STAMP=$(date +%Y%m%d_%H%M%S)
 JOBID=${PBS_JOBID:-local}
-LOG="Mask_RAFT-STLA_logs/$TARGET/Mask_RAFT-STLA.${TARGET}.formal.seed${SEED}.${JOBID}.${STAMP}.live.log"
+LOG="Mask_RAFT-STLA_logs/$TARGET/$BACKBONE_MODE/Mask_RAFT-STLA.${TARGET}.${BACKBONE_MODE}.formal.seed${SEED}.${JOBID}.${STAMP}.live.log"
 
 # Prefix every line written to the main live log, including Python warnings/errors
 # and multi-line external command output. This keeps one canonical timestamp format.
@@ -48,7 +58,7 @@ run_logged() {
   return "$rc"
 }
 
-log_line "START model=Mask_RAFT-STLA target=$TARGET seed=$SEED job=$JOBID host=$(hostname)"
+log_line "START model=Mask_RAFT-STLA backbone_mode=$BACKBONE_MODE checkpoint=$BACKBONE_CHECKPOINT target=$TARGET seed=$SEED job=$JOBID host=$(hostname)"
 log_line "ROOT=$ROOT PYTHON=$PYTHON"
 run_logged "$PYTHON" -V
 run_logged nvidia-smi || true
@@ -65,11 +75,11 @@ cleanup_gpu_monitor() {
 }
 trap cleanup_gpu_monitor EXIT
 
-run_logged "$PYTHON" -u Mask_RAFT-STLA/scripts/preflight.py --target "$TARGET" --dataset "$DATASET"
+run_logged "$PYTHON" -u Mask_RAFT-STLA/scripts/preflight.py --target "$TARGET" --dataset "$DATASET" --backbone-checkpoint "$BACKBONE_CHECKPOINT"
 log_line "PERF_CONFIG project=Mask_RAFT-STLA ncpus=12"
 EXTRA_ARGS=()
 if [[ -n "${RESUME_CHECKPOINT:-}" ]]; then EXTRA_ARGS+=(--resume "$RESUME_CHECKPOINT"); fi
 if [[ -n "${BATCH_SIZE:-}" ]]; then EXTRA_ARGS+=(--batch-size "$BATCH_SIZE"); fi
-run_logged "$PYTHON" -u Mask_RAFT-STLA/scripts/train.py --target "$TARGET" --seed "$SEED" --dataset "$DATASET" --ablation "$ABLATION" --run-stamp "$STAMP" "${EXTRA_ARGS[@]}"
+run_logged "$PYTHON" -u Mask_RAFT-STLA/scripts/train.py --target "$TARGET" --seed "$SEED" --dataset "$DATASET" --ablation "$ABLATION" --run-stamp "$STAMP" --backbone-checkpoint "$BACKBONE_CHECKPOINT" "${EXTRA_ARGS[@]}"
 
 log_line "FINISH model=Mask_RAFT-STLA target=$TARGET seed=$SEED"
