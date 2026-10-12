@@ -1,146 +1,119 @@
+"""Forecast-oriented staged losses. Training targets NEVER enter model forward."""
 from __future__ import annotations
-import os
 import torch
 from torch.nn import functional as F
-from .ranking import target_recovery_ranking_loss,forecast_utility_ranking_loss
-from .forecast_utility import coarse_forecast_utility_loss
+
 
 def masked_mean(x,mask):
-    selected=x.masked_select(mask.bool().expand_as(x))
-    if not selected.numel():return x.new_zeros(())
-    if not torch.isfinite(selected).all():
-        raise FloatingPointError('Nonfinite value at an actively supervised position')
-    return selected.mean()
+    m=mask.expand_as(x).bool()
+    if not m.any():return x.sum()*0
+    v=x[m]
+    if not torch.isfinite(v).all():raise FloatingPointError('Nonfinite supervised positions')
+    return v.mean()
+
 
 def forecast_validation_loss(batch,out,mean,std):
-    """Canonical normalized forecast MAE only, used for checkpoint selection.
-
-    Skips candidate/ranking/recovery/teacher losses when the selected
-    checkpoint metric is already the forecast MAE. Does not change model forward.
-    """
     valid=batch['future_valid'].bool()
-    err=(out['prediction']*std+mean-batch['y_raw'].float()).abs()/max(float(std),1e-5)
-    forecast=masked_mean(err,valid)
-    return {'total':forecast,'forecast':forecast}
+    pred=out['prediction']*std+mean
+    mae=masked_mean((pred-batch['y_raw'].float()).abs()/max(std,1e-5),valid)
+    return {'total':mae,'forecast':mae}
 
-
-def retrieval_phase_loss(model,batch,out,memory,mean,std,cfg):
-    """Equivalent retrieval-stage objective with no Teacher/second STLA pass.
-
-    Only retrieval query, selected evidence weights and recovered historical
-    state are necessary for this phase. No future target enters the model forward.
-    """
-    ref=out['recovered_state']
-    z=ref.sum()*0
-    rank=z;rank_diag={};utility=z;utility_diag={}
-    if cfg.get('ranking',{}).get('enabled',True):
-        rank,rank_diag=target_recovery_ranking_loss(
-            batch,{'ids':out['retrieved_ids'],'valid':out['retrieved_valid_candidates'],
-                   'weights':out['retrieved_weights']},memory,model.regions,
-            float(cfg['ranking'].get('target_temperature',.25)))
-    if cfg.get('forecast_utility',{}).get('enabled',False):
-        utility,utility_diag=forecast_utility_ranking_loss(
-            batch,{'ids':out['retrieved_ids'],'valid':out['retrieved_valid_candidates'],
-                   'weights':out['retrieved_weights']},memory,model.regions,
-            float(cfg['forecast_utility'].get('teacher_temperature',.35)))
-    coarse_loss,coarse_diag=coarse_forecast_utility_loss(
-        batch,out.get('retrieval_evidence'),model.regions,
-        cfg.get('forecast_utility',{}).get('coarse_temperature',.7))
-    ctx=model.regions(batch['x_full'].float(),batch['raw_valid'].bool())
-    enc=model.retrieval.encoder
-    features=enc._features(ctx['anchor_values'],ctx['anchor_mask'],
-        torch.stack([torch.zeros_like(ctx['coverage']),ctx['coverage']],-1))
-    paired=F.normalize(enc.k(features),dim=-1)
-    r=(1-(out['retrieval_query']*paired).sum(-1)).mean()
-    wanted=batch['artificial_mask'].bool()&batch['raw_valid'].bool()
-    state=masked_mean((ref-batch['x_full']).abs(),wanted)
-    w=cfg['loss']
-    total=(w['retrieval']*r+w.get('ranking',.15)*rank+.05*state+
-           cfg.get('forecast_utility',{}).get('loss_weight',.20)*utility+
-           cfg.get('forecast_utility',{}).get('coarse_loss_weight',.35)*coarse_loss)
-    return {'total':total,'retrieval':r.detach(),'ranking':rank.detach(),
-            'forecast_utility_rank':utility.detach(),'state':state.detach(),
-            'forecast':z.detach(),'direct':z.detach(),'tail':z.detach(),
-            'candidate':z.detach(),'correction_energy':z.detach(),
-            'innovation':z.detach(),'gate':z.detach(),
-            'coarse_utility_loss':coarse_loss.detach(),**coarse_diag,**rank_diag,**utility_diag}
 
 def losses(model,batch,out,memory,phase,mean,std,cfg):
-    if phase=='retrieval' and cfg['experiment'].get('training_mode','full')!='no_memory':
-        return retrieval_phase_loss(model,batch,out,memory,mean,std,cfg)
-    valid=batch['future_valid'].bool();truth=batch['y_raw'].float();scale=max(float(std),1e-5)
-    pred=out['prediction']*std+mean
-    abs_err=(pred-truth).abs();sq=((pred-truth)/scale).square()
-    direct=valid&batch['direct_mask'].bool()[:,None,:]
-    forecast=masked_mean(abs_err/scale,valid)
-    missing_forecast=masked_mean(abs_err/scale,direct)
-    tail=masked_mean(sq,valid)
-    # Proposal supervision is deliberately weak: the alpha=1 candidate need
-    # not outperform the base, but its huge errors should not be cost-free.
-    candidate_raw=out['candidate_prediction']*std+mean
-    candidate_loss=masked_mean(F.smooth_l1_loss((candidate_raw-truth)/scale,
-                               torch.zeros_like(candidate_raw),reduction='none'),valid)
-    delta=out['candidate_prediction']-out['base_prediction']
-    # A small correction-magnitude regularizer improves stability and should
-    # not stop the model from learning helpful large corrections.
-    correction_energy=masked_mean(F.smooth_l1_loss(delta,torch.zeros_like(delta),reduction='none'),valid)
-    if cfg['experiment'].get('training_mode','full')=='no_memory':
-        total=forecast+cfg['loss']['direct']*missing_forecast+cfg['loss']['tail']*tail
-        zero=total.detach()*0
-        return {'total':total,'forecast':forecast.detach(),'direct':missing_forecast.detach(),
-                'tail':tail.detach(),'candidate':zero,'correction_energy':zero,
-                'retrieval':zero,'ranking':zero,'state':zero,'innovation':zero,'gate':zero}
-    retrieval=forecast*0
-    ranking=forecast*0
-    rank_diag={}
-    if phase in ('retrieval','recovery','injection','partial','full') and cfg.get('ranking',{}).get('enabled',True):
-        rank_temp=float(cfg.get('ranking',{}).get('target_temperature',.25))
-        ranking,rank_diag=target_recovery_ranking_loss(
-            batch,{'ids':out['retrieved_ids'],'valid':out['retrieved_valid_candidates'],
-                   'weights':out['retrieved_weights']},memory,model.regions,rank_temp)
+    valid=batch['future_valid'].bool()
+    truth=batch['y_norm'].float().permute(0,2,1) # [B,N,P]
+    if cfg['experiment'].get('training_mode')=='no_memory':
+        return forecast_validation_loss(batch,out,mean,std)
+    retrieved=out['retrieval_evidence']
+    probe=retrieved['probe_predictions'] # [B,N,L,P]
+    candidates=retrieved['shortlist_valid']
+    valid_node=valid.permute(0,2,1)[:,:,None,:]
+    candidate_mae=((probe-truth[:,:,None,:]).abs()*valid_node).sum(-1)/valid_node.sum(-1).clamp_min(1)
+    base=out['base_prediction'].permute(0,2,1)
+    base_mae=((base-truth).abs()*valid.permute(0,2,1)).sum(-1)/valid.permute(0,2,1).sum(-1).clamp_min(1)
+    utility_teacher=(base_mae[:,:,None]-candidate_mae).detach()
+    # Only valid, earlier historical futures can form teacher labels.
+    masked_label=candidates & valid_node.any(-1)
+    zero=probe.sum()*0
+    forecast=masked_mean((out['prediction']-batch['y_norm']).abs(),valid)
+    if phase=='evidence':
+        # Train candidate forecast probe & evidence adapter BEFORE utility ranking.
+        # Hard-minimum alone would overfit; use robust mean with a soft best term.
+        good=candidate_mae.masked_fill(~masked_label,10.0)
+        best=good.min(-1).values
+        eligible=masked_label.any(-1)
+        ave=masked_mean(candidate_mae,masked_label)
+        best_mean=masked_mean(best,eligible)
+        training_objective=.7*ave+.3*best_mean
+        return {'total':training_objective,'forecast':forecast.detach(),
+                'candidate_probe_MAE':ave.detach(),'candidate_best_MAE':best_mean.detach(),
+                'utility_positive_fraction':masked_mean((utility_teacher>0).float(),masked_label).detach()}
+    if phase=='retrieval':
+        # Node-level forecast utility, pairwise ranking and regret.
+        logits=retrieved['shortlist_scores']
+        util=retrieved['shortlist_utility']
+        teacher=utility_teacher.clamp(-3,3)
+        reg=masked_mean(F.smooth_l1_loss(util,teacher,reduction='none'),masked_label)
+        pair=teacher[:,:,:-1]-teacher[:,:,1:]
+        pred_pair=logits[:,:,:-1]-logits[:,:,1:]
+        good_pair=masked_label[:,:,:-1] & masked_label[:,:,1:] & (pair.abs()>.005)
+        pair_loss=masked_mean(F.softplus(-pred_pair*pair.sign()),good_pair)
+        probs=torch.softmax(logits.masked_fill(~masked_label,-1e4),-1)*masked_label.float()
+        probs=probs/probs.sum(-1,keepdim=True).clamp_min(1e-6)
+        best=teacher.masked_fill(~masked_label,-1e4).max(-1).values
+        chosen=(probs*teacher).sum(-1)
+        active=masked_label.any(-1)
+        regret=masked_mean((best-chosen).clamp_min(0),active)
+        # Mask-consistent same-episode key alignment gives Key Encoder gradients.
+        paired=model.retrieval.encoder.encode_key_examples(batch['x_full'].float(),
+                                    batch['raw_valid'].bool(),model.regions)
+        query=retrieved['region_query']
+        consistency=(1-(query*paired).sum(-1)).mean()
+        coarse_benefit=coarse_benefit_contrastive_loss(retrieved,utility_teacher,masked_label,
+                                                       model.regions.owner)
+        total=.7*reg+.3*pair_loss+.4*regret+.2*coarse_benefit+.05*consistency
+        return {'total':total,'forecast':forecast.detach(),'utility_regression':reg.detach(),
+                'utility_pairwise':pair_loss.detach(),'utility_regret':regret.detach(),
+                'utility_positive_fraction':masked_mean((teacher>0).float(),masked_label).detach(),
+                'query_consistency':consistency.detach(),
+                'coarse_benefit_contrastive':coarse_benefit.detach()}
+    # Integration and control: actual future MAE, with candidate auxiliary loss.
+    candidate=masked_mean((out['candidate_prediction']-batch['y_norm']).abs(),valid)
+    directly_masked=valid & batch['direct_mask'].bool()[:,None,:]
+    direct=masked_mean((out['prediction']-batch['y_norm']).abs(),directly_masked)
+    correction=masked_mean(F.smooth_l1_loss(out['candidate_prediction']-out['base_prediction'],
+                                torch.zeros_like(out['candidate_prediction']),reduction='none'),valid)
+    # Additional candidate loss counters the easy all-null/zero-gate solution.
+    total=forecast+.2*candidate+.2*direct+.002*correction
+    return {'total':total,'forecast':forecast.detach(),'candidate':candidate.detach(),
+            'direct':direct.detach(),'correction_energy':correction.detach(),
+            'retrieval_null_fraction':retrieved['null_weight'].mean().detach()}
 
-    utility_rank=forecast*0
-    utility_diag={}
-    if cfg.get('forecast_utility',{}).get('enabled',False) and phase in ('retrieval','recovery','injection','partial','full'):
-        utility_rank,utility_diag=forecast_utility_ranking_loss(
-            batch,{'ids':out['retrieved_ids'],'valid':out['retrieved_valid_candidates'],
-                   'weights':out['retrieved_weights']},memory,model.regions,
-            cfg['forecast_utility'].get('teacher_temperature',.35))
-    coarse_loss,coarse_diag=coarse_forecast_utility_loss(
-        batch,out.get('retrieval_evidence'),model.regions,
-        cfg.get('forecast_utility',{}).get('coarse_temperature',.7))
-    if phase=='retrieval':
-        ctx=model.regions(batch['x_full'].float(),batch['raw_valid'].bool())
-        enc=model.retrieval.encoder
-        feats=enc._features(ctx['anchor_values'],ctx['anchor_mask'],torch.stack([torch.zeros_like(ctx['coverage']),ctx['coverage']],-1))
-        paired=F.normalize(enc.k(feats),dim=-1)
-        qry=out['retrieval_query']
-        retrieval=(1-(qry*paired).sum(-1)).mean()
-    rec_mask=batch['artificial_mask'].bool()&batch['raw_valid'].bool()
-    state=masked_mean((out['recovered_state']-batch['x_full']).abs(),rec_mask)
-    with torch.no_grad():
-        full_hidden=model.teacher_hidden(batch['x_full'].float(),batch['raw_valid'].bool(),batch['tod'],batch['dow'])
-        current_hidden=model.teacher_hidden(out['supported_history'].detach(),batch['obs_mask'],batch['tod'],batch['dow'])
-        dz_target=(full_hidden-current_hidden).detach()
-    innov_weight=(~batch['obs_mask']).float()[...,None]
-    innov=masked_mean(F.smooth_l1_loss(out['latent_innovation'],dz_target,reduction='none'),innov_weight.expand_as(dz_target))
-    ctrl=(out['final_gate']**2).mean()
-    w=cfg['loss']
-    utility_term=(cfg.get('forecast_utility',{}).get('loss_weight',.20)*utility_rank+
-                  cfg.get('forecast_utility',{}).get('coarse_loss_weight',.35)*coarse_loss)
-    if phase=='retrieval':
-        total=w['retrieval']*retrieval+w.get('ranking',.15)*ranking+.05*state+utility_term
-    elif phase=='recovery':
-        total=w['state']*state+w['innovation']*innov+.1*forecast+w.get('ranking',.15)*ranking+utility_term
-    else:
-        total=(forecast+w['direct']*missing_forecast+w['tail']*tail+
-               w['state']*state+w['innovation']*innov+w['gate']*ctrl+
-               w.get('candidate',.08)*candidate_loss+
-               w.get('correction_energy',.003)*correction_energy+
-               w.get('ranking',.15)*ranking+utility_term)
-    return {'total':total,'ranking':ranking.detach(),'forecast_utility_rank':utility_rank.detach(),
-            'coarse_utility_loss':coarse_loss.detach(),**coarse_diag,**utility_diag,**rank_diag,'forecast':forecast.detach(),'direct':missing_forecast.detach(),
-            'tail':tail.detach(),'candidate':candidate_loss.detach(),
-            'correction_energy':correction_energy.detach(),
-            'retrieval':retrieval.detach(),'state':state.detach(),
-            'innovation':innov.detach(),'gate':out['final_gate'].mean().detach()}
+
+def coarse_benefit_contrastive_loss(retrieved,benefit,valid,owner,temperature=0.25):
+    """Forecast-utility supervision of differentiable selected coarse scores.
+
+    A candidate gets credit when its historical ID is beneficial to a node in
+    that graph region. This lets the *region query* learn beyond reconstruction
+    or same-episode identity, even though the discrete topk IDs are non-grad.
+    """
+    scores=retrieved['coarse_scores']  # [B,G,C], with live query gradients
+    coarse= retrieved['coarse_ids']
+    shortlist=retrieved['shortlist_ids']
+    b,g,c=coarse.shape
+    target=scores.new_zeros(b,g,c)
+    region_active=torch.zeros(b,g,dtype=torch.bool,device=scores.device)
+    for rid in range(g):
+        node_mask=(owner==rid)
+        if not node_mask.any():continue
+        chosen=shortlist[:,node_mask,:]
+        benefit_group=benefit[:,node_mask,:].clamp_min(0)*valid[:,node_mask,:].float()
+        same=(chosen[...,None]==coarse[:,rid,None,None,:])
+        value=(same.float()*benefit_group[...,None]).sum((1,2))
+        target[:,rid]=value
+        region_active[:,rid]=value.sum(-1)>1e-6
+    if not region_active.any():return scores.sum()*0
+    scaled=scores/temperature
+    target=target/target.sum(-1,keepdim=True).clamp_min(1e-8)
+    logp=F.log_softmax(scaled,-1)
+    return -(target*logp).sum(-1)[region_active].mean()

@@ -1,6 +1,5 @@
-# FARE v2.0.3 PILOT: 8k time-spread TRAIN; full validation; 16k train-only memory.
-# Full model components + Forecast Utility + diagnostics. Validation selects checkpoint; Pilot Test is report-only.
-version: 2.0.4
+# FARE v2.1 clean configuration; old model checkpoints are incompatible.
+version: 2.1.1
 experiment:
   dataset: TraffiDent_Net_06
   target: speed
@@ -29,10 +28,8 @@ graph:
 retrieval:
   key_dim: 128
   coarse_topk: 64
+  shortlist_topk: 16
   topk: 8
-  utility_score_weight: 0.8
-  alignment_steps: 3
-  match_on_observed_anchors_only: true
   exclude_overlapping_history_forecast: true
 memory:
   max_rows: 16000
@@ -41,67 +38,33 @@ memory:
   resident_device: cuda
 innovation:
   memory_dim: 32
-  rank: 16
-  heads: 4
-ranking:
-  enabled: true
-  target_temperature: 0.25
-ablation:
-  constant_alpha: 0.12
-control:
-  max_alpha: 0.6
-  initial_alpha: 0.12
-loss:
-  retrieval: 0.4
-  state: 0.1
-  innovation: 0.03
-  direct: 0.5
-  tail: 0.03
-  gate: 0.0005
-  candidate: 0.08
-  correction_energy: 0.003
-  ranking: 0.15
 training:
   batch_size: 32
   num_workers: 2
   grad_clip: 5.0
   weight_decay: 0.0001
   new_lr: 0.0001
-  partial_backbone_lr: 2.0e-06
-  full_backbone_lr: 1.0e-06
-  stop_after_phase: injection
-  freeze_retrieval_on_finetune: true
-  finetune_new_lr: 2.0e-05
   patience: 4
   min_phase_epochs: 2
   phase_epochs:
+    evidence: 5
     retrieval: 8
-    recovery: 5
-    injection: 12
-    partial: 5
-    full: 5
-  oof_folds: 3
-  oof_candidate_epochs: 5
-  oof_controller_epochs: 10
-  oof_nodes_per_window: 32
-  oof_time_gap: 24
+    integration: 12
+    control: 5
+  stop_after_phase: null
+  utility_teacher_holdout_fraction: 0.25
+  teacher_purge_gap: 24
 evaluation:
   save_stage_predictions: false
   save_final_predictions: true
-  auto_test: true  # report-only in Pilot; does not participate in model selection
-forecast_utility:
-  enabled: true
-  loss_weight: 0.2
-  teacher_temperature: 0.35
-  coarse_loss_weight: 0.35
-  coarse_temperature: 0.7
-  strict_causal_historical_future: true
+  auto_test: true
+  metrics_source: Base_SupportBench.experiment_common.metrics.metric_bundle
 performance:
-  retrieval_phase_fast: true
+  retrieval_phase_fast: false
   forecast_only_validation: true
   strict_batch_diagnostics: false
 diagnostics:
   enabled: true
-  sample_every_batches: 50
-  max_sampled_batches: 160
-  progress_every_batches: 500
+  sample_every_batches: 25
+  max_sampled_batches: 80
+  progress_every_batches: 100

@@ -9,10 +9,8 @@ from datetime import datetime
 from pathlib import Path
 import _bootstrap
 
-MODES=('full','retrieval_off','no_memory','global_retrieval',
-       'no_mask_alignment','no_learned_reranker','utility_off','similarity_memory','no_observation_distance',
-       'random_memory','state_only','innovation_only','no_risk','no_utility',
-       'constant_alpha')
+MODES=('full','retrieval_off','no_memory','similarity_memory','utility_off',
+       'random_memory','cross_query_shuffle','weight_shuffle','null_evidence')
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)

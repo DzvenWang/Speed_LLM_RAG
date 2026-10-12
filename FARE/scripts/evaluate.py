@@ -11,7 +11,7 @@ from fare.evaluation import evaluate
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--checkpoint',required=True);p.add_argument('--dataset');p.add_argument('--target');p.add_argument('--memory');p.add_argument('--config')
-    p.add_argument('--mode',default=None,choices=['full','retrieval_off','state_only','innovation_only','global_retrieval','no_mask_alignment','random_memory','no_risk','no_utility','constant_alpha','no_memory','no_learned_reranker','no_observation_distance','utility_off','similarity_memory']);p.add_argument('--split',choices=['val','test'],default='test');p.add_argument('--severities',type=int,nargs='+',default=[20,40,60,90]);p.add_argument('--batch-size',type=int);p.add_argument('--output');p.add_argument('--smoke',action='store_true')
+    p.add_argument('--mode',default=None,choices=['full','retrieval_off','no_memory','random_memory','similarity_memory','utility_off','cross_query_shuffle','weight_shuffle','null_evidence']);p.add_argument('--split',choices=['val','test'],default='test');p.add_argument('--severities',type=int,nargs='+',default=[20,40,60,90]);p.add_argument('--batch-size',type=int);p.add_argument('--output');p.add_argument('--smoke',action='store_true')
     args=p.parse_args();ck=torch.load(args.checkpoint,map_location='cpu',weights_only=False)
     exp=ck['config']['experiment'];dataset=args.dataset or exp['dataset'];target=args.target or exp['target']
     if dataset!=exp['dataset'] or target!=exp['target']:raise ValueError('Checkpoint / evaluation dataset or target mismatch')

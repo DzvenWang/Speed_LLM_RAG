@@ -90,7 +90,7 @@ def report(run_dir,resource_prefix=None):
     util=aggregate.get('gpu_util_pct',{}).get('mean')
     if util is not None and util<45:
         warnings.append('Average matched-GPU utilization is below 45%; profile data loading, CPU work, and small kernels before changing the model.')
-    late=[x for x in per_epoch if x['phase'] in ('injection','partial','full')]
+    late=[x for x in per_epoch if x['phase'] in ('integration','control')]
     if late:
         harmful=[x['val_final_harmful_fraction'] for x in late if x['val_final_harmful_fraction'] is not None]
         if harmful and _mean(harmful)>.4:

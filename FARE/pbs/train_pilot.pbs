@@ -11,7 +11,7 @@ source FARE/pbs/_activate_tfp.sh
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-3}"
 DATASET="${DATASET:-TraffiDent_Net_06}"
-# Use the v2.0.3 PILOT config unless explicitly overridden.
+# Use the v2.1 clean PILOT config unless explicitly overridden.
 FARE_CONFIG="${FARE_CONFIG:-FARE/configs/pilot.yaml}"
 BATCH_SIZE="${BATCH_SIZE:-32}"
 TARGET="${TARGET:-speed}"

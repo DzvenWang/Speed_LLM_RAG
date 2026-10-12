@@ -9,7 +9,7 @@ from .losses import losses, forecast_validation_loss
 from .evaluation import evaluate
 from .online_diagnostics import OnlineDiagnostics, append_diagnostics
 
-PHASE_ORDER=['retrieval','recovery','injection','partial','full']
+PHASE_ORDER=['evidence','retrieval','integration','control']
 
 def seed_all(seed):
     random.seed(seed);np.random.seed(seed);torch.manual_seed(seed)
@@ -22,12 +22,47 @@ def save_ckpt(path,model,opt,cfg,meta,epoch,phase,validation,memory_path=None):
 
 def load_ckpt(path,model=None,device='cpu',restore_rng=False):
     ck=torch.load(path,map_location='cpu',weights_only=False)
-    if ck['model']!='FARE':raise ValueError('Not a FARE checkpoint')
+    if ck['model']!='FARE' or not str(ck.get('version','')).startswith('2.1.'):
+        raise ValueError('FARE v2.1 checkpoints only; old versions are incompatible')
     if model is not None:
         model.load_state_dict(ck['state_dict'],strict=True);model.to(device)
     if restore_rng:
         torch.set_rng_state(ck['rng']['torch']);np.random.set_state(ck['rng']['numpy'])
     return ck
+
+def temporal_teacher_partition(dataset, holdout_fraction=0.25, gap=24):
+    """Purged chronological stage split for probe training vs utility supervision.
+
+    The candidate-specific probe and evidence adapter do NOT train on the
+    later windows used to supervise utility ranking. This is time-held-out,
+    not K-fold OOF; checkpoints explicitly record this distinction.
+    """
+    from torch.utils.data import Subset
+    if not 0 < holdout_fraction < .5:raise ValueError('holdout fraction must be between 0 and .5')
+    if len(dataset)<100:return dataset,dataset,{'enabled':False,'reason':'tiny_test_dataset'}
+    if isinstance(dataset,Subset):
+        src=dataset.dataset
+        if not hasattr(src,'window_starts'):raise ValueError('Temporal windows required')
+        starts=np.asarray(src.window_starts)[np.asarray(dataset.indices,dtype=np.int64)]
+    elif hasattr(dataset,'window_starts'):
+        starts=np.asarray(dataset.window_starts)[:len(dataset)]
+    else:
+        raise ValueError('Temporal manifest windows required')
+    if len(starts)<100:return dataset,dataset,{'enabled':False,'reason':'synthetic_dataset_too_small'}
+    ordered=np.argsort(starts,kind='stable')
+    boundary=int(round(len(ordered)*(1-holdout_fraction)))
+    low=starts[ordered[boundary-1]]
+    high=starts[ordered[boundary]]
+    earlier=ordered[starts[ordered] <= low-gap]
+    later=ordered[starts[ordered] >= high+gap]
+    if len(earlier)<10 or len(later)<10:
+        raise RuntimeError('Temporal teacher holdout is empty after purge; check global window units')
+    meta={'enabled':True,'train_evidence_examples':int(len(earlier)),
+          'utility_teacher_examples':int(len(later)),
+          'purge_gap_time_steps':int(gap),'boundary_earlier_start':int(low),
+          'boundary_later_start':int(high),'teacher_label_protocol':'time-held-out, not full K-fold OOF'}
+    return Subset(dataset,earlier.tolist()),Subset(dataset,later.tolist()),meta
+
 
 class FARETrainer:
     def __init__(self,model,memory,train_ds,val_ds,cfg,meta,device,run_dir,memory_path=None):
@@ -43,24 +78,29 @@ class FARETrainer:
         # Reuse DataLoader instances, allowing persistent_workers across epochs.
         bs=self.cfg['training']['batch_size'];nw=self.cfg['training'].get('num_workers',0)
         self._train_loader=loader(self.train_ds,bs,shuffle=True,workers=nw)
+        fraction=float(cfg['training'].get('utility_teacher_holdout_fraction',0.0))
+        self.teacher_partition={'enabled':False}
+        self._evidence_loader=self._train_loader
+        self._utility_loader=self._train_loader
+        if fraction>0 and cfg['experiment'].get('training_mode','full')!='no_memory':
+            evidence_ds, utility_ds, self.teacher_partition=temporal_teacher_partition(
+                train_ds,fraction,int(cfg['training'].get('teacher_purge_gap',model.h+model.p)))
+            self._evidence_loader=loader(evidence_ds,bs,shuffle=True,workers=nw)
+            self._utility_loader=loader(utility_ds,bs,shuffle=True,workers=nw)
+        print('FARE_UTILITY_TEACHER_PARTITION '+json.dumps(self.teacher_partition),flush=True)
         self._val_loader=loader(self.val_ds,bs,shuffle=False,workers=nw)
-        json_write(self.run_dir/'run_manifest.json',{'cfg':cfg,'meta':meta,'memory_path':str(memory_path),'start_time':time.strftime('%Y-%m-%d %H:%M:%S')})
+        json_write(self.run_dir/'run_manifest.json',{'cfg':cfg,'meta':meta,'memory_path':str(memory_path),'teacher_partition':self.teacher_partition,'start_time':time.strftime('%Y-%m-%d %H:%M:%S')})
     def _optimizer(self,phase):
-        base=[];new=[]
-        for name,p in self.model.named_parameters():
-            if not p.requires_grad:continue
-            (base if name.startswith('stla.base.') else new).append(p)
-        if not new and not base:raise RuntimeError('No trainable parameters')
-        lr=self.cfg['training'];groups=[]
-        new_lr=(lr.get('finetune_new_lr',lr['new_lr']) if phase in ('partial','full') else lr['new_lr'])
-        if new:groups.append({'params':new,'lr':new_lr})
-        if base:groups.append({'params':base,'lr':lr['partial_backbone_lr'] if phase=='partial' else lr['full_backbone_lr']})
-        return torch.optim.AdamW(groups,weight_decay=lr['weight_decay'])
+        new=[p for p in self.model.parameters() if p.requires_grad]
+        if not new:raise RuntimeError(f'No trainable parameters in phase {phase}')
+        lr=self.cfg['training']
+        return torch.optim.AdamW(new,lr=float(lr['new_lr']),weight_decay=float(lr['weight_decay']))
     def _epoch(self,phase,optimizer=None,max_batches=None):
         training=optimizer is not None
         self.model.train(training)
         if not training:self.model.eval()
-        it=self._train_loader if training else self._val_loader
+        it=(self._evidence_loader if phase=='evidence' else
+            self._utility_loader if phase=='retrieval' else self._train_loader) if training else self._val_loader
         acc={};total=0
         epoch_started=time.monotonic()
         diag=(OnlineDiagnostics(every_batches=self.diag_config.get('sample_every_batches',50),
@@ -71,9 +111,8 @@ class FARETrainer:
         opt_cfg=self.cfg.get('performance',{})
         # These skip only computations whose outputs cannot influence the
         # phase objective/selection score. Full inference/phase evaluation stays intact.
-        retrieval_fast=(phase=='retrieval' and mode!='no_memory' and
-                        opt_cfg.get('retrieval_phase_fast',True))
-        forecast_only_val=(not training and phase in ('injection','partial','full') and
+        retrieval_fast=False
+        forecast_only_val=(not training and phase in ('integration','control') and
                            opt_cfg.get('forecast_only_validation',True))
         debug=(opt_cfg.get('strict_batch_diagnostics',False) or
                __import__('os').environ.get('FARE_DEBUG_NONFINITE')=='1')
@@ -170,13 +209,6 @@ class FARETrainer:
         index_is_fresh=False
         for phase in phases:
             if phase not in PHASE_ORDER:raise ValueError(phase)
-            if (phase in ('partial','full') and resume_ck is None and
-                    self.cfg['training'].get('rollback_to_best_before_finetune',False)):
-                previous=self.run_dir/'candidate_best.pt'
-                if previous.exists():
-                    load_ckpt(previous,self.model,self.device)
-                    print(f'FARE_FINETUNE_ROLLBACK phase={phase} checkpoint={previous}',flush=True)
-                    index_is_fresh=False
             self.model.set_phase(phase);opt=self._optimizer(phase)
             epochs=self.cfg['training']['phase_epochs'][phase]
             best=float('inf');stale=0;best_ep=0;best_ck=None;start_ep=1
@@ -186,7 +218,7 @@ class FARETrainer:
                 existing=self.run_dir/f'{phase}_best.pt'
                 if existing.exists():
                     record=load_ckpt(existing)
-                    best=float(record.get('validation',{}).get('total',float('inf')) if phase in ('retrieval','recovery') else record.get('validation',{}).get('forecast',float('inf')))
+                    best=float(record.get('validation',{}).get('total',float('inf')) if phase in ('evidence','retrieval') else record.get('validation',{}).get('forecast',float('inf')))
                     best_ep=int(record['epoch']);best_ck=existing
                 print(f'FARE_RESUME phase={phase} start_epoch={start_ep}',flush=True)
             for ep in range(start_ep,epochs+1):
@@ -220,7 +252,7 @@ class FARETrainer:
                 if self.device.type=='cuda':torch.cuda.synchronize(self.device)
                 val_seconds=time.time()-t_val
                 # Stage validation using canonical forecast metrics, rather than auxiliary losses.
-                score=val['forecast'] if phase not in ('retrieval','recovery') or self.cfg['experiment'].get('training_mode')=='no_memory' else val['total']
+                score=val['forecast'] if phase not in ('evidence','retrieval') or self.cfg['experiment'].get('training_mode')=='no_memory' else val['total']
                 resource_rec={'utc_start':started_at,
                               'utc_end':datetime.datetime.now(datetime.timezone.utc).isoformat(),
                               'train_examples':int(train_diag.get('examples_processed',0)),
@@ -277,6 +309,7 @@ class FARETrainer:
                 'phase':phase,'epoch':best_ep,'selection_score':best,
                 'val_MAE':stage_metrics['final']['MAE'],
                 'val_RMSE':stage_metrics['final']['RMSE'],
+                'val_MAPE':stage_metrics['final']['MAPE'],
                 'val_directly_masked_MAE':stage_metrics['final']['directly_masked_MAE'],
                 'val_base_MAE':stage_metrics['base']['MAE'],
                 'val_candidate_MAE':stage_metrics['candidate']['MAE'],
@@ -287,10 +320,11 @@ class FARETrainer:
                 'val_final_harmful_fraction':stage_metrics.get('corrections',{}).get('final_harmful_fraction'),
                 'val_gate_p90':stage_metrics.get('gate_statistics',{}).get('p90'),
                 'val_directly_masked_RMSE':stage_metrics['final'].get('directly_masked_RMSE'),
+                'val_directly_masked_MAPE':stage_metrics['final'].get('directly_masked_MAPE'),
             })
             json_write(self.run_dir/'phase_summary.json',self.phase_history)
             print('FARE_STAGE_DIAG '+json.dumps(self.phase_history[-1],allow_nan=False),flush=True)
-            if phase in ('injection','partial','full') and stage_metrics['final']['MAE']<self.global_best:
+            if phase in ('integration','control') and stage_metrics['final']['MAE']<self.global_best:
                 self.global_best=stage_metrics['final']['MAE'];self._snapshot(self.run_dir/'candidate_best.pt',phase,best_ep,None,stage_metrics['final'])
         if not (self.run_dir/'candidate_best.pt').exists():
             self._snapshot(self.run_dir/'candidate_best.pt',phases[-1],0,None,{'note':'intermediate stages only'})

@@ -56,6 +56,34 @@ class TrainMemory:
         return (source[safe[..., None], time_index, nodes[None, :, None, :]],
                 validity[safe[..., None], time_index, nodes[None, :, None, :]])
 
+    def fetch_target(self, ids, kind='history'):
+        """Node-specific sparse gather: [B,N,K] IDs -> [B,N,K,T]."""
+        if ids.ndim != 3 or ids.shape[1] != self.x.shape[-1]:
+            raise ValueError('Target candidate ids must be [B,N,K]')
+        if kind == 'history':
+            x, valid = self.x, self.valid
+        elif kind == 'future':
+            if self.future is None or self.future_valid is None:
+                raise RuntimeError('Train-only future memory is required')
+            x, valid = self.future, self.future_valid
+        else:
+            raise ValueError(f'Unknown evidence type: {kind}')
+        b,n,k=ids.shape
+        nodes=torch.arange(n,device=ids.device)[None,:,None]
+        ids=ids.clamp(0,len(x)-1)
+        # [M,T,N] -> [M,N,T], avoiding an intermediate full-network candidate.
+        return x.permute(0,2,1)[ids,nodes],valid.permute(0,2,1)[ids,nodes]
+
+    def fetch_target_latent(self,ids,dim):
+        if self.latent is None: raise RuntimeError('Historical STLA latent cache not built')
+        if ids.ndim!=3 or ids.shape[1]!=self.latent.shape[1]:
+            raise ValueError('Latent target candidates must be [B,N,K]')
+        nodes=torch.arange(ids.shape[1],device=ids.device)[None,:,None]
+        z=self.latent[ids.clamp(0,len(self.latent)-1),nodes].float()
+        if z.shape[-1]<dim:
+            return torch.nn.functional.pad(z,(0,dim-z.shape[-1]))
+        return z[...,:dim]
+
     @torch.no_grad()
     def ensure_region_future(self, regions, chunk_size=512):
         """Cache exact valid-only region means of historical futures, once per memory."""

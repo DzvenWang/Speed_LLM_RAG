@@ -53,8 +53,8 @@ def setup(cfg,ckpt_path=None,memory_path=None,device=None,smoke=False):
             device=device,sampling=cfg['memory'].get('sampling','head')
         )
     if memory.x.shape[-1]!=train.num_nodes:raise RuntimeError('Memory / network mismatch')
-    if cfg.get('forecast_utility',{}).get('enabled',False) and cfg['experiment'].get('training_mode')!='no_memory' and memory.future is None:
-        raise RuntimeError('FARE v2 needs historical-future TRAIN memory; rebuild it with v2 build_memory.py')
+    if cfg['experiment'].get('training_mode')!='no_memory' and (memory.future is None or memory.future_valid is None):
+        raise RuntimeError('FARE v2.1 needs valid train-only historical future; rebuild memory')
     if cfg['experiment'].get('training_mode')!='no_memory':
         populate_latents(memory,model,dim=cfg['innovation']['memory_dim'])
     meta={'dataset':cfg['experiment']['dataset'],'target':cfg['experiment']['target'],'mean':float(ck['mean']),'std':float(ck['std']),'backbone_checkpoint':str(checkpoint),'backbone_sha256':sha256(checkpoint),'cache':str(cache),'num_nodes':train.num_nodes}

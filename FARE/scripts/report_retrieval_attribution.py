@@ -1,22 +1,32 @@
 #!/usr/bin/env python3
-"""Readable fixed-checkpoint Retrieval interventions for Validation and Test.
-
-Validation uses the pilot/formal Validation cache (training mask severity, normally s40).
-Test is evaluated separately at each configured SupportBench severity.
-These interventions neither retrain the model nor select a checkpoint.
-"""
+"""Readable fixed-checkpoint Retrieval interventions, canonical MAPE protocol."""
 import argparse
 import json
+import math
 from collections import defaultdict
 from pathlib import Path
 
-MODES=('full','similarity_memory','utility_off','random_memory','no_memory')
+MODES=('full','similarity_memory','utility_off','random_memory',
+       'cross_query_shuffle','weight_shuffle','null_evidence','retrieval_off','no_memory')
+
+
+def _fmt(value, decimals=2):
+    return 'N/A' if value is None or not math.isfinite(float(value)) else f'{float(value):.{decimals}f}'
+
+
+def _macro(rows, metric):
+    values=[r.get(metric) for r in rows]
+    if not values or any(v is None or not math.isfinite(float(v)) for v in values):
+        return None
+    return sum(float(v) for v in values)/len(values)
 
 
 def _gain(full, comparator):
-    baseline=float(comparator['MAE'])
-    if baseline <= 0: return 0.0
-    return 100.0*(baseline-float(full['MAE']))/baseline
+    b=comparator.get('MAE')
+    f=full.get('MAE')
+    if b is None or f is None or not math.isfinite(float(b)) or float(b)<=0 or not math.isfinite(float(f)):
+        return float('nan')
+    return 100.0*(float(b)-float(f))/float(b)
 
 
 def build_report(rows):
@@ -25,51 +35,60 @@ def build_report(rows):
     groups=defaultdict(dict)
     for row in rows:
         split=row['split']
-        severity=row.get('severity','')
-        severity='' if severity is None else str(severity)
+        severity='' if row.get('severity') is None else str(row.get('severity',''))
         key=(split,severity)
         mode=row['mode']
         if mode in groups[key]:
             raise ValueError(f'Duplicate mode for {key}: {mode}')
+        if row.get('mape_protocol') != 'raw_target_percent_exclude_abs_le_1_v1':
+            raise ValueError(f'Ablation metrics were not computed with the shared Base_SupportBench protocol: {key}/{mode}')
         groups[key][mode]=row
-    for key, modes in groups.items():
+    for key,modes in groups.items():
         if 'full' not in modes:
             raise ValueError(f'Missing full Retrieval result for {key}')
-    lines=['# FARE — Retrieval Attribution: Validation and Test','',
-           'All interventions share ONE checkpoint chosen on Validation. '
-           'Positive gain means Full/Real Retrieval has lower MAE than the comparator.','',
-           '**Test is exploratory in Pilot. Do not tune, select checkpoints, or choose a model version using these Test results.**','',
-           'The Validation split is from the training-protocol cache (normally s40). '
-           'The Test split uses separate evaluation caches at s20, s40, s60 and s90.','',
-           '| Split | Severity | Mode | MAE | RMSE | Full advantage (MAE) |',
-           '|---|---|---|---:|---:|---:|']
-    for (split,severity), modes in sorted(groups.items(),key=lambda g:(0 if g[0][0]=='val' else 1,int(g[0][1]) if g[0][1] else -1)):
-        base=modes['full']
+    lines=[
+        '# FARE Retrieval Attribution: Validation and Test','',
+        'All interventions share the same Validation-selected checkpoint. '
+        'A positive gain means Real Retrieval has lower MAE than that comparator.','',
+        '**Test is exploratory: do not select checkpoints using Test results.**','',
+        'Raw-unit MAPE uses the shared Base_SupportBench protocol: |truth| > 1.0; '
+        'MAPE is cell-level micro-aggregated within each severity.','',
+        '| Split | Severity | Mode | MAE | RMSE | MAPE (%) | MAPE count | MAPE coverage | Real advantage (MAE) |',
+        '|---|---|---|---:|---:|---:|---:|---:|---:|',
+    ]
+    for (split,severity),modes in sorted(groups.items(),key=lambda g:(0 if g[0][0]=='val' else 1,int(g[0][1]) if g[0][1] else -1)):
+        real=modes['full']
         for mode in (x for x in MODES if x in modes):
             value=modes[mode]
-            gain=0.0 if mode=='full' else _gain(base,value)
+            gain=0.0 if mode=='full' else _gain(real,value)
             tag='Training-mask validation' if split=='val' else f's{int(severity):02d}'
-            lines.append(f'| {split} | {tag} | {mode} | {float(value["MAE"]):.5f} | '
-                         f'{float(value["RMSE"]):.5f} | {gain:+.2f}% |')
+            lines.append(
+                f'| {split} | {tag} | {mode} | {_fmt(value["MAE"],5)} | '
+                f'{_fmt(value["RMSE"],5)} | {_fmt(value.get("MAPE"))} | '
+                f'{value.get("MAPE_count","N/A")} | {_fmt(value.get("MAPE_coverage"),3)} | '
+                f'{gain:+.2f}% |'
+            )
     tests=sorted((k for k in groups if k[0]=='test'),key=lambda k:int(k[1]))
     if tests:
-        lines += ['', '## Test severity macro-average (unweighted average across evaluated severities)', '',
-                  '| Mode | Avg MAE | Avg RMSE | Full advantage (Avg MAE) |',
-                  '|---|---:|---:|---:|']
+        lines.extend(['','## Test severity macro-average (equal weight across severities)','',
+                      '| Mode | Avg MAE | Avg RMSE | Avg MAPE (%) | Real advantage (Avg MAE) |',
+                      '|---|---:|---:|---:|---:|'])
         modes=set.intersection(*(set(groups[k]) for k in tests))
-        avgs={mode:{metric:sum(float(groups[k][mode][metric]) for k in tests)/len(tests)
-                    for metric in ('MAE','RMSE')} for mode in modes}
+        avgs={mode:{metric:_macro([groups[k][mode] for k in tests],metric)
+                    for metric in ('MAE','RMSE','MAPE')}
+              for mode in modes}
         for mode in (x for x in MODES if x in avgs):
             gain=0.0 if mode=='full' else _gain(avgs['full'],avgs[mode])
-            lines.append(f'| {mode} | {avgs[mode]["MAE"]:.5f} | {avgs[mode]["RMSE"]:.5f} | {gain:+.2f}% |')
-        lines += ['', 'This macro-average is NOT a pooled-observation MAE or RMSE. '
-                  'It weights every evaluated Test severity equally.']
-    lines += ['', '## Interpretation', '',
-              'The Fixed-Checkpoint retrieval interventions can indicate whether query-matched evidence adds value '
-              'to this checkpoint. They do not isolate gains from extra parameters or training capacity. '
-              'Use matched retrained ablations and multiple seeds for paper conclusions.',
-              '', 'Forecast Utility teachers are region-level historical-future proxies, '
-              'not oracle node-wise forecasting utility.']
+            lines.append(
+                f'| {mode} | {_fmt(avgs[mode]["MAE"],5)} | '
+                f'{_fmt(avgs[mode]["RMSE"],5)} | '
+                f'{_fmt(avgs[mode]["MAPE"])} | {gain:+.2f}% |'
+            )
+        lines.extend(['','These are unweighted across-severity averages, not pooled Test metrics.'])
+    lines.extend(['','## Interpretation','',
+                  'Fixed-checkpoint interventions measure the sensitivity of this checkpoint to evidence. '
+                  'A matched retrained No-memory model and multiple seeds are needed for a stronger attribution claim.',
+                  '', 'The Utility Teacher uses a purged later TRAIN time-block; it is not full K-fold OOF.'])
     return '\n'.join(lines)+'\n'
 
 
@@ -86,5 +105,5 @@ def main():
     print('FARE_RETRIEVAL_REPORT '+json.dumps({'report':str(dest),
           'splits':sorted({r['split'] for r in rows}), 'rows':len(rows)}),flush=True)
 
-
-if __name__=='__main__':main()
+if __name__=='__main__':
+    main()

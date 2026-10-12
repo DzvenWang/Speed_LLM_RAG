@@ -82,7 +82,7 @@ def main():
     else:
         memory_path=Path(memory_to_use)
     if args.variant=='no_memory' and args.phases is None:
-        args.phases=['injection','partial','full']
+        args.phases=['integration']
     print('FARE_DIAGNOSTICS_CONFIG '+json.dumps({'run_dir':str(run_dir),
          'interval':diag.get('sample_every_batches',50),
          'max_batches':diag.get('max_sampled_batches',160),
@@ -139,7 +139,7 @@ def main():
         # Same selected checkpoint; separate intervention reports for Val and each Test severity.
         # Test results are exploratory diagnostics only and NEVER drive checkpoint selection.
         if args.auto_ablations:
-            modes=['full','similarity_memory','utility_off','random_memory','no_memory']
+            modes=['full','similarity_memory','utility_off','random_memory','cross_query_shuffle','weight_shuffle','null_evidence','retrieval_off','no_memory']
             ablation_splits=args.ablation_splits or splits
             if not set(ablation_splits).issubset(set(splits)):
                 raise ValueError('Ablation splits must be included in the evaluated splits')

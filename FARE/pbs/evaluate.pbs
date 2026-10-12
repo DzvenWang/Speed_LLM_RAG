@@ -12,14 +12,13 @@ export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${NCPUS:-12}"
 
 # Use either CHECKPOINT=<path> or RUN_DIR=<experiment directory>.
-# CHECKPOINT_KIND=best|candidate|retrieval|recovery|injection|partial|full|controller
-KIND="${CHECKPOINT_KIND:-best}"
+# CHECKPOINT_KIND=candidate|evidence|retrieval|integration|control
+KIND="${CHECKPOINT_KIND:-candidate}"
 if [[ -z "${CHECKPOINT:-}" ]]; then
     : "${RUN_DIR:?Pass CHECKPOINT=/path/to/checkpoint.pt or RUN_DIR=/path/to/run-dir}"
     case "$KIND" in
-        best) CHECKPOINT="$RUN_DIR/best.pt" ;;
         candidate) CHECKPOINT="$RUN_DIR/candidate_best.pt" ;;
-        retrieval|recovery|injection|partial|full|controller) CHECKPOINT="$RUN_DIR/${KIND}_best.pt" ;;
+        evidence|retrieval|integration|control) CHECKPOINT="$RUN_DIR/${KIND}_best.pt" ;;
         *) echo "ERROR: unsupported CHECKPOINT_KIND=$KIND" >&2; exit 2 ;;
     esac
 fi

@@ -93,8 +93,10 @@ def config_from_checkpoint(checkpoint, *, smoke=False):
     """
     if 'config' not in checkpoint:
         raise RuntimeError('FARE checkpoint missing saved configuration')
+    if not str(checkpoint.get('version','')).startswith('2.1.'):
+        raise RuntimeError('FARE v2.1 does not support older model checkpoints')
     cfg=copy.deepcopy(checkpoint['config'])
-    required=('experiment','training','model','backbone','graph','retrieval','memory','innovation','control','loss','evaluation')
+    required=('experiment','training','model','backbone','graph','retrieval','memory','innovation','evaluation')
     missing=[k for k in required if k not in cfg]
     if missing:raise RuntimeError(f'Checkpoint missing FARE configuration fields: {missing}')
     cfg['project_root']=str(project_root())
