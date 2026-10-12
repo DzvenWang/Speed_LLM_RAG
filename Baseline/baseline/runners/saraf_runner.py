@@ -168,15 +168,13 @@ def predict(model, dl, device, mean: float, std: float) -> np.ndarray:
     return pn*np.float32(std)+np.float32(mean)
 
 
-def _save_lifecycle_smoke_checkpoint(payload, retrieval_store=None):
+def _save_lifecycle_smoke_checkpoint(payload):
     out = os.environ.get("BASELINE_LIFECYCLE_CHECKPOINT")
     if not out:
         return None
     path = Path(out)
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(payload, path)
-    if retrieval_store is not None:
-        save_store(path.with_name("retrieval_store_best.npz"), retrieval_store)
     print(f"LIFECYCLE_CHECKPOINT_SAVE_PASS path={path}", flush=True)
     return path
 
