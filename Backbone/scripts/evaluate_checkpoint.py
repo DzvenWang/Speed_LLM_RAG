@@ -226,7 +226,9 @@ def main() -> None:
         )
     log(
         f'CHECKPOINT EVALUATION COMPLETE s{args.severity} seed={seed} '
-        f'MAE={summary["MAE"]:.6f} masked_MAE={summary["directly_masked_MAE"]:.6f} out={out}'
+        f'MAE={summary["MAE"]:.6f} RMSE={summary["RMSE"]:.6f} '
+        f'MAPE={summary["MAPE"]:.4f}% MAPE_count={summary["MAPE_count"]} '
+        f'masked_MAE={summary["directly_masked_MAE"]:.6f} out={out}'
     )
     if not args.quiet_summary:
         from backbone.evaluation_reporting import severity_table_lines, scenario_table_lines

@@ -1,4 +1,4 @@
-# Baseline v1.4.0
+# Baseline v1.4.7
 
 Experiment execution for TraffiDent_Net_06 under incomplete sensing.
 
@@ -79,3 +79,11 @@ Complete reference runs and evaluation outputs are written to separate `/complet
 directories; previous incomplete paths are untouched. See
 [`REFERENCE_BACKBONE_TRAIN_MODES.md`](REFERENCE_BACKBONE_TRAIN_MODES.md) for commands,
 validation rules and output paths.
+
+## v1.4.7 – MAPE evaluation
+
+Evaluation adds micro-aggregated MAPE (%), masked MAPE, H3/H6/H12 MAPE, and
+eligible target counts/coverage, using the same Base_SupportBench definition as
+Backbone. Best checkpoint still uses validation MAE. Requires the updated
+Base_SupportBench evaluator; existing checkpoints can be re-evaluated.
+See `Base_SupportBench/MAPE_EVALUATION_PROTOCOL.md`.

@@ -95,8 +95,8 @@ def _train_once(cfg, cache_dir, run_dir, vendor_root, benchmark_adj, benchmark_n
             if bi%print_every==0: log(f'epoch={epoch:03d} batch={bi:05d}/{len(train_loader):05d} train_loss={np.mean(losses[-print_every:]):.6f}')
         if scheduler is not None and epoch % max(1,int(mc.get('scheduler_step_interval',1))) == 0: scheduler.step()
         _,_,vs=evaluate(adapter,val_loader,val.meta,device); v=float(vs['MAE'])
-        rec={'epoch':epoch,'train_loss':float(np.mean(losses)),'val_MAE':v,'val_masked_MAE':float(vs['directly_masked_MAE']),'lr':float(optimizer.param_groups[0]['lr']),'seconds':float(time.time()-e0)}; history.append(rec)
-        log(f'epoch={epoch:03d} train_loss={rec["train_loss"]:.6f} val_MAE={v:.6f} val_masked_MAE={rec["val_masked_MAE"]:.6f} lr={rec["lr"]:.3e} time={rec["seconds"]:.1f}s')
+        rec={'epoch':epoch,'train_loss':float(np.mean(losses)),'val_MAE':v,'val_masked_MAE':float(vs['directly_masked_MAE']),'val_MAPE':float(vs['MAPE']),'val_masked_MAPE':float(vs['directly_masked_MAPE']),'lr':float(optimizer.param_groups[0]['lr']),'seconds':float(time.time()-e0)}; history.append(rec)
+        log(f'epoch={epoch:03d} train_loss={rec["train_loss"]:.6f} val_MAE={v:.6f} val_masked_MAE={rec["val_masked_MAE"]:.6f} val_MAPE={rec["val_MAPE"]:.4f}% lr={rec["lr"]:.3e} time={rec["seconds"]:.1f}s')
         if v < best-1e-8:
             best=v; best_epoch=epoch; wait=0
             torch.save({'project_version':cfg['version'],'run_identity':run_identity,'stage':stage,'model':'PatchSTG','target':str(cfg['experiment'].get('target')),'train_data_mode':train_data_mode,'state_dict':model.state_dict(),'model_config':mc,'num_nodes':train.x.shape[2],'mean':mean,'std':std,'seed':seed,'batch_size':batch_size,'vendor':vendor,'adapter_revision':adapter.adapter_revision,'adapter_metadata':adapter.adapter_metadata,'spatial_layout':adapter.spatial_layout,'best_val_MAE':best,'best_epoch':best_epoch},run_dir/'best.pt')
@@ -109,7 +109,7 @@ def _train_once(cfg, cache_dir, run_dir, vendor_root, benchmark_adj, benchmark_n
     vdf.to_csv(run_dir/'val_metrics.csv',index=False)
     summary={'project_version':cfg['version'],'run_identity':run_identity,'stage':stage,'model':'PatchSTG','target':str(cfg['experiment'].get('target')),'train_data_mode':train_data_mode,'seed':seed,'parameters':params,'batch_size':batch_size,'best_epoch':best_epoch,'best_val_MAE':best,'train_seconds_total':float(time.time()-total_start),'vendor':vendor,'adapter_revision':adapter.adapter_revision,'adapter_metadata':adapter.adapter_metadata,'recipe_source':mc.get('recipe_source'),'validation':vs,'metrics_revision':METRICS_REVISION,'test_evaluated':False}
     write_json(run_dir/'summary.json',summary); write_json(run_dir/'RUN_MANIFEST.json',{**run_identity,'code_project_version':str(cfg['version']),'model':'PatchSTG','seed':int(seed),'status':'FINISHED','train_data_mode':train_data_mode,'best_epoch':int(best_epoch),'best_val_MAE':float(best)})
-    log(f'FINISHED stage={stage} PatchSTG seed={seed}: val_MAE={vs["MAE"]:.6f} val_masked_MAE={vs["directly_masked_MAE"]:.6f}; TEST NOT EVALUATED')
+    log(f'FINISHED stage={stage} PatchSTG seed={seed}: val_MAE={vs["MAE"]:.6f} val_masked_MAE={vs["directly_masked_MAE"]:.6f} val_MAPE={vs["MAPE"]:.4f}%; TEST NOT EVALUATED')
     return summary
 
 

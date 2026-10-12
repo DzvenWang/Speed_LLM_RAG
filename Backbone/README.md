@@ -1,4 +1,4 @@
-# Backbone v1.3.0
+# Backbone v1.3.1
 
 Backbone training/evaluation project for TraffiDent incomplete-sensing experiments.
 
@@ -56,3 +56,11 @@ The same pointer files can therefore be copied between Windows and Gadi. Legacy 
 Formal training now supports `--train-data-mode incomplete` (**default; fully backward compatible**) and `--train-data-mode complete` (use unmasked historical input with raw-invalid positions still filled safely). Both modes use the same frozen Formal rows, labels, seed, and model recipe. The validation input matches the train-input mode, and both are automatically evaluated with the **existing incomplete-sensing s20/s40/s60/s90 test caches**. The new checkpoint directory is `formal_complete` and its own `LATEST_CHECKPOINT.txt`, leaving old `formal` results and Baseline dependencies intact.
 
 See [DUAL_TRAINING_MODES.md](DUAL_TRAINING_MODES.md) for Windows/Gadi commands, exact definitions, checkpoint outputs, and tests.
+
+## v1.3.1 – MAPE evaluation
+
+The canonical evaluator in Base_SupportBench now additionally reports MAPE (%),
+masked MAPE, per-horizon MAPE and eligible target counts, while preserving MAE/
+RMSE and validation-by-MAE. Requires the companion updated Base_SupportBench.
+See `Base_SupportBench/MAPE_EVALUATION_PROTOCOL.md`. Existing checkpoints can
+be re-evaluated without retraining.

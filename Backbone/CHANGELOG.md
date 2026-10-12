@@ -18,3 +18,11 @@
 - After successful evaluation, each model publishes `LATEST_RUN.txt` and `LATEST_CHECKPOINT.txt` under its own Formal directory.
 - Downstream projects select the Backbone model explicitly; the pointers are convenience discovery only, not global model selection.
 - No model architecture, training recipe, dataset split, Protocol, cache, or metric definition is changed.
+
+## v1.3.1 (MAPE evaluation)
+
+- Add shared raw-target MAPE (%) to per-query metrics, family/severity summaries,
+  horizon-specific reporting and live evaluation tables.
+- Carry `MAPE_count` and `MAPE_coverage` to report eligibility.
+- Preserve `traffident_metrics_v2` run identity and all previous MAE/RMSE values.
+- No cache rebuild or model retraining required; run Evaluate to update CSV/JSON.

@@ -1,13 +1,36 @@
 from __future__ import annotations
+"""Shared raw-target MAE / RMSE / MAPE evaluators.
+
+MAPE is in percent (not a fraction).  Samples with |ground truth| <= 1.0
+in the native target unit are excluded from *MAPE only*, because percentage
+error is undefined for zero and unstable for near-zero flow/speed values.
+MAE/RMSE retain exactly their former masks and denominators.
+Counts/coverage are reported to make the exclusion transparent.
+"""
 import numpy as np
 from .constants import METRICS_REVISION
 
+MAPE_MIN_TARGET_ABS = 1.0
+MAPE_PROTOCOL = 'raw_target_percent_exclude_abs_le_1_v1'
+
+
+def _selection(pred, y, mask):
+    pred = np.asarray(pred, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    m = np.asarray(mask, dtype=bool) & np.isfinite(pred) & np.isfinite(y)
+    return pred[m], y[m]
+
 
 def _metric(pred, y, mask, kind='mae'):
-    m = np.asarray(mask, bool) & np.isfinite(pred) & np.isfinite(y)
-    if not np.any(m):
-        return np.nan
-    e = np.asarray(pred, np.float64)[m] - np.asarray(y, np.float64)[m]
+    p, t = _selection(pred, y, mask)
+    if kind == 'mape':
+        eligible = np.abs(t) > MAPE_MIN_TARGET_ABS
+        if not np.any(eligible):
+            return float('nan')
+        return float(100.0 * np.mean(np.abs(p[eligible] - t[eligible]) / np.abs(t[eligible])))
+    if p.size == 0:
+        return float('nan')
+    e = p - t
     if kind == 'mae':
         return float(np.mean(np.abs(e)))
     if kind == 'rmse':
@@ -27,64 +50,72 @@ def _masked_values(pred, true, valid, node_mask=None):
 
 
 def mae_rmse(pred, true, valid, node_mask=None):
+    """Backwards-compatible API; appends MAPE/count/coverage fields."""
     p, y = _masked_values(pred, true, valid, node_mask)
-    if p.size == 0:
-        return {'MAE': float('nan'), 'RMSE': float('nan'), 'count': 0}
+    n = int(p.size)
+    keep = np.abs(y) > MAPE_MIN_TARGET_ABS
+    mc = int(np.count_nonzero(keep))
+    mape = float(100.0 * np.mean(np.abs(p[keep] - y[keep]) / np.abs(y[keep]))) if mc else float('nan')
+    if not n:
+        return {'MAE': float('nan'), 'RMSE': float('nan'), 'MAPE': mape,
+                'count': 0, 'MAPE_count': 0, 'MAPE_coverage': float('nan')}
     e = p - y
-    return {'MAE': float(np.mean(np.abs(e))), 'RMSE': float(np.sqrt(np.mean(e * e))), 'count': int(p.size)}
+    return {'MAE': float(np.mean(np.abs(e))), 'RMSE': float(np.sqrt(np.mean(e * e))),
+            'MAPE': mape, 'count': n, 'MAPE_count': mc, 'MAPE_coverage': float(mc / n)}
 
 
 def metric_bundle(pred, true, valid, direct_mask):
-    """Canonical aggregate metrics used by Baseline/OwnModel evaluation."""
-    out = {'metrics_revision': METRICS_REVISION}
+    """Canonical, micro-aggregated scores for Baseline and Backbone."""
+    out = {'metrics_revision': METRICS_REVISION, 'mape_protocol': MAPE_PROTOCOL,
+           'mape_min_target_abs': MAPE_MIN_TARGET_ABS}
     scopes = [('overall', None), ('masked', direct_mask)]
     for name, nm in scopes:
         d = mae_rmse(pred, true, valid, nm)
-        out[f'{name}_MAE'] = d['MAE']; out[f'{name}_RMSE'] = d['RMSE']; out[f'{name}_count'] = d['count']
+        for key in ('MAE', 'RMSE', 'MAPE', 'count', 'MAPE_count', 'MAPE_coverage'):
+            out[f'{name}_{key}'] = d[key]
     for h in (3, 6, 12):
         hh = min(h, pred.shape[1]); sl = slice(hh - 1, hh)
         for name, nm in scopes:
             d = mae_rmse(pred[:, sl], true[:, sl], valid[:, sl], nm)
-            out[f'H{h}_{name}_MAE'] = d['MAE']; out[f'H{h}_{name}_RMSE'] = d['RMSE']; out[f'H{h}_{name}_count'] = d['count']
-        out[f'H{h}_MAE'] = out[f'H{h}_overall_MAE']
-        out[f'H{h}_RMSE'] = out[f'H{h}_overall_RMSE']
+            for key in ('MAE', 'RMSE', 'MAPE', 'count', 'MAPE_count', 'MAPE_coverage'):
+                out[f'H{h}_{name}_{key}'] = d[key]
+        for key in ('MAE', 'RMSE', 'MAPE'):
+            out[f'H{h}_{key}'] = out[f'H{h}_overall_{key}']
     return out
 
 
 def per_query_metrics(pred, y, valid, direct):
-    """Canonical per-query metrics used by Backbone training/selection."""
+    """Per-query diagnostics; do not average these rows for headline MAPE."""
     rows = []
     for i in range(len(pred)):
         v = np.asarray(valid[i], bool)
         d = v & np.asarray(direct[i], bool)[None, :]
-        r = {
-            'MAE': _metric(pred[i], y[i], v, 'mae'),
-            'RMSE': _metric(pred[i], y[i], v, 'rmse'),
-            'directly_masked_MAE': _metric(pred[i], y[i], d, 'mae'),
-            'directly_masked_RMSE': _metric(pred[i], y[i], d, 'rmse'),
-        }
+        r = {}
+        for prefix, mask in [('', v), ('directly_masked_', d)]:
+            result = mae_rmse(pred[i], y[i], mask)
+            for key in ('MAE', 'RMSE', 'MAPE', 'MAPE_count', 'MAPE_coverage'):
+                r[f'{prefix}{key}'] = result[key]
         for h in (3, 6, 12):
             if h <= pred.shape[1]:
                 sl = slice(h - 1, h)
-                r[f'H{h}_MAE'] = _metric(pred[i, sl], y[i, sl], v[sl], 'mae')
-                r[f'H{h}_RMSE'] = _metric(pred[i, sl], y[i, sl], v[sl], 'rmse')
+                result = mae_rmse(pred[i, sl], y[i, sl], v[sl])
+                for key in ('MAE', 'RMSE', 'MAPE', 'MAPE_count'):
+                    r[f'H{h}_{key}'] = result[key]
         rows.append(r)
     return rows
 
 
 def backbone_metric_summary(pred, true, valid, direct_mask):
-    """Canonical micro-aggregated metrics using Backbone's historical key names.
-
-    This is the comparison-safe aggregate used by Backbone selection, Baseline,
-    and future OwnModel experiments. `per_query_metrics` remains available only
-    for diagnostic CSV rows.
-    """
+    """Micro-aggregate with historical Backbone keys plus additive MAPE keys."""
     b = metric_bundle(pred, true, valid, direct_mask)
-    out = {
-        'MAE': b['overall_MAE'], 'RMSE': b['overall_RMSE'],
-        'directly_masked_MAE': b['masked_MAE'], 'directly_masked_RMSE': b['masked_RMSE'],
-    }
+    out = {}
+    for key in ('MAE', 'RMSE', 'MAPE'):
+        out[key] = b[f'overall_{key}']
+        out[f'directly_masked_{key}'] = b[f'masked_{key}']
+    for key in ('count', 'MAPE_count', 'MAPE_coverage'):
+        out[key] = b[f'overall_{key}']
+        out[f'directly_masked_{key}'] = b[f'masked_{key}']
     for h in (3, 6, 12):
-        out[f'H{h}_MAE'] = b[f'H{h}_overall_MAE']
-        out[f'H{h}_RMSE'] = b[f'H{h}_overall_RMSE']
+        for key in ('MAE', 'RMSE', 'MAPE', 'MAPE_count'):
+            out[f'H{h}_{key}'] = b[f'H{h}_overall_{key}']
     return out

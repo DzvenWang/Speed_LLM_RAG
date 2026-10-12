@@ -12,6 +12,11 @@ import pandas as pd
 METRIC_SPECS = [
     ('MAE', 'MAE'),
     ('RMSE', 'RMSE'),
+    ('MAPE', 'MAPE'),
+    ('MAPE_count', 'MAPE_count'),
+    ('MAPE_coverage', 'MAPE_coverage'),
+    ('Masked_MAPE', 'directly_masked_MAPE'),
+    ('H12_MAPE', 'H12_MAPE'),
     ('Masked_MAE', 'directly_masked_MAE'),
     ('H12_MAE', 'H12_MAE'),
 ]
@@ -81,8 +86,11 @@ def _format_table(rows: Sequence[Mapping], columns: Sequence[tuple[str, str, str
             value = row.get(key, '')
             if key == 'severity':
                 vals.append(f's{int(value)}')
-            elif key in {'seed', 'queries'}:
-                vals.append(str(int(value)) if value not in ('', None) else '-')
+            elif key in {'seed', 'queries', 'MAPE_count'}:
+                try:
+                    vals.append(str(int(value)) if math.isfinite(float(value)) else '-')
+                except (TypeError, ValueError, OverflowError):
+                    vals.append('-')
             elif key in {x[0] for x in METRIC_SPECS}:
                 vals.append(_fmt_value(value))
             else:
@@ -108,6 +116,11 @@ def severity_table_lines(rows: Sequence[Mapping], include_seed: bool = False) ->
     columns += [
         ('MAE', 'MAE', '>'),
         ('RMSE', 'RMSE', '>'),
+        ('MAPE', 'MAPE', '>'),
+        ('MAPE_count', 'MAPE_count', '>'),
+        ('MAPE_coverage', 'MAPE_coverage', '>'),
+        ('Masked_MAPE', 'Masked_MAPE', '>'),
+        ('H12_MAPE', 'H12_MAPE', '>'),
         ('Masked_MAE', 'Masked_MAE', '>'),
         ('H12_MAE', 'H12_MAE', '>'),
     ]
@@ -123,6 +136,11 @@ def scenario_table_lines(rows: Sequence[Mapping], include_seed: bool = False) ->
         ('queries', 'Queries', '>'),
         ('MAE', 'MAE', '>'),
         ('RMSE', 'RMSE', '>'),
+        ('MAPE', 'MAPE', '>'),
+        ('MAPE_count', 'MAPE_count', '>'),
+        ('MAPE_coverage', 'MAPE_coverage', '>'),
+        ('Masked_MAPE', 'Masked_MAPE', '>'),
+        ('H12_MAPE', 'H12_MAPE', '>'),
         ('Masked_MAE', 'Masked_MAE', '>'),
         ('H12_MAE', 'H12_MAE', '>'),
     ]

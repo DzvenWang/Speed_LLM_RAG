@@ -1,4 +1,4 @@
-version: 1.4.5
+version: 1.4.7
 compatible_formal_versions:
 - 1.4.0
 - 1.4.1
@@ -6,6 +6,8 @@ compatible_formal_versions:
 - 1.4.3
 - 1.4.4
 - 1.4.5
+- 1.4.6
+- 1.4.7
 project:
   root: ${SPEED_LLM_RAG_ROOT}
   baseline_root: ${SPEED_LLM_RAG_ROOT}/Baseline

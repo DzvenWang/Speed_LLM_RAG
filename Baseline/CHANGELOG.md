@@ -1,9 +1,3 @@
-## v1.4.6 — Remove orphaned lifecycle `save_store` calls
-- Removed undefined and unreachable `save_store(...)` fallback from ReMFT, GinAR, RAFT, and SARAF lifecycle smoke checkpoint helpers.
-- Each of these helpers receives only a checkpoint payload; checkpoint saving via `torch.save` is unchanged, and their train/evaluate pipelines are untouched.
-- RAST retains its genuine `save_store` implementation and persistent retrieval store snapshot behavior.
-- Added CPU-only lifecycle helper tests verifying saving with/without the lifecycle environment variable and regression-checking RAST's store support.
-
 # Baseline v1.4.4 — matched-backbone safe residual consistency
 
 - Native `RAFT` and native `RAST` are unchanged and remain source-faithful primary baselines.
@@ -42,4 +36,13 @@
 - Persist `reference_backbone_train_mode` with reference checkpoint provenance and keep old Formal results compatible.
 - Added seven CPU-only regression tests; see `REFERENCE_BACKBONE_TRAIN_MODES.md`.
 
+## v1.4.7 (MAPE evaluation + ReMFT lifecycle smoke helper fix)
 
+- Uses the shared Base_SupportBench evaluator to output MAPE (%) for `overall`,
+  `masked`, H3/H6/H12 and the five sensing-failure families.
+- Includes `MAPE_count` and `MAPE_coverage` in severity/scenario summaries to
+  disclose denominator exclusions for near-zero true targets.
+- Retains historical run identity/metric revision, pretrained reference
+  Backbone selection mode, MAE-based checkpoint selection and live logs.
+- Carries forward v1.4.6's cleanup of invalid `save_store()` calls in ReMFT,
+  GinAR, RAFT, and SARAF lifecycle-smoke helpers; RAST store persistence is kept.

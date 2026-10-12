@@ -29,3 +29,9 @@ This project is the only preprocessing layer required by Backbone and Baseline.
 Set `SPEED_LLM_RAG_ROOT` to the repository root (optional when the standard sibling layout is used), then choose `--target speed` or `--target flow`.
 The canonical channel mapping is flow=0, occupancy=1, speed=2. Speed and Flow use separate benchmark, protocol, cache and log namespaces. The five general sensing families and 20/40/60/90 severity generation retain the original SupportBench sensing contract. Training/validation is selected at 40%; evaluation is paired across 20/40/60/90.
 Generated resolved YAML files persist `${SPEED_LLM_RAG_ROOT}` tokens rather than machine-specific absolute paths, so artifacts can move between Windows and Gadi.
+
+## MAPE (additive evaluator support)
+
+The shared `experiment_common.metrics` now reports MAPE (%) with zero/near-zero
+handling and explicit eligible-cell counts. This does not require a dataset
+rebuild or modify cache/checkpoint identity. See `MAPE_EVALUATION_PROTOCOL.md`.

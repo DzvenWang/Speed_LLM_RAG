@@ -63,9 +63,11 @@ def main():
         print(f'SCENARIO_COVERAGE_PASS s{sev} families={got}',flush=True)
         allr=df.loc[df.family.astype(str)=='ALL'].iloc[0]
         severity_rows.append({
-            'Severity':f's{sev}','MAE':allr['overall_MAE'],'RMSE':allr['overall_RMSE'],
-            'Masked_MAE':allr['masked_MAE'],'Masked_RMSE':allr['masked_RMSE'],
+            'Severity':f's{sev}','MAE':allr['overall_MAE'],'RMSE':allr['overall_RMSE'],'MAPE':allr['overall_MAPE'],
+            'MAPE_count':allr['overall_MAPE_count'],'MAPE_coverage':allr['overall_MAPE_coverage'],
+            'Masked_MAE':allr['masked_MAE'],'Masked_RMSE':allr['masked_RMSE'],'Masked_MAPE':allr['masked_MAPE'],
             'H3_MAE':allr['H3_overall_MAE'],'H6_MAE':allr['H6_overall_MAE'],'H12_MAE':allr['H12_overall_MAE'],
+            'H3_MAPE':allr['H3_overall_MAPE'],'H6_MAPE':allr['H6_overall_MAPE'],'H12_MAPE':allr['H12_overall_MAPE'],
         })
         cache=cache_path(cfg,'evaluation',sev)
         meta=pd.read_csv(cache/'test_manifest.csv')
@@ -74,8 +76,10 @@ def main():
             r=df.loc[df.family.astype(str)==family].iloc[0]
             scenario_rows.append({
                 'Severity':f's{sev}','Scenario':family,'Queries':int(counts.get(family,0)),
-                'MAE':r['overall_MAE'],'RMSE':r['overall_RMSE'],'Masked_MAE':r['masked_MAE'],'Masked_RMSE':r['masked_RMSE'],
+                'MAE':r['overall_MAE'],'RMSE':r['overall_RMSE'],'MAPE':r['overall_MAPE'],
+                'MAPE_count':r['overall_MAPE_count'],'MAPE_coverage':r['overall_MAPE_coverage'],'Masked_MAE':r['masked_MAE'],'Masked_RMSE':r['masked_RMSE'],'Masked_MAPE':r['masked_MAPE'],
                 'H3_MAE':r['H3_overall_MAE'],'H6_MAE':r['H6_overall_MAE'],'H12_MAE':r['H12_overall_MAE'],
+                'H3_MAPE':r['H3_overall_MAPE'],'H6_MAPE':r['H6_overall_MAPE'],'H12_MAPE':r['H12_overall_MAPE'],
             })
         print(f'========== EVALUATION s{sev} PASS ==========',flush=True)
     base=exp/'evaluation'/a.method
@@ -99,7 +103,7 @@ def main():
     print('Scenario = Core-5 missing-sensing family; metrics are micro-aggregated within that scenario.')
     print('='*148)
     show=scdf.copy()
-    for c in ['MAE','RMSE','Masked_MAE','Masked_RMSE','H3_MAE','H6_MAE','H12_MAE']:
+    for c in ['MAE','RMSE','MAPE','MAPE_coverage','Masked_MAE','Masked_RMSE','Masked_MAPE','H3_MAE','H6_MAE','H12_MAE','H3_MAPE','H6_MAPE','H12_MAPE']:
         show[c]=show[c].map(fmt)
     print(show.to_string(index=False))
     print(f'\nSEVERITY_SUMMARY_CSV={out / "severity_summary.csv"}')
