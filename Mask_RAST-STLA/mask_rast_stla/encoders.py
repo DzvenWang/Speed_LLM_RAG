@@ -65,8 +65,8 @@ class StateEncoder(nn.Module):
         wt=cov.clamp_min(0.05)
         t_global=(tn*wt[...,None]).sum(1)/wt.sum(1).clamp_min(1e-5)[...,None]
         s_global=(spatial*wt[...,None]).sum(1)/wt.sum(1).clamp_min(1e-5)[...,None]
-        tk=torch.nn.functional.normalize(self.temporal_key(t_global),dim=-1)
-        sk=torch.nn.functional.normalize(self.spatial_key(s_global),dim=-1)
+        tk=torch.nn.functional.normalize(self.temporal_key(t_global),dim=-1,eps=1e-6)
+        sk=torch.nn.functional.normalize(self.spatial_key(s_global),dim=-1,eps=1e-6)
         # Region queries are computed from the SAME node encoder for query and
         # memory. Fully masked nodes still carry observed-neighbour features;
         # their direct contribution is downweighted, not treated as observed.
@@ -82,7 +82,7 @@ class StateEncoder(nn.Module):
         regsum.index_add_(1,rid,nq.float()*regweight)
         den=torch.zeros((B,regions,1),device=nq.device,dtype=torch.float32)
         den.index_add_(1,rid,regweight)
-        rk=torch.nn.functional.normalize(self.region_proj(regsum/den.clamp_min(1e-6)),dim=-1)
+        rk=torch.nn.functional.normalize(self.region_proj(regsum/den.clamp_min(1e-6)),dim=-1,eps=1e-6)
         internal=torch.zeros((B,regions,1),device=nq.device,dtype=torch.float32)
         boundary=torch.zeros_like(internal)
         total=torch.zeros_like(internal)

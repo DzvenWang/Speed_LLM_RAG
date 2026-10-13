@@ -1,0 +1,40 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12,ngpus=1,mem=32GB,walltime=24:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -N FARE212_oracle
+set -euo pipefail
+cd "${SPEED_LLM_RAG_ROOT:-$PBS_O_WORKDIR}"
+source FARE/pbs/_activate_tfp.sh
+export PYTHONUNBUFFERED=1
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-3}"
+TARGET="${TARGET:-speed}"
+DATASET="${DATASET:-TraffiDent_Net_06}"
+SEED="${SEED:-10}"
+MAX_QUERIES="${MAX_QUERIES:-12}"
+MAX_REGIONS="${MAX_REGIONS:-2}"
+MAX_CANDIDATES="${MAX_CANDIDATES:-64}"
+SPLIT="${SPLIT:-both}"
+SEVERITIES="${SEVERITIES:-20:40:60:90}"
+if [[ -z "${FARE_CHECKPOINT:-}" ]]; then
+  echo 'ERROR: set FARE_CHECKPOINT=/absolute/path/to/candidate_best.pt' >&2
+  exit 2
+fi
+mkdir -p "FARE_logs/${TARGET}/${DATASET}"
+STAMP=$(date '+%Y%m%d_%H%M%S')
+LOG="FARE_logs/${TARGET}/${DATASET}/FARE_ORACLE.${TARGET}.${PBS_JOBID:-manual}.${STAMP}.live.log"
+cmd=(python -u FARE/scripts/run_oracle_audit.py --checkpoint "$FARE_CHECKPOINT"
+     --split "$SPLIT" --seed "$SEED" --expect-target "$TARGET" --expect-dataset "$DATASET" --max-queries "$MAX_QUERIES"
+     --max-regions "$MAX_REGIONS" --max-candidates "$MAX_CANDIDATES")
+IFS=':' read -r -a severity_array <<< "$SEVERITIES"
+cmd+=(--severities "${severity_array[@]}")
+if [[ -n "${FARE_MEMORY:-}" ]]; then cmd+=(--memory "$FARE_MEMORY"); fi
+if [[ -n "${FARE_ORACLE_OUTPUT:-}" ]]; then cmd+=(--output "$FARE_ORACLE_OUTPUT"); fi
+if [[ "${FARE_ORACLE_RESUME:-0}" == '1' ]]; then cmd+=(--resume); fi
+if [[ "${FARE_ORACLE_SMOKE:-0}" == '1' ]]; then cmd+=(--smoke); fi
+printf 'FARE212_START target=%s checkpoint=%s split=%s queries=%s regions=%s candidates=%s\n' \
+ "$TARGET" "$FARE_CHECKPOINT" "$SPLIT" "$MAX_QUERIES" "$MAX_REGIONS" "$MAX_CANDIDATES" | tee -a "$LOG"
+"${cmd[@]}" 2>&1 | tee -a "$LOG"
+echo 'FARE212_AUDIT_PBS_PASS' | tee -a "$LOG"

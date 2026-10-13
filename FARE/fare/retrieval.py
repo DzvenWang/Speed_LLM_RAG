@@ -118,6 +118,55 @@ class HierarchicalForecastRetriever(nn.Module):
         end=memory.starts[None,:]+self.overlap
         return ((window_start[:,None]-memory.starts[None,:]).abs()>=self.overlap) & (end<=query_issue)
 
+    @torch.no_grad()
+    def encode_audit_candidate(self, inputs, base, memory, regions, pool,
+                               region_id, coarse_rank):
+        """Replay a region coarse candidate through the real evidence adapter.
+
+        Returns singleton node evidence and the trained utility/risk estimates;
+        no true query future is provided to this method.
+        """
+        if inputs['x_obs'].shape[0] != 1:
+            raise ValueError('Audit candidate encoder expects batch_size=1')
+        if not 0 <= region_id < regions.g:
+            raise IndexError('Invalid target region')
+        if not 0 <= coarse_rank < pool['coarse_ids'].shape[-1]:
+            raise IndexError('Invalid coarse candidate rank')
+        target_nodes=torch.where(regions.owner == region_id)[0]
+        cid=pool['coarse_ids'][0,region_id,coarse_rank]
+        candidates=cid.reshape(1,1,1).expand(1,len(target_nodes),1)
+        node_q=pool['node_query'].index_select(1,target_nodes).unsqueeze(2)
+        evidence=self.adapter(memory,candidates,inputs,base['prediction'],node_q,
+                              self.latent_dim,node_ids=target_nodes)
+        # Reproduce the fast and utility heads to report candidate-specific
+        # predicted scores. These values are not used to choose the oracle.
+        query=node_q
+        latent=memory.fetch_target_latent(candidates,self.latent_dim,node_ids=target_nodes)
+        projected=F.normalize(self.memory_latent_projection(latent),dim=-1)
+        coarse=pool['coarse_scores'][0,region_id,coarse_rank].expand(1,len(target_nodes),1)
+        align=(query*projected).sum(-1)
+        last=memory.x[cid,-1,target_nodes][None,:,None]
+        last_valid=memory.valid[cid,-1,target_nodes][None,:,None]
+        recent=inputs['x_obs'][:,-1,:].index_select(-1,target_nodes)[:,:,None]
+        current_valid=inputs['obs_mask'][:,-1,:].index_select(-1,target_nodes)[:,:,None]
+        observed_delta=(last-recent).abs()*current_valid.float()*last_valid.float()
+        cov=memory.valid[cid].index_select(1,target_nodes).float().mean(0)[None,:,None]
+        fast_features=torch.cat([query,latent,coarse[...,None],align[...,None],
+                                 observed_delta[...,None],cov[...,None]],-1)
+        fast=self.fast(fast_features).squeeze(-1)+.2*coarse+.2*align-.1*observed_delta
+        coverage=inputs['obs_mask'].float().index_select(-1,target_nodes).mean(1)[:,:,None,None]
+        utility_features=torch.cat([evidence['token'],query,fast[...,None],
+                evidence['reliability'][...,None],coverage,
+                evidence['forecast_delta'].abs().mean(-1,keepdim=True)],-1)
+        util=self.utility(utility_features)
+        predicted_gain=util[...,0]
+        predicted_risk=F.softplus(util[...,1])
+        return dict(ids=candidates,node_ids=target_nodes,evidence=evidence,
+                    utility=predicted_gain,risk=predicted_risk,
+                    fast=fast,ranking=fast+.75*predicted_gain-.15*predicted_risk,
+                    effective=evidence['future_valid'].any(-1),
+                    coarse_id=int(cid.item()))
+
     def forward(self,inputs,base,ctx,regions,memory,mode='full'):
         if memory.keys is None:raise RuntimeError('Refresh historical memory keys before retrieval')
         b,h,n=inputs['x_obs'].shape

@@ -143,32 +143,90 @@ def compute_alignment(model,b,repo,device,temperature=.1,out=None):
         loss=loss+F.cross_entropy(logits,torch.arange(len(rows),device=device))
     return loss/2.
 
+def _query_encoder_diagnostics(model, batch):
+    """On-demand diagnostics; never silently replace non-finite evidence."""
+    with torch.no_grad():
+        faulty=[]
+        for name, tensor in model.query_encoder.named_parameters():
+            if not bool(torch.isfinite(tensor).all().item()):
+                faulty.append(name)
+        input_bad={name:int((~torch.isfinite(batch[name])).sum().item())
+                   for name in ('x', 'mask') if name in batch}
+        # Run the same query once with lightweight stage hooks ONLY after a
+        # failure, so normal training has no extra GPU synchronizations.
+        bad_modules=[]
+        handles=[]
+        def record(name):
+            def hook(module, inputs, outputs):
+                if torch.is_tensor(outputs) and not bool(torch.isfinite(outputs).all().item()):
+                    bad_modules.append(name)
+            return hook
+        for name, module in model.query_encoder.named_modules():
+            if isinstance(module, nn.Linear):
+                handles.append(module.register_forward_hook(record(name)))
+        try:
+            x=batch['x'].float()
+            with torch.autocast(device_type=x.device.type,enabled=False):
+                model.query_encoder(x,batch['mask'].float(),batch['tod'].long(),batch['dow'].long())
+        except Exception as exc:
+            bad_modules.append('diagnostic_forward_exception:'+str(exc)[:120])
+        finally:
+            for handle in handles:handle.remove()
+        return {"nonfinite_parameters":faulty[:16],"first_nonfinite_linear_layers":bad_modules[:8],
+                "nonfinite_inputs":input_bad}
+
+
 def run_epoch(model,loader,index,repo,device,mean,std,cfg,mode,opt=None,ep=1,scaler=None):
     training=opt is not None;model.train(training);model.stla.base.eval();cum={};size=0
+    skipped_updates=0
     with torch.enable_grad() if training else torch.no_grad():
         for step,bb in enumerate(loader,1):
             b=move(bb,device)
             if training:opt.zero_grad(set_to_none=True)
-            with torch.autocast(device_type=device.type,dtype=torch.float16,enabled=bool(cfg['runtime'].get('amp',False)) and device.type=='cuda'):
-                out=model(b,index,repo,mode=mode)
-                align=(compute_alignment(model,b,repo,device,float(cfg['training'].get('alignment_temperature',.1)),out=out)
-                       if training and mode=='full' and float(cfg['training'].get('alignment_weight',0))>0 else None)
-                loss,parts=losses(out,b,mean,std,cfg,mode,align)
+            try:
+                with torch.autocast(device_type=device.type,dtype=torch.float16,enabled=bool(cfg['runtime'].get('amp',False)) and device.type=='cuda'):
+                    out=model(b,index,repo,mode=mode)
+                    align=(compute_alignment(model,b,repo,device,float(cfg['training'].get('alignment_temperature',.1)),out=out)
+                           if training and mode=='full' and float(cfg['training'].get('alignment_weight',0))>0 else None)
+                    loss,parts=losses(out,b,mean,std,cfg,mode,align)
+            except RuntimeError as exc:
+                if 'Non-finite' in str(exc) or 'non-finite' in str(exc):
+                    print(f'QUERY_FAILURE_DIAGNOSTICS epoch={ep} batch={step} '
+                          f'{_query_encoder_diagnostics(model,b)}',flush=True)
+                raise
             if not bool(torch.isfinite(loss).item()):
                 raise RuntimeError(f'Non-finite training loss at epoch={ep} batch={step} '
                                    f'mode={mode}; inspect encoder and retrieval health logs')
             if training:
+                trainable=[p for p in model.parameters() if p.requires_grad]
                 if scaler is not None and scaler.is_enabled():
-                    scaler.scale(loss).backward();scaler.unscale_(opt)
-                    nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad],float(cfg['training']['grad_clip']))
-                    scale_before=scaler.get_scale()
-                    scaler.step(opt);scaler.update()
-                    # GradScaler skips the optimizer step when FP16 gradients
-                    # overflow; do not advance the EMA teacher on that batch.
-                    if mode=='full' and scaler.get_scale() >= scale_before:
-                        model.momentum_update(float(cfg['training'].get('memory_momentum',0.995)))
+                    scaler.scale(loss).backward()
+                    scaler.unscale_(opt)
+                    norm=nn.utils.clip_grad_norm_(trainable,float(cfg['training']['grad_clip']))
+                    if not bool(torch.isfinite(norm).item()):
+                        # Do NOT modify parameters or EMA after an invalid backward.
+                        # Dynamic loss scale is reduced before retrying next batch.
+                        skipped_updates+=1
+                        print(f'GRADIENT_OVERFLOW epoch={ep} batch={step} '
+                              f'scale={scaler.get_scale():.1f} skipped={skipped_updates}',flush=True)
+                        opt.zero_grad(set_to_none=True)
+                        scaler.update(new_scale=max(1.0,float(scaler.get_scale())/2.0))
+                        if skipped_updates>=20:
+                            raise RuntimeError('Repeated non-finite gradients; '
+                                               'stopping before corrupting Query Encoder')
+                    else:
+                        skipped_updates=0
+                        old_scale=scaler.get_scale()
+                        scaler.step(opt)
+                        scaler.update()
+                        if mode=='full' and scaler.get_scale()>=old_scale:
+                            model.momentum_update(float(cfg['training'].get('memory_momentum',0.995)))
                 else:
-                    loss.backward();nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad],float(cfg['training']['grad_clip']));opt.step()
+                    loss.backward()
+                    norm=nn.utils.clip_grad_norm_(trainable,float(cfg['training']['grad_clip']))
+                    if not bool(torch.isfinite(norm).item()):
+                        raise RuntimeError(f'Non-finite gradients at epoch={ep} batch={step}')
+                    opt.step()
                     if mode=='full':model.momentum_update(float(cfg['training'].get('memory_momentum',0.995)))
             bs=int(b['x'].shape[0]);size+=bs
             for k,v in parts.items():cum[k]=cum.get(k,0)+v*bs

@@ -11,6 +11,24 @@ from .stla import MaskSupportSTLAformer
 from .seasonal import seasonal_innovation
 
 
+def stable_candidate_disagreement(weights: torch.Tensor, residual: torch.Tensor) -> torch.Tensor:
+    """Stable per-step dispersion of candidate corrections, shape [B,P,N].
+
+    The naive expression sqrt(sum(w * (r - mean)^2)) has an infinite
+    backward derivative when dispersion is exactly zero. This happens for
+    fully masked or identical historical futures and can poison the Query
+    Encoder even though the forward loss remains finite. Accumulate in FP32
+    and use a smooth epsilon before sqrt; preserve zero at zero variance.
+    """
+    with torch.autocast(device_type=weights.device.type, enabled=False):
+        w = weights.float()
+        r = residual.float()
+        mean = (w * r).sum(dim=1, keepdim=True)
+        var = (w * (r - mean).square()).sum(dim=1).clamp_min(0.0)
+        return (torch.sqrt(var + 1e-6) - 1e-3).clamp_min(0.0).clamp_max(10.0)
+
+
+
 class MaskRASTSTLA(nn.Module):
     def __init__(self,stla:MaskSupportSTLAformer,num_nodes,history,horizon,cfg):
         super().__init__()
@@ -204,7 +222,9 @@ class MaskRASTSTLA(nn.Module):
         all_scores=torch.cat([logits,null[:,None]],1)
         weights=torch.softmax(all_scores,1)
         evidence=(weights[:,:C]*residual).sum(1)
-        candidate_disagreement=(weights[:,:C]*(residual-evidence[:,None]).square()).sum(1).sqrt().clamp_max(10.)
+        # Avoid sqrt(0) backward -> Inf/NaN when every candidate has the same
+        # delta or all candidate weights are assigned to None.
+        candidate_disagreement=stable_candidate_disagreement(weights[:,:C],residual)
         support_node=q['region_support'][:,region_for_node][:,None,:].expand(B,P,N)
         risk_features=torch.cat([base[...,None],n_cov[:,None,:,None].expand(B,P,N,1),
             neighcov[:,None,:,None].expand(B,P,N,1),candidate_disagreement[...,None],

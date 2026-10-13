@@ -92,6 +92,25 @@ class FARE(nn.Module):
                     'final_gate':torch.zeros_like(y0)}
         ctx=self.regions(inputs['x_obs'].float(),inputs['obs_mask'].bool())
         retrieved=self.retrieval(inputs,base,ctx,self.regions,memory,mode=mode)
+        return self.forward_from_retrieved(inputs,base,retrieved)
+
+    @torch.no_grad()
+    def retrieve_for_diagnostics(self, inputs, memory):
+        """Return the unmodified v2.1.1 node-level retrieval pool and base.
+
+        The caller must supply inference-safe inputs; no future labels are passed.
+        """
+        base=self._base(inputs)
+        ctx=self.regions(inputs['x_obs'].float(),inputs['obs_mask'].bool())
+        return base,self.retrieval(inputs,base,ctx,self.regions,memory,mode='full')
+
+    def forward_from_retrieved(self,inputs,base,retrieved):
+        """Run the actual FARE integration and control with a fixed pool.
+
+        No additional trainable parameters or checkpoint keys. Intended for
+        fixed-checkpoint counterfactual diagnostic interventions.
+        """
+        y0=base['prediction']
         weights=retrieved['weights']
         ev=retrieved['selected_evidence']
         # Node-specific historical state evidence is auxiliary, not obligatory.

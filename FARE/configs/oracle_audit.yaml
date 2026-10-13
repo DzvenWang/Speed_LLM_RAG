@@ -1,0 +1,11 @@
+# FARE v2.1.2 diagnostic-only defaults. The checkpoint's stored training
+# configuration is mandatory; this is documentation, not an architecture override.
+version: 2.1.2
+split: both
+severities: [20, 40, 60, 90]
+seed: 10
+max_queries_per_split_severity: 12
+max_regions_per_query: 2
+max_candidates_per_region: 64
+strict_pool_match: true
+# Test is exploratory: never used for model selection or training.

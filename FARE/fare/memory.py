@@ -56,10 +56,20 @@ class TrainMemory:
         return (source[safe[..., None], time_index, nodes[None, :, None, :]],
                 validity[safe[..., None], time_index, nodes[None, :, None, :]])
 
-    def fetch_target(self, ids, kind='history'):
+    def fetch_target(self, ids, kind='history', node_ids=None):
         """Node-specific sparse gather: [B,N,K] IDs -> [B,N,K,T]."""
-        if ids.ndim != 3 or ids.shape[1] != self.x.shape[-1]:
+        if ids.ndim != 3:
             raise ValueError('Target candidate ids must be [B,N,K]')
+        if node_ids is None:
+            if ids.shape[1] != self.x.shape[-1]:
+                raise ValueError('Full target ids must include every graph node')
+            node_ids = torch.arange(self.x.shape[-1], device=ids.device)
+        else:
+            node_ids = torch.as_tensor(node_ids, dtype=torch.long, device=ids.device)
+            if node_ids.ndim != 1 or ids.shape[1] != len(node_ids):
+                raise ValueError('node_ids must match target candidate node dimension')
+            if bool(((node_ids < 0) | (node_ids >= self.x.shape[-1])).any()):
+                raise IndexError('Invalid audit target node index')
         if kind == 'history':
             x, valid = self.x, self.valid
         elif kind == 'future':
@@ -69,16 +79,26 @@ class TrainMemory:
         else:
             raise ValueError(f'Unknown evidence type: {kind}')
         b,n,k=ids.shape
-        nodes=torch.arange(n,device=ids.device)[None,:,None]
+        nodes=node_ids[None,:,None]
         ids=ids.clamp(0,len(x)-1)
         # [M,T,N] -> [M,N,T], avoiding an intermediate full-network candidate.
         return x.permute(0,2,1)[ids,nodes],valid.permute(0,2,1)[ids,nodes]
 
-    def fetch_target_latent(self,ids,dim):
+    def fetch_target_latent(self,ids,dim,node_ids=None):
         if self.latent is None: raise RuntimeError('Historical STLA latent cache not built')
-        if ids.ndim!=3 or ids.shape[1]!=self.latent.shape[1]:
+        if ids.ndim!=3:
             raise ValueError('Latent target candidates must be [B,N,K]')
-        nodes=torch.arange(ids.shape[1],device=ids.device)[None,:,None]
+        if node_ids is None:
+            if ids.shape[1]!=self.latent.shape[1]:
+                raise ValueError('Full latent ids must cover all nodes')
+            node_ids=torch.arange(self.latent.shape[1],device=ids.device)
+        else:
+            node_ids=torch.as_tensor(node_ids,dtype=torch.long,device=ids.device)
+            if node_ids.ndim!=1 or ids.shape[1]!=len(node_ids):
+                raise ValueError('Latent node_ids shape mismatch')
+            if bool(((node_ids<0)|(node_ids>=self.latent.shape[1])).any()):
+                raise IndexError('Invalid latent audit target node index')
+        nodes=node_ids[None,:,None]
         z=self.latent[ids.clamp(0,len(self.latent)-1),nodes].float()
         if z.shape[-1]<dim:
             return torch.nn.functional.pad(z,(0,dim-z.shape[-1]))

@@ -1,2 +1,2 @@
-"""FARE v2.1: forecast-oriented retrieval under incomplete traffic sensing."""
-__version__='2.1.0'
+"""FARE v2.1.2: native v2.1.1 forecasting with fixed-checkpoint Oracle Audit."""
+__version__='2.1.2'
