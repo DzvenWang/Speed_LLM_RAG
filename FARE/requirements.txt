@@ -1,0 +1,6 @@
+# Production TFP environment already provides CUDA torch and Base_SupportBench.
+# Install torch according to the Gadi TFP environment (do not downgrade CUDA build).
+numpy
+pandas
+PyYAML
+pytest

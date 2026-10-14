@@ -1,0 +1,59 @@
+version: '3.0.2'
+experiment:
+  dataset: TraffiDent_Net_06
+  target: speed
+  seed: 10
+  run_tag: formal
+  train_limit: null
+  val_limit: null
+  test_limit: null
+  sample_strategy: spread
+  severities: [20, 40, 60, 90]
+model:
+  history: 12
+  horizon: 12
+  hidden_dim: 64
+  alpha_max: 1.25
+backbone:
+  inject_layers: [4, 5]
+traffic:
+  region_size: 24
+  neighbor_count: 4
+memory:
+  max_episodes: 50000
+  residual_mode: external_oos
+  require_oos_for_formal: true
+  purge_steps: 0
+  build_batch_size: 16
+retrieval:
+  coarse_k: 64
+  shortlist_k: 16
+  final_k: 8
+teacher:
+  max_queries: 2000
+  batch_size: 2
+  refresh_every_epochs: 3
+training:
+  batch_size: 32
+  workers: 4
+  lr: 0.0001
+  weight_decay: 0.0001
+  grad_clip: 5.0
+  masked_weight: 0.2
+  tail_weight: 0.02
+  utility_weight: 0.25
+  log_every: 50
+  stage_epochs:
+    evidence: 8
+    utility: 12
+    integration: 20
+    risk: 8
+    joint: 10
+evaluation:
+  auto_evaluate: true
+  include_val: false  # Default: Test s20/s40/s60/s90 only. Optional --eval-val.
+analysis:
+  enabled: true
+  counterfactual_split: s40  # Test-only LOO/Replacement/Scaling diagnostics.
+  max_counterfactual_queries: 250
+  bootstrap_samples: 1000

@@ -1,182 +1,118 @@
-from __future__ import annotations
-import numpy as np, torch
+"""Train-only episode memory; all future values are completed past episodes.
+
+Memory uses CPU arrays and GPU-readable small keys, with sparse target/neighborhood
+value gathering. Residual provenance is verified on production starts.
+"""
 from pathlib import Path
-from .config import json_write,sha256
+import json,warnings
+import numpy as np,torch
+from .config import dump_json,hash_file
 
-class TrainMemory:
-    """Train-only historical windows, optionally with strictly historical observed outcomes."""
-    def __init__(self,x,valid,starts,latent=None,device='cpu',tod=None,dow=None,future=None,future_valid=None):
-        self.x=torch.as_tensor(np.asarray(x),dtype=torch.float32,device=device)
-        self.valid=torch.as_tensor(np.asarray(valid),dtype=torch.bool,device=device)
-        self.starts=torch.as_tensor(np.asarray(starts),dtype=torch.long,device=device)
-        self.latent=(torch.as_tensor(np.asarray(latent),dtype=torch.float32,device=device) if latent is not None else None)
-        self.tod=(torch.as_tensor(np.asarray(tod),dtype=torch.long,device=device) if tod is not None else None)
-        self.dow=(torch.as_tensor(np.asarray(dow),dtype=torch.long,device=device) if dow is not None else None)
-        self.future=(torch.as_tensor(np.asarray(future),dtype=torch.float32,device=device) if future is not None else None)
-        self.future_valid=(torch.as_tensor(np.asarray(future_valid),dtype=torch.bool,device=device) if future_valid is not None else None)
-        self.keys=None
-        # Derived inference-only region aggregates; never serialize into checkpoints.
-        self.region_future=None
-        self.region_future_valid=None
-        self._region_cache_signature=None
-        assert self.x.ndim==3 and self.valid.shape==self.x.shape and len(self.starts)==len(self.x)
-    def to(self,device):
-        for k in ('x','valid','starts','latent','keys','tod','dow','future','future_valid','region_future','region_future_valid'):
-            v=getattr(self,k)
-            if v is not None:setattr(self,k,v.to(device))
-        return self
-    def fetch(self,ids):
-        safe=ids.clamp(min=0,max=len(self.x)-1)
-        return self.x[safe],self.valid[safe]
+def _episode_key(x,mask):
+    # x/mask [M,H,N]; key solely from historical information
+    ok=mask.float();count=ok.sum(1).clamp_min(1)
+    mean=(x*ok).sum(1)/count
+    var=((x-mean[:,None,:]).square()*ok).sum(1)/count
+    trend=(x[:,-1]-x[:,0])*mask[:,-1]*mask[:,0]
+    coverage=ok.mean(1)
+    return torch.stack([mean,torch.sqrt(var+1e-5),trend,coverage],-1)
 
-    def fetch_nodes(self, ids, node_ids, kind='history', time_index=None):
-        """Indexed gather without materializing [B,G,K,T,N].
-
-        ids: [B,G,K], node_ids: [G,S] including padded region entries.
-        Returns [B,G,K,T,S] or [B,G,K,S] when time_index is specified.
-        """
-        if ids.ndim != 3 or node_ids.ndim != 2 or ids.shape[1] != node_ids.shape[0]:
-            raise ValueError('fetch_nodes expects ids [B,G,K], nodes [G,S]')
-        if kind == 'history':
-            source, validity = self.x, self.valid
-        elif kind == 'future':
-            if self.future is None or self.future_valid is None:
-                raise ValueError('Future evidence missing from memory')
-            source, validity = self.future, self.future_valid
-        else:
-            raise ValueError(f'Unsupported evidence kind: {kind}')
-        safe = ids.clamp(min=0, max=len(source)-1)
-        nodes = node_ids.clamp(min=0, max=source.shape[-1]-1)
-        # Advanced tensor indexing gathers just the required region/anchor nodes.
-        row = safe[..., None, None]
-        node = nodes[None, :, None, None, :]
-        if time_index is None:
-            clock = torch.arange(source.shape[1], device=source.device)[None, None, None, :, None]
-            return source[row, clock, node], validity[row, clock, node]
-        return (source[safe[..., None], time_index, nodes[None, :, None, :]],
-                validity[safe[..., None], time_index, nodes[None, :, None, :]])
-
-    def fetch_target(self, ids, kind='history', node_ids=None):
-        """Node-specific sparse gather: [B,N,K] IDs -> [B,N,K,T]."""
-        if ids.ndim != 3:
-            raise ValueError('Target candidate ids must be [B,N,K]')
-        if node_ids is None:
-            if ids.shape[1] != self.x.shape[-1]:
-                raise ValueError('Full target ids must include every graph node')
-            node_ids = torch.arange(self.x.shape[-1], device=ids.device)
-        else:
-            node_ids = torch.as_tensor(node_ids, dtype=torch.long, device=ids.device)
-            if node_ids.ndim != 1 or ids.shape[1] != len(node_ids):
-                raise ValueError('node_ids must match target candidate node dimension')
-            if bool(((node_ids < 0) | (node_ids >= self.x.shape[-1])).any()):
-                raise IndexError('Invalid audit target node index')
-        if kind == 'history':
-            x, valid = self.x, self.valid
-        elif kind == 'future':
-            if self.future is None or self.future_valid is None:
-                raise RuntimeError('Train-only future memory is required')
-            x, valid = self.future, self.future_valid
-        else:
-            raise ValueError(f'Unknown evidence type: {kind}')
+class EpisodeMemory:
+    def __init__(self,history,mask,future,future_valid,starts,origin,base_forecast=None,metadata=None):
+        x=torch.as_tensor(history,dtype=torch.float32,device='cpu');m=torch.as_tensor(mask,dtype=torch.bool,device='cpu')
+        y=torch.as_tensor(future,dtype=torch.float32,device='cpu');yv=torch.as_tensor(future_valid,dtype=torch.bool,device='cpu')
+        self.x=x;self.mask=m;self.future=y;self.future_valid=yv
+        self.starts=torch.as_tensor(starts,dtype=torch.long,device='cpu')
+        self.origin=torch.as_tensor(origin,dtype=torch.long,device='cpu')
+        if base_forecast is None:self.residual=torch.zeros_like(y);self.residual_valid=torch.zeros_like(yv)
+        else:self.residual=y-torch.as_tensor(base_forecast,dtype=torch.float32,device='cpu');self.residual_valid=yv.clone()
+        self.metadata=dict(metadata or {})
+        self.node_key_cpu=_episode_key(x,m)
+        self._node_keys_device={}
+    @property
+    def n(self):return self.x.shape[-1]
+    @property
+    def m(self):return self.x.shape[0]
+    def keys(self,device):
+        k=str(device)
+        if k not in self._node_keys_device:self._node_keys_device[k]=self.node_key_cpu.to(device)
+        return self._node_keys_device[k]
+    def valid_for(self,origins,device,purge=0):
+        # memory future end MUST precede current origin, including val/test.
+        ends=(self.starts+self.x.shape[1]+self.future.shape[1]-1).to(device)
+        return ends[None,:]+int(purge)<=origins[:,None]
+    def fetch_node(self,episode_ids,source,device):
+        # IDs [B,N,K] -> [B,N,K,P] without materializing [B,N,K,P,N].
+        ids=episode_ids.detach().cpu().long().clamp(0,self.m-1)
         b,n,k=ids.shape
-        nodes=node_ids[None,:,None]
-        ids=ids.clamp(0,len(x)-1)
-        # [M,T,N] -> [M,N,T], avoiding an intermediate full-network candidate.
-        return x.permute(0,2,1)[ids,nodes],valid.permute(0,2,1)[ids,nodes]
-
-    def fetch_target_latent(self,ids,dim,node_ids=None):
-        if self.latent is None: raise RuntimeError('Historical STLA latent cache not built')
-        if ids.ndim!=3:
-            raise ValueError('Latent target candidates must be [B,N,K]')
-        if node_ids is None:
-            if ids.shape[1]!=self.latent.shape[1]:
-                raise ValueError('Full latent ids must cover all nodes')
-            node_ids=torch.arange(self.latent.shape[1],device=ids.device)
-        else:
-            node_ids=torch.as_tensor(node_ids,dtype=torch.long,device=ids.device)
-            if node_ids.ndim!=1 or ids.shape[1]!=len(node_ids):
-                raise ValueError('Latent node_ids shape mismatch')
-            if bool(((node_ids<0)|(node_ids>=self.latent.shape[1])).any()):
-                raise IndexError('Invalid latent audit target node index')
-        nodes=node_ids[None,:,None]
-        z=self.latent[ids.clamp(0,len(self.latent)-1),nodes].float()
-        if z.shape[-1]<dim:
-            return torch.nn.functional.pad(z,(0,dim-z.shape[-1]))
-        return z[...,:dim]
-
-    @torch.no_grad()
-    def ensure_region_future(self, regions, chunk_size=512):
-        """Cache exact valid-only region means of historical futures, once per memory."""
-        if self.future is None or self.future_valid is None:
-            return
-        signature=(self.future.data_ptr(),self.future_valid.data_ptr(),
-                   regions.target_mask.data_ptr(),regions.g,regions.n)
-        if self._region_cache_signature==signature and self.region_future is not None:
-            return
-        weights=regions.target_mask.to(device=self.future.device, dtype=self.future.dtype)
-        means=[];counts=[]
-        for lo in range(0,len(self.future),chunk_size):
-            x=self.future[lo:lo+chunk_size]
-            valid=self.future_valid[lo:lo+chunk_size]
-            count=torch.einsum('mpn,gn->mgp',valid.to(x.dtype),weights)
-            num=torch.einsum('mpn,gn->mgp',x*valid.to(x.dtype),weights)
-            means.append(num/count.clamp_min(1))
-            counts.append(count > 0)
-        self.region_future=torch.cat(means,dim=0)
-        self.region_future_valid=torch.cat(counts,dim=0)
-        self._region_cache_signature=signature
-    @classmethod
-    def from_cache(cls,cache,max_rows=None,device='cpu',sampling='head'):
-        from .data import SupportSplit
-        ds=SupportSplit(cache,'train')
-        # De-duplicate multiple sensing views of the same historical window.
-        starts=ds.meta.window_start.to_numpy(np.int64)
-        _,unique=np.unique(starts,return_index=True)
-        ix=np.sort(unique)
-        if sampling not in ('head','spread','stratified_temporal'):
-            raise ValueError(f'Unsupported TRAIN memory sampling strategy: {sampling}')
-        if max_rows is not None:
-            count=min(int(max_rows),len(ix))
-            if count < 1:raise ValueError('Memory max_rows must be positive')
-            if sampling in ('spread','stratified_temporal'):
-                # Evenly distribute selected, unique TRAIN windows across
-                # the whole TRAIN split; never access validation/test here.
-                ix=ix[np.linspace(0,len(ix)-1,count,dtype=np.int64)]
-            else:
-                ix=ix[:count]
-        full=ds.arr['x_full_norm'][ix]
-        observed=np.asarray(ds.arr['history_observed'][ix],dtype=bool)
-        artificial=np.asarray(ds.arr['artificial_missing'][ix],dtype=bool)
-        valid=observed|artificial
-        return cls(np.asarray(full,dtype=np.float32),valid,starts[ix],device=device,tod=np.asarray(ds.arr['tod_hist'][ix]),dow=np.asarray(ds.arr['dow_hist'][ix]),future=(np.asarray(ds.arr['y_norm'][ix],dtype=np.float32) if 'y_norm' in ds.arr else None),future_valid=(np.asarray(ds.arr['future_valid'][ix],dtype=bool) if 'future_valid' in ds.arr else None))
-    def save(self,path,metadata=None):
+        nodes=torch.arange(n).view(1,n,1)
+        table=getattr(self,source).permute(0,2,1)
+        return table[ids,nodes].to(device,non_blocking=True)
+    def fetch_neighbors(self,episode_ids,neighbor_ids,source,device):
+        # [B,N,K,L,P], bounded 1-hop graph neighborhood.
+        ids=episode_ids.detach().cpu().long().clamp(0,self.m-1)
+        neighbors=neighbor_ids.detach().cpu().long();table=getattr(self,source).permute(0,2,1)
+        return table[ids[...,None],neighbors[None,:,None,:]].to(device,non_blocking=True)
+    def save(self,path):
         p=Path(path);p.parent.mkdir(parents=True,exist_ok=True)
-        kw={'x':self.x.cpu().numpy().astype(np.float16),'valid':self.valid.cpu().numpy(),'starts':self.starts.cpu().numpy()}
-        if self.latent is not None:kw['latent']=self.latent.cpu().numpy().astype(np.float16)
-        if self.future is not None:kw['future']=self.future.cpu().numpy().astype(np.float16)
-        if self.future_valid is not None:kw['future_valid']=self.future_valid.cpu().numpy()
-        if self.tod is not None:kw['tod']=self.tod.cpu().numpy().astype(np.int16)
-        if self.dow is not None:kw['dow']=self.dow.cpu().numpy().astype(np.int16)
-        np.savez_compressed(p,**kw)
-        json_write(p.with_suffix('.json'),{'rows':len(self.x),'nodes':self.x.shape[-1],'sha256':sha256(p),**(metadata or {})})
+        np.savez_compressed(p,x=self.x.numpy().astype('float16'),mask=self.mask.numpy(),future=self.future.numpy().astype('float16'),
+                            future_valid=self.future_valid.numpy(),starts=self.starts.numpy(),origin=self.origin.numpy(),
+                            residual=self.residual.numpy().astype('float16'),residual_valid=self.residual_valid.numpy())
+        dump_json(p.with_suffix('.json'),{'sha256':hash_file(p),'episodes':self.m,'nodes':self.n,**self.metadata})
     @classmethod
-    def load(cls,path,device='cpu'):
-        p=Path(path);z=np.load(p,allow_pickle=False)
-        import json
-        mp=p.with_suffix('.json')
-        if mp.exists():
-            meta=json.loads(mp.read_text(encoding='utf-8'))
-            if meta.get('sha256')!=sha256(p):raise RuntimeError('Retrieval memory checksum mismatch')
-        return cls(z['x'],z['valid'],z['starts'],z['latent'] if 'latent' in z else None,device=device,tod=z['tod'] if 'tod' in z else None,dow=z['dow'] if 'dow' in z else None,future=z['future'] if 'future' in z else None,future_valid=z['future_valid'] if 'future_valid' in z else None)
+    def load(cls,path,expected=None):
+        p=Path(path);meta=json.loads(p.with_suffix('.json').read_text())
+        if hash_file(p)!=meta['sha256']:raise RuntimeError('Memory SHA mismatch')
+        for k,v in (expected or {}).items():
+            if meta.get(k)!=v:raise RuntimeError(f'Memory {k} mismatch: {meta.get(k)} vs {v}')
+        z=np.load(p,allow_pickle=False)
+        obj=cls(z['x'],z['mask'],z['future'],z['future_valid'],z['starts'],z['origin'],metadata=meta)
+        obj.residual=torch.as_tensor(np.array(z['residual'],dtype=np.float32,copy=True))
+        obj.residual_valid=torch.as_tensor(np.array(z['residual_valid'],dtype=bool,copy=True))
+        return obj
 
 @torch.no_grad()
-def populate_latents(memory,model,batch_size=32,dim=32):
-    if memory.latent is not None:return memory
-    if memory.tod is None or memory.dow is None:raise RuntimeError('Memory must store TOD/DOW for teacher latent cache')
-    model.eval();parts=[]
-    for lo in range(0,len(memory.x),batch_size):
-        hi=min(lo+batch_size,len(memory.x))
-        h=model.teacher_hidden(memory.x[lo:hi].float(),memory.valid[lo:hi],memory.tod[lo:hi],memory.dow[lo:hi])
-        parts.append(h.mean(1)[...,:dim].detach().to(dtype=torch.float16).cpu())
-    memory.latent=torch.cat(parts,0).to(memory.x.device)
+def from_support_cache(cache,backbone,max_episodes,mode='checkpoint_in_sample',external_base_file=None,device='cpu',batch_size=16):
+    from .protocol import SupportDataset,make_loader,device_batch
+    ds=SupportDataset(cache,'train')
+    starts=ds.meta.window_start.to_numpy(np.int64)
+    _,uni=np.unique(starts,return_index=True)
+    ix=np.sort(uni)
+    oos=None;lookup=None
+    if mode=='external_oos':
+        if not external_base_file:raise RuntimeError('external_oos requires --oos-forecast-file')
+        oos=np.load(external_base_file,allow_pickle=False)
+        if not all(k in oos for k in ('window_start','prediction','trained_until')):
+            raise RuntimeError('OOF file must contain window_start, prediction, trained_until')
+        lookup={int(k):i for i,k in enumerate(oos['window_start'])}
+        # Chronological OOF warm-up interval can have no eligible producer model.
+        ix=np.asarray([i for i in ix if int(starts[i]) in lookup],dtype=np.int64)
+        if len(ix)==0:raise RuntimeError('No eligible OOF memory episodes')
+    if max_episodes and len(ix)>max_episodes:ix=ix[np.linspace(0,len(ix)-1,max_episodes,dtype=np.int64)]
+    arr=ds.arr
+    obs=np.asarray(arr['x_obs_norm'][ix],dtype='float32');mask=np.asarray(arr['history_observed'][ix],dtype=bool)
+    y=np.asarray(arr['y_norm'][ix],dtype='float32');valid=np.asarray(arr['future_valid'][ix],dtype=bool)
+    starts_sel=starts[ix]
+    if mode=='external_oos':
+        matches=[lookup[int(s)] for s in starts_sel]
+        training_cutoff=np.asarray(oos['trained_until'][matches],dtype='int64')
+        if np.any(training_cutoff>=starts_sel):
+            raise RuntimeError('OOF leakage: a producer model trained through its historical prediction window')
+        base=np.asarray(oos['prediction'][matches],dtype='float32')
+        if base.shape!=y.shape:raise RuntimeError('OOF prediction shape mismatch')
+        if not np.isfinite(base).all():raise RuntimeError('Nonfinite OOF predictions')
+        provenance='external_oos'
+    elif mode=='checkpoint_in_sample':
+        warnings.warn('EXPLORATORY residuals: backbone trained on overlapping train data; not OOF.',RuntimeWarning)
+        preds=[]
+        for low in range(0,len(ix),batch_size):
+            ids=ix[low:low+batch_size]
+            x=torch.as_tensor(np.asarray(arr['x_obs_norm'][ids],dtype='float32'),device=device)
+            m=torch.as_tensor(np.asarray(arr['history_observed'][ids],dtype=bool),device=device)
+            tod=torch.as_tensor(np.asarray(arr['tod_hist'][ids]),device=device)
+            dow=torch.as_tensor(np.asarray(arr['dow_hist'][ids]),device=device)
+            preds.append(backbone(x,m,tod,dow)['prediction'].cpu())
+        base=torch.cat(preds,0).numpy();provenance='checkpoint_in_sample_NOT_OOF'
+    else:raise ValueError('residual mode must be external_oos or checkpoint_in_sample')
+    memory=EpisodeMemory(obs,mask,y,valid,starts_sel,starts_sel+ds.h-1,base,metadata={'residual_provenance':provenance})
     return memory

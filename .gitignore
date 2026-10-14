@@ -121,6 +121,8 @@ Mask_RAST-STLA_exps/
 Mask_RAST-STLA_logs/
 Mask_RAST-STLA_store/
 
+EvalOnly_logs/
+
 
 model_cache/
 

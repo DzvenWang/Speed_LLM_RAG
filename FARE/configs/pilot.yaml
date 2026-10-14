@@ -1,70 +1,59 @@
-# FARE v2.1 clean configuration; old model checkpoints are incompatible.
-version: 2.1.2
+version: '3.0.2'
 experiment:
   dataset: TraffiDent_Net_06
   target: speed
   seed: 10
+  run_tag: pilot
+  train_limit: 8000
+  val_limit: 2000
+  test_limit: null
+  sample_strategy: spread
+  severities: [20, 40, 60, 90]
+model:
   history: 12
   horizon: 12
-  severities:
-  - 20
-  - 40
-  - 60
-  - 90
-  max_train_rows: 8000
-  max_val_rows: null
-  run_tag: pilot
-  train_sample_strategy: spread
-model:
-  hidden: 64
+  hidden_dim: 64
+  alpha_max: 1.25
 backbone:
-  injection_layers:
-  - 4
-  - 5
-  initialized_from_official_checkpoint: true
-graph:
-  target_region_size: 24
-  max_anchors: 32
-retrieval:
-  key_dim: 128
-  coarse_topk: 64
-  shortlist_topk: 16
-  topk: 8
-  exclude_overlapping_history_forecast: true
+  inject_layers: [4, 5]
+traffic:
+  region_size: 24
+  neighbor_count: 4
 memory:
-  max_rows: 16000
-  sampling: spread
-  latent_compression_dim: 32
-  resident_device: cuda
-innovation:
-  memory_dim: 32
+  max_episodes: 16000
+  residual_mode: checkpoint_in_sample
+  require_oos_for_formal: true
+  purge_steps: 0
+  build_batch_size: 16
+retrieval:
+  coarse_k: 64
+  shortlist_k: 16
+  final_k: 8
+teacher:
+  max_queries: 256
+  batch_size: 2
+  refresh_every_epochs: 3
 training:
   batch_size: 32
-  num_workers: 2
-  grad_clip: 5.0
+  workers: 2
+  lr: 0.0001
   weight_decay: 0.0001
-  new_lr: 0.0001
-  patience: 4
-  min_phase_epochs: 2
-  phase_epochs:
+  grad_clip: 5.0
+  masked_weight: 0.2
+  tail_weight: 0.02
+  utility_weight: 0.25
+  log_every: 50
+  stage_epochs:
     evidence: 5
-    retrieval: 8
+    utility: 8
     integration: 12
-    control: 5
-  stop_after_phase: null
-  utility_teacher_holdout_fraction: 0.25
-  teacher_purge_gap: 24
+    risk: 5
+    joint: 5
 evaluation:
-  save_stage_predictions: false
-  save_final_predictions: true
-  auto_test: true
-  metrics_source: Base_SupportBench.experiment_common.metrics.metric_bundle
-performance:
-  retrieval_phase_fast: false
-  forecast_only_validation: true
-  strict_batch_diagnostics: false
-diagnostics:
+  auto_evaluate: true
+  include_val: false  # Default: Test s20/s40/s60/s90 only. Optional --eval-val.
+analysis:
   enabled: true
-  sample_every_batches: 25
-  max_sampled_batches: 80
-  progress_every_batches: 100
+  counterfactual_split: s40  # Test-only LOO/Replacement/Scaling diagnostics.
+  max_counterfactual_queries: 64
+  bootstrap_samples: 300
