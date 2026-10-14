@@ -1,3 +1,22 @@
+## v1.4.8 — legacy Formal evaluation + source fingerprint warning (2026-10-15)
+
+- Accept completed Baseline v1.3.10 Formal runs as eligible inputs to the
+  existing direct Evaluate-only pipeline; also retain v1.4.0–v1.4.7.
+- Official vendor source *tree SHA256* mismatch now emits
+  `WARNING SOURCE_TREE_HASH_MISMATCH` and continues verification. The recorded
+  `SOURCE_LOCK.json` fingerprint is **not** modified and a warning remains
+  visible in PBS live logs. This applies to `source_lock.py verify` and
+  `verify-one` (including preflight); lock creation still enforces original
+  source state, and missing sources / lock metadata, remote, commit and
+  entrypoints still fail as before.
+- Keep strict Protocol/cache identity, completed-run status, method, seed,
+  reference Backbone checkpoint SHA256, best.pt load and all evaluation
+  protocol/metric validations. Old weights and experiment outputs are not
+  rewritten by this patch.
+- **Caution:** a warning-only source mismatch does not establish numerical
+  reproducibility. Compare old MAE/RMSE after re-evaluation; document the
+  changed source if using results in a paper.
+
 # Baseline v1.4.4 — matched-backbone safe residual consistency
 
 - Native `RAFT` and native `RAST` are unchanged and remain source-faithful primary baselines.
