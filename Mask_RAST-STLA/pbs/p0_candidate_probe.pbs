@@ -1,0 +1,22 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=24:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+set -euo pipefail
+ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
+ENVROOT=${TFP_ENV_ROOT:-/scratch/mh20/zw1165/envs/TFP}
+: "${FULL_CHECKPOINT:?Set FULL_CHECKPOINT to the already-trained Full best.pt}"
+cd "$ROOT"
+export SPEED_LLM_RAG_ROOT="$ROOT" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH="$ROOT/Mask_RAST-STLA:$ROOT/Base_SupportBench:${PYTHONPATH:-}"
+LOGDIR="$ROOT/Mask_RAST-STLA_logs/p0"
+mkdir -p "$LOGDIR"
+exec "$ENVROOT/bin/python" -u "Mask_RAST-STLA/scripts/p0_candidate_probe.py" \
+  --checkpoint "$FULL_CHECKPOINT" \
+  --max-queries "${P0_MAX_QUERIES:-0}" \
+  --batch-size "${P0_BATCH_SIZE:-32}"

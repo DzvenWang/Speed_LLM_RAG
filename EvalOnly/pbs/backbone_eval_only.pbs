@@ -1,0 +1,43 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12,ngpus=1,mem=32GB,walltime=48:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -N BB_ReEval
+set -euo pipefail
+: "${MODEL:?MODEL required}"
+: "${TARGET:?TARGET required}"
+: "${CKPT:?CKPT required}"
+SEED="${SEED:-10}"
+MODE="${MODE:-incomplete}"
+case "$MODEL" in STAEformer|HimNet|BigST|STDN|PatchSTG|STLAformer) ;; *) echo "Invalid MODEL=$MODEL"; exit 2;; esac
+case "$TARGET" in speed|flow) ;; *) echo "Invalid TARGET=$TARGET"; exit 2;; esac
+case "$MODE" in incomplete|complete) ;; *) echo "Invalid MODE=$MODE"; exit 2;; esac
+PROJECT_ROOT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}"
+ROOT="$PROJECT_ROOT/Backbone"
+ENVROOT="${TFP_ENV_ROOT:-/scratch/mh20/zw1165/envs/TFP}"
+PY="$ENVROOT/bin/python"
+[[ -x "$PY" ]] || { echo "Python not found $PY"; exit 3; }
+[[ -f "$CKPT" ]] || { echo "Checkpoint not found: $CKPT"; exit 3; }
+export SPEED_LLM_RAG_ROOT="$PROJECT_ROOT" TRAFFIDENT_TARGET="$TARGET" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH="$ROOT:$PROJECT_ROOT/Base_SupportBench:${PYTHONPATH:-}"
+export PATH="$ENVROOT/bin:$PATH"
+unset TRANSFORMERS_CACHE || true
+"$PY" - <<'PYCODE'
+from experiment_common.metrics import MAPE_PROTOCOL, MAPE_MIN_TARGET_ABS
+print('MAPE_PROTOCOL=',MAPE_PROTOCOL,'MAPE_MIN_TARGET_ABS=',MAPE_MIN_TARGET_ABS,flush=True)
+PYCODE
+LOGROOT="$PROJECT_ROOT/Backbone_logs/$TARGET/$MODEL"
+mkdir -p "$LOGROOT"
+STAMP="$(date +%Y%m%d_%H%M%S)"
+LOG="$LOGROOT/${MODEL}.${TARGET}.reeval.${MODE}.seed${SEED}.${PBS_JOBID:-manual}.${STAMP}.live.log"
+cd "$ROOT"
+exec > >( "$PY" -u "$ROOT/timestamp_stream.py" | tee -a "$LOG" ) 2>&1
+trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"' EXIT
+echo "START BACKBONE EVAL ONLY model=$MODEL target=$TARGET mode=$MODE seed=$SEED checkpoint=$CKPT"
+echo "LIVE_LOG=$LOG"
+"$PY" -u scripts/run_checkpoint_evaluations.py \
+  --model "$MODEL" --checkpoint "$CKPT" --expected-seed "$SEED" \
+  --severities 20 40 60 90 --stdout-only
+echo "BACKBONE REEVALUATION PASS"

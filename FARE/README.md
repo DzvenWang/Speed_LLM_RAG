@@ -1,6 +1,6 @@
-# FARE v2.1.2 — Forecast-Oriented Retrieval + Native Candidate Oracle Audit
+# FARE v2.1.3 — Forecast-Oriented Retrieval + Weight-Preserving Oracle Audit
 
-**v2.1.2 adds a backward-compatible native Oracle Audit to the uploaded v2.1.1.** See [README_ORACLE_V212.md](README_ORACLE_V212.md) for exact Gadi commands, causality, checkpoint compatibility and diagnostic limitations.
+**v2.1.3 extends the backward-compatible v2.1.2 Native Oracle Audit using leave-one-out, same-weight candidate replacements, node-level interventions and prediction correction-strength sweeps.** See [README_ORACLE_V213.md](README_ORACLE_V213.md) for new Gadi commands, exact intervention semantics and limitations. The previous [v2.1.2 documentation](README_ORACLE_V212.md) is retained for provenance.
 
 This was originally a **clean architectural implementation**, not an upgrade/compatibility
 patch for FARE v1/v2.0. Old checkpoints, optimizer states, and model configs

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FARE v2.1.2 candidate-level Oracle Audit for actual v2.1.1 checkpoints.
+"""FARE v2.1.3 weight-preserving counterfactual Oracle Audit for actual v2.1.1 checkpoints.
 
 Safe baseline: the frozen validation-selected checkpoint. No weight updates.
 Outputs per-candidate realized MAE for each sampled query-region in Val/Test.
@@ -15,7 +15,7 @@ from fare.runtime import setup
 from fare.trainer import load_ckpt
 from fare.data import SupportSplit,to_device
 from fare.candidate_oracle import evaluate_query_regions
-from fare.retrieval_diagnostics import clean,summarize
+from fare.retrieval_diagnostics import clean,summarize,summarize_counterfactual
 
 
 def parse_args():
@@ -30,16 +30,32 @@ def parse_args():
     parser.add_argument('--max-regions',type=int,default=2,help='Per query; 0=all regions')
     parser.add_argument('--max-candidates',type=int,default=64,help='Top legal coarse candidates; 0=all')
     parser.add_argument('--seed',type=int,default=10)
+    parser.add_argument('--audit-modes',nargs='+',default=['singleton','loo','replacement','scaling','node_loo'],
+                        choices=('singleton','loo','replacement','scaling','node_loo'))
+    parser.add_argument('--max-nodes',type=int,default=4,
+                        help='Nodes per sampled region for node-level LOO, 0 disables node-level audit')
+    parser.add_argument('--replacement-slot',type=int,default=0,
+                        help='Selected Top8 rank slot to replace while retaining its original weights')
+    parser.add_argument('--scaling-factors',nargs='+',type=float,
+                        default=[0.,.25,.5,.75,1.,1.25],
+                        help='Prediction-space interpolation alpha; include 0 and 1 for parity')
     parser.add_argument('--output')
     parser.add_argument('--resume',action='store_true')
     parser.add_argument('--smoke',action='store_true')
     parser.add_argument('--no-strict-pool-match',action='store_true',help='Debug only: disables replay consistency')
     args=parser.parse_args()
-    if min(args.max_queries,args.max_regions,args.max_candidates)<0:parser.error('Counts must be >= 0')
+    if min(args.max_queries,args.max_regions,args.max_candidates,args.max_nodes)<0:
+        parser.error('Counts must be >= 0')
+    if args.replacement_slot<0:parser.error('replacement-slot must be >= 0')
+    if len(set(args.audit_modes))!=len(args.audit_modes):parser.error('Duplicate audit modes')
+    if not args.scaling_factors or any(not np.isfinite(s) or s<0 for s in args.scaling_factors):
+        parser.error('scaling-factors must be finite nonnegative numbers')
+    if 'scaling' in args.audit_modes and (0. not in args.scaling_factors or 1. not in args.scaling_factors):
+        parser.error('scaling-factors must include 0 and 1 for Null/Real parity')
     if not args.severities or any(s not in (20,40,60,90) for s in args.severities):parser.error('Invalid severities')
     if len(set(args.severities))!=len(args.severities):parser.error('Duplicate severities')
     if args.smoke:
-        args.max_queries=2;args.max_regions=1;args.max_candidates=4;args.severities=[40]
+        args.max_queries=2;args.max_regions=1;args.max_candidates=4;args.max_nodes=1;args.severities=[40]
     return args
 
 
@@ -62,7 +78,7 @@ def append_row(file,row):
 
 
 def manifest(checkpoint,cfg,args,memory_path):
-    return {'audit_version':'2.1.2','checkpoint':str(checkpoint),'checkpoint_sha256':sha256(checkpoint),
+    return {'audit_version':'2.1.3','checkpoint':str(checkpoint),'checkpoint_sha256':sha256(checkpoint),
             'memory':str(memory_path or ''),
             'memory_sha256':sha256(memory_path) if memory_path and Path(memory_path).is_file() else None,
             'dataset':cfg['experiment']['dataset'],
@@ -70,7 +86,11 @@ def manifest(checkpoint,cfg,args,memory_path):
             'split':args.split,'severities':args.severities if args.split!='val' else [],
             'max_queries':args.max_queries,'max_regions':args.max_regions,
             'max_candidates':args.max_candidates,'strict_pool_match':not args.no_strict_pool_match,
-            'oracle_scope':'region_singleton_fixed_other_regions'}
+            'oracle_scope':'region_singleton_and_weight_preserving_fixed_other_regions',
+            'audit_modes':args.audit_modes,'max_nodes':args.max_nodes,
+            'replacement_slot':args.replacement_slot,
+            'scaling_factors':args.scaling_factors,
+            'teacher_labels_only_in_audit':True}
 
 
 def main():
@@ -132,7 +152,11 @@ def main():
                 with torch.no_grad():
                     measured=evaluate_query_regions(model,memory,batch,std=meta['std'],
                               max_candidates=args.max_candidates,region_ids=regions,
-                              strict_pool_match=not args.no_strict_pool_match)
+                              strict_pool_match=not args.no_strict_pool_match,
+                              audit_modes=tuple(args.audit_modes),
+                              max_nodes=args.max_nodes,
+                              replacement_slot=args.replacement_slot,
+                              scaling_factors=tuple(args.scaling_factors))
                 for row in measured:
                     row.update({'split':split,'severity':sev,'row_id':int(idx),
                         'window_start':ws,'target':target,'dataset':dataset})
@@ -143,10 +167,13 @@ def main():
                      'done_queries':step,'planned_queries':len(chosen),'region_records':len(all_rows),
                      'elapsed_seconds':round(time.monotonic()-start,1)}),flush=True)
             summarize(all_rows,folder)
+            summarize_counterfactual(all_rows,folder)
             if torch.cuda.is_available():torch.cuda.empty_cache()
     summary=summarize(all_rows,folder)
+    counterfactual_summary=summarize_counterfactual(all_rows,folder)
     print('FARE_ORACLE_COMPLETE '+json.dumps({'output':str(folder),'region_records':len(all_rows),
-                                             'summary_groups':len(summary)}),flush=True)
+                                             'summary_groups':len(summary),
+                                             'counterfactual_summary_groups':len(counterfactual_summary)}),flush=True)
 
 
 if __name__=='__main__':main()

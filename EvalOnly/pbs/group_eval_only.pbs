@@ -1,0 +1,29 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12,ngpus=1,mem=48GB,walltime=48:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -N EvalOneGPU
+set -euo pipefail
+: "${KIND:?KIND must be backbone or baseline}"
+: "${MANIFEST:?MANIFEST JSONL required}"
+case "$KIND" in backbone|baseline) ;; *) echo "Invalid KIND: $KIND" >&2; exit 2;; esac
+PROJECT_ROOT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}"
+ENVROOT="${TFP_ENV_ROOT:-/scratch/mh20/zw1165/envs/TFP}"
+PY="$ENVROOT/bin/python"
+[[ -x "$PY" ]] || { echo "Python not found: $PY" >&2; exit 3; }
+[[ -f "$MANIFEST" ]] || { echo "Manifest not found: $MANIFEST" >&2; exit 3; }
+LOGROOT="$PROJECT_ROOT/EvalOnly_logs"
+mkdir -p "$LOGROOT"
+STAMP="$(date +%Y%m%d_%H%M%S)"
+LOG="$LOGROOT/EvalBatch.${KIND}.${PBS_JOBID:-manual}.${STAMP}.live.log"
+export SPEED_LLM_RAG_ROOT="$PROJECT_ROOT" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+export PATH="$ENVROOT/bin:$PATH"
+cd "$PROJECT_ROOT"
+exec > >("$PY" -u "$PROJECT_ROOT/Backbone/timestamp_stream.py" | tee -a "$LOG") 2>&1
+trap 'rc=$?; echo "SCRIPT_EXIT_STATUS=$rc"' EXIT
+echo "EVAL_BATCH_LIVE_LOG=$LOG"
+echo "ALLOCATED_GPU_COUNT=1 KIND=$KIND MANIFEST=$MANIFEST PBS_JOBID=${PBS_JOBID:-manual}"
+"$PY" -u "$PROJECT_ROOT/EvalOnly/scripts/run_manifest.py" --kind "$KIND" --manifest "$MANIFEST" --root "$PROJECT_ROOT"
+echo "EVAL_BATCH_FINISHED kind=$KIND"

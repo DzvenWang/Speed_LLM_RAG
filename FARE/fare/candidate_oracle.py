@@ -1,4 +1,4 @@
-"""FARE v2.1.2: deterministic, causally-legal, actual-forward singleton audit.
+"""FARE v2.1.3: deterministic, causally-legal, actual-forward audit.
 
 Targets the REAL v2.1.1 topology: Region Top64 -> Node Top16 -> Utility Top8.
 Does not modify model weights or use current future labels in retrieval.
@@ -167,13 +167,19 @@ def _spearman(x,y)->float:
 @torch.no_grad()
 def evaluate_query_regions(model,memory,batch:dict,*,std:float,
                            max_candidates:int=64,region_ids:list[int]|None=None,
-                           strict_pool_match:bool=True)->list[dict]:
+                           strict_pool_match:bool=True,
+                           audit_modes:tuple[str,...]=("singleton","loo","replacement","scaling","node_loo"),
+                           max_nodes:int=4,replacement_slot:int=0,
+                           scaling_factors:tuple[float,...]=(0.,.25,.5,.75,1.,1.25))->list[dict]:
     """Measure full FARE forecast MAE under single-region evidence interventions.
 
     Future labels are *only* used by target_mae after all model forwards.
     Every candidate is first checked against model's causal retrieval eligibility.
     """
     model.eval()
+    allowed={"singleton","loo","replacement","scaling","node_loo"}
+    if set(audit_modes)-allowed:raise ValueError(f"Unknown audit modes: {set(audit_modes)-allowed}")
+    if max_nodes<0:raise ValueError("max_nodes must be >=0")
     inputs=inference_only(batch)
     base,pool=model.retrieve_for_diagnostics(inputs,memory)
     legal=validate_candidate_pool(model,memory,inputs,pool)
@@ -208,10 +214,12 @@ def evaluate_query_regions(model,memory,batch:dict,*,std:float,
         # Dense top-m coarse candidates, no synthetic candidates or label-based pool.
         if max_candidates>0:ranks=ranks[:max_candidates]
         cand_rows=[]
-        for rank in ranks:
+        candidate_encodings={}
+        for rank in (ranks if "singleton" in audit_modes else []):
             encoded=model.retrieval.encode_audit_candidate(
                 inputs,base,memory,model.regions,pool,g,rank)
             if not bool(encoded['effective'].any()):continue
+            candidate_encodings[rank]=encoded
             switched=_extract_prediction(model.forward_from_retrieved(
                 inputs,base,singleton_intervention(model,pool,g,encoded)))
             cand_mae=target_mae(switched,truth,future_valid,mask,std)
@@ -232,7 +240,7 @@ def evaluate_query_regions(model,memory,batch:dict,*,std:float,
         best_selected=max(top8,key=lambda x:x['gain_vs_region_null']) if top8 else None
         direct_null=target_mae(null,truth,future_valid,mask,std,direct)
         direct_real=target_mae(real,truth,future_valid,mask,std,direct)
-        rows.append(dict(
+        result=dict(
             region_id=int(g),num_region_nodes=int(len(nodes)),
             num_legal_coarse_candidates=int(legal[g].sum().item()),
             num_evaluated_candidates=int(len(cand_rows)),
@@ -254,5 +262,15 @@ def evaluate_query_regions(model,memory,batch:dict,*,std:float,
             direct_null_mae=direct_null,direct_real_mae=direct_real,
             direct_real_gain_vs_null=direct_null-direct_real,
             real_selected_unique_memories=int(len(selected_ids)),
-            candidates=cand_rows))
+            candidates=cand_rows)
+        if any(mode in audit_modes for mode in ("loo","replacement","scaling","node_loo")):
+            from .weight_preserving_audit import audit_region_interventions
+            cf=audit_region_interventions(
+                model,memory,inputs,base,pool,region_id=g,real=real,null=null,
+                truth=truth,future_valid=future_valid,std=std,direct=direct,
+                legal_ranks=ranks,max_nodes=max_nodes,replacement_slot=replacement_slot,
+                scaling_factors=scaling_factors,modes=audit_modes,
+                cached_candidates=candidate_encodings)
+            result.update(cf)
+        rows.append(result)
     return rows

@@ -4,7 +4,7 @@
 #PBS -l ncpus=12,ngpus=1,mem=32GB,walltime=24:00:00
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -j oe
-#PBS -N FARE212_oracle
+#PBS -N FARE213_oracle
 set -euo pipefail
 cd "${SPEED_LLM_RAG_ROOT:-$PBS_O_WORKDIR}"
 source FARE/pbs/_activate_tfp.sh
@@ -16,6 +16,10 @@ SEED="${SEED:-10}"
 MAX_QUERIES="${MAX_QUERIES:-12}"
 MAX_REGIONS="${MAX_REGIONS:-2}"
 MAX_CANDIDATES="${MAX_CANDIDATES:-64}"
+MAX_NODES="${MAX_NODES:-4}"
+REPLACEMENT_SLOT="${REPLACEMENT_SLOT:-0}"
+AUDIT_MODES="${AUDIT_MODES:-singleton:loo:replacement:scaling:node_loo}"
+SCALING_FACTORS="${SCALING_FACTORS:-0:0.25:0.5:0.75:1:1.25}"
 SPLIT="${SPLIT:-both}"
 SEVERITIES="${SEVERITIES:-20:40:60:90}"
 if [[ -z "${FARE_CHECKPOINT:-}" ]]; then
@@ -27,14 +31,19 @@ STAMP=$(date '+%Y%m%d_%H%M%S')
 LOG="FARE_logs/${TARGET}/${DATASET}/FARE_ORACLE.${TARGET}.${PBS_JOBID:-manual}.${STAMP}.live.log"
 cmd=(python -u FARE/scripts/run_oracle_audit.py --checkpoint "$FARE_CHECKPOINT"
      --split "$SPLIT" --seed "$SEED" --expect-target "$TARGET" --expect-dataset "$DATASET" --max-queries "$MAX_QUERIES"
-     --max-regions "$MAX_REGIONS" --max-candidates "$MAX_CANDIDATES")
+     --max-regions "$MAX_REGIONS" --max-candidates "$MAX_CANDIDATES"
+     --max-nodes "$MAX_NODES" --replacement-slot "$REPLACEMENT_SLOT")
+IFS=':' read -r -a mode_array <<< "$AUDIT_MODES"
+cmd+=(--audit-modes "${mode_array[@]}")
+IFS=':' read -r -a scaling_array <<< "$SCALING_FACTORS"
+cmd+=(--scaling-factors "${scaling_array[@]}")
 IFS=':' read -r -a severity_array <<< "$SEVERITIES"
 cmd+=(--severities "${severity_array[@]}")
 if [[ -n "${FARE_MEMORY:-}" ]]; then cmd+=(--memory "$FARE_MEMORY"); fi
 if [[ -n "${FARE_ORACLE_OUTPUT:-}" ]]; then cmd+=(--output "$FARE_ORACLE_OUTPUT"); fi
 if [[ "${FARE_ORACLE_RESUME:-0}" == '1' ]]; then cmd+=(--resume); fi
 if [[ "${FARE_ORACLE_SMOKE:-0}" == '1' ]]; then cmd+=(--smoke); fi
-printf 'FARE212_START target=%s checkpoint=%s split=%s queries=%s regions=%s candidates=%s\n' \
- "$TARGET" "$FARE_CHECKPOINT" "$SPLIT" "$MAX_QUERIES" "$MAX_REGIONS" "$MAX_CANDIDATES" | tee -a "$LOG"
+printf 'FARE213_START target=%s checkpoint=%s split=%s queries=%s regions=%s candidates=%s nodes=%s modes=%s\n' \
+ "$TARGET" "$FARE_CHECKPOINT" "$SPLIT" "$MAX_QUERIES" "$MAX_REGIONS" "$MAX_CANDIDATES" "$MAX_NODES" "$AUDIT_MODES" | tee -a "$LOG"
 "${cmd[@]}" 2>&1 | tee -a "$LOG"
-echo 'FARE212_AUDIT_PBS_PASS' | tee -a "$LOG"
+echo 'FARE213_AUDIT_PBS_PASS' | tee -a "$LOG"
