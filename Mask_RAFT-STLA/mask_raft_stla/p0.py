@@ -226,7 +226,7 @@ def candidate_probe_batch(output, batch, max_delta, margin=.02):
             'risk_prob_mean':mean_q(risk_prob),
             'risk_label_rate':mean_q(true_benefit),
             'risk_brier':mean_q((risk_prob-true_benefit.float()).square()),
-            'gate_mean':mean_q(output['forecast_gate']),
+            'gate_mean':mean_q(output['gate']),
             'none_weight_mean':mean_q(none_w),
             'correction_abs_norm':mean_q(correction.abs()),
             'full_beneficial_element_rate':mean_q((base_err>full_err)),

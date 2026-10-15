@@ -40,3 +40,50 @@ def evaluate(model,memory,ds,device,cfg,output,mode='full',save_traces=True):
     dump_json(path/f'{mode}.json',result)
     if save_traces:np.savez_compressed(path/f'{mode}.npz',**data)
     return result,data
+
+@torch.no_grad()
+def evaluate_modes(model,memory,ds,device,cfg,output,modes,save_traces=False):
+    """Evaluate fixed-checkpoint interventions in ONE pass over query batches.
+
+    Full output is reused by downstream interventions; no repeated Backbone
+    prefix and no repeated historical retrieval when a mode affects only risk,
+    integration or candidate selection.
+    """
+    model.eval()
+    buffer={m:{'prediction':[],'alpha':[],'null_weight':[],'predicted_gain':[],
+               'forward_coverage':[],'backward_coverage':[],'regime':[],
+               'residual_weight_mean':[],'evolution_weight_mean':[]} for m in modes}
+    common={'target':[],'valid':[],'direct':[],'row_id':[],'origin':[]}
+    for raw in make_loader(ds,cfg['training']['batch_size'],workers=cfg['training']['workers']):
+        batch=device_batch(raw,device)
+        full=model(batch,memory,purge=cfg['memory']['purge_steps'],return_details=True)
+        for m in modes:
+            out=model.intervene_cached(batch,memory,full,m,cfg['memory']['purge_steps'])
+            b=buffer[m]
+            b['prediction'].append(((out['prediction']*model.backbone.std)+model.backbone.mean).cpu().numpy())
+            b['alpha'].append(out['alpha'].cpu().numpy())
+            b['null_weight'].append(out['selection']['null'].cpu().numpy())
+            b['predicted_gain'].append(out['gain_estimate'].cpu().numpy())
+            b['forward_coverage'].append(out['support']['forward_coverage'].cpu().numpy())
+            b['backward_coverage'].append(out['support']['backward_coverage'].cpu().numpy())
+            b['regime'].append(out['support']['regime'].cpu().numpy())
+            w=out['selection']['weights'];den=max(1,w.shape[1]*w.shape[-1])
+            b['residual_weight_mean'].append((w[:,:,:,0,:].sum((1,2,3))/den).cpu().numpy())
+            b['evolution_weight_mean'].append((w[:,:,:,1,:].sum((1,2,3))/den).cpu().numpy())
+        common['target'].append(raw['target_raw'].numpy())
+        common['valid'].append(raw['future_valid'].numpy())
+        common['direct'].append(raw['direct_mask'].numpy())
+        common['row_id'].append(raw['row_id'].numpy())
+        common['origin'].append(raw['origin'].numpy())
+    common={k:np.concatenate(v) for k,v in common.items()}
+    output=Path(output);output.mkdir(parents=True,exist_ok=True)
+    results={};data={}
+    for mode,items in buffer.items():
+        trace={**common,**{k:np.concatenate(v) for k,v in items.items()}}
+        res=dict(canonical_metric_bundle()(trace['prediction'],trace['target'],trace['valid'],trace['direct']))
+        res.update({'evaluation_mode':mode,'rows':len(trace['row_id']),
+                    'analysis_scope':'fixed_checkpoint_budgeted' if cfg['analysis'].get('max_intervention_queries') else 'fixed_checkpoint_full'})
+        dump_json(output/f'{mode}.json',res)
+        if save_traces:np.savez_compressed(output/f'{mode}.npz',**trace)
+        results[mode]=res;data[mode]=trace
+    return results,data

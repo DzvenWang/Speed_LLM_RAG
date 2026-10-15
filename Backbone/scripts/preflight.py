@@ -10,13 +10,13 @@ from backbone.training_modes import require_mode
 from backbone.identity import load_cache_identity, require_cache_version_compatibility
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument('--stage',choices=['development','formal','evaluation'],required=True); ap.add_argument('--severity',type=int,choices=[20,40,60,90]); ap.add_argument('--train-data-mode',choices=('incomplete','complete'),default=None); ap.add_argument('--config',default=str(ROOT/'configs/backbone.yaml')); a=ap.parse_args()
+    ap=argparse.ArgumentParser(); ap.add_argument('--model',choices=['STAEformer','HimNet','BigST','STDN','PatchSTG','STLAformer'],default='PatchSTG'); ap.add_argument('--stage',choices=['development','formal','evaluation'],required=True); ap.add_argument('--severity',type=int,choices=[20,40,60,90]); ap.add_argument('--train-data-mode',choices=('incomplete','complete'),default=None); ap.add_argument('--config',default=str(ROOT/'configs/backbone.yaml')); a=ap.parse_args()
     if a.stage=='evaluation' and a.severity is None: raise SystemExit('--severity is required for evaluation')
     cfg=load_yaml(a.config); train_data_mode=require_mode(a.train_data_mode or cfg.get('experiment',{}).get('train_data_mode','incomplete')); print('Backbone preflight v'+str(cfg['version']),'train_data_mode='+train_data_mode); failed=False
     paths=[ROOT,repository_root()/'Base_SupportBench',repository_root()/'Base_SupportBench',repository_root()/'Base_SupportBench',Path(cfg['project']['benchmark_root']),Path(cfg['project']['cache_root'])]
     for p in paths:
         ok=p.exists(); print(('PASS' if ok else 'FAIL'),p); failed|=not ok
-    try: subprocess.check_call([sys.executable,str(ROOT/'scripts/source_lock.py'),'verify','--config',a.config])
+    try: subprocess.check_call([sys.executable,str(ROOT/'scripts/source_lock.py'),'verify','--config',a.config,'--model',a.model])
     except Exception: failed=True
     for pkg in ['torch','numpy','pandas','yaml','scipy','sklearn','timm']:
         ok=importlib.util.find_spec(pkg) is not None; print(('PASS' if ok else 'FAIL'),pkg); failed|=not ok

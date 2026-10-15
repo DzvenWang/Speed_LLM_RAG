@@ -8,7 +8,7 @@ def test_full_forward_and_backward(fixture_data):
     assert torch.allclose(out['selection']['weights'].sum((2,3))+out['selection']['null'],torch.ones(2,6,12),atol=1e-5)
     loss=(out['prediction']-b['target']).square().mean()
     loss.backward()
-    assert model.support.mix[0].weight.grad is not None
+    assert model.support.embed[0].weight.grad is not None
 
 def test_null_evidence_is_exact_base(fixture_data):
     model,mem,b=fixture_data

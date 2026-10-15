@@ -8,6 +8,21 @@
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -j oe
 set -euo pipefail
+# Find runtime helper from the submission working directory (PBS scripts can be spooled).
+_RUNTIME=""
+for _dir in "${SPEED_LLM_RAG_ROOT:-}" "${PBS_O_WORKDIR:-}" "${PWD:-}"; do
+  [[ -n "$_dir" && -d "$_dir" ]] || continue
+  _dir="$(cd "$_dir" && pwd -P)"
+  while :; do
+    if [[ -f "$_dir/Mask_RAFT-STLA/pbs/runtime.sh" ]]; then
+      _RUNTIME="$_dir/Mask_RAFT-STLA/pbs/runtime.sh"; break 2
+    fi
+    [[ "$_dir" == / ]] && break
+    _dir="$(dirname "$_dir")"
+  done
+done
+[[ -n "$_RUNTIME" ]] || { echo 'ERROR: runtime.sh not found. Submit qsub from within repository tree or set SPEED_LLM_RAG_ROOT.' >&2; exit 2; }
+source "$_RUNTIME"
 
 TARGET=${TARGET:-${TRAFFIDENT_TARGET:-speed}}
 SEED=${SEED:-10}
@@ -17,6 +32,7 @@ BACKBONE_MODE=${BACKBONE_MODE:?BACKBONE_MODE is required for dual-backbone forma
 BACKBONE_CHECKPOINT=${BACKBONE_CHECKPOINT:?BACKBONE_CHECKPOINT is required for dual-backbone formal jobs}
 case "$TARGET" in speed|flow) ;; *) echo "ERROR TARGET=$TARGET (expected speed|flow)"; exit 2;; esac
 case "$BACKBONE_MODE" in complete|incomplete) ;; *) echo "ERROR BACKBONE_MODE must be complete/incomplete"; exit 2;; esac
+[[ "$BACKBONE_CHECKPOINT" = /* ]] || BACKBONE_CHECKPOINT="$ROOT/$BACKBONE_CHECKPOINT"
 [[ -f "$BACKBONE_CHECKPOINT" ]] || { echo "ERROR missing STLA checkpoint: $BACKBONE_CHECKPOINT"; exit 2; }
 # Fail fast on the common mistake of labeling the wrong STLA initialization.
 case "$BACKBONE_MODE:$BACKBONE_CHECKPOINT" in
@@ -25,20 +41,12 @@ case "$BACKBONE_MODE:$BACKBONE_CHECKPOINT" in
 esac
 [[ "$SEED" =~ ^[0-9]+$ ]] || { echo "ERROR SEED must be a nonnegative integer"; exit 2; }
 
-ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
-ENVROOT=${TFP_ENV_ROOT:-/scratch/mh20/zw1165/envs/TFP}
-PYTHON="$ENVROOT/bin/python"
-[[ -x "$PYTHON" ]] || { echo "ERROR Python not executable: $PYTHON"; exit 3; }
 
-export SPEED_LLM_RAG_ROOT="$ROOT"
 export TRAFFIDENT_TARGET="$TARGET"
 export BACKBONE_MODE BACKBONE_CHECKPOINT
 export PYTHONUNBUFFERED=1
 export PYTHONDONTWRITEBYTECODE=1
-export PYTHONPATH="$ROOT/Mask_RAFT-STLA:$ROOT/Base_SupportBench:${PYTHONPATH:-}"
-export PATH="$ENVROOT/bin:$PATH"
 
-cd "$ROOT"
 mkdir -p "Mask_RAFT-STLA_logs/$TARGET/$BACKBONE_MODE"
 STAMP=$(date +%Y%m%d_%H%M%S)
 JOBID=${PBS_JOBID:-local}

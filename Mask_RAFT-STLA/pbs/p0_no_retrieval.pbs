@@ -8,9 +8,22 @@
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -j oe
 set -euo pipefail
+# Find runtime helper from the submission working directory (PBS scripts can be spooled).
+_RUNTIME=""
+for _dir in "${SPEED_LLM_RAG_ROOT:-}" "${PBS_O_WORKDIR:-}" "${PWD:-}"; do
+  [[ -n "$_dir" && -d "$_dir" ]] || continue
+  _dir="$(cd "$_dir" && pwd -P)"
+  while :; do
+    if [[ -f "$_dir/Mask_RAFT-STLA/pbs/runtime.sh" ]]; then
+      _RUNTIME="$_dir/Mask_RAFT-STLA/pbs/runtime.sh"; break 2
+    fi
+    [[ "$_dir" == / ]] && break
+    _dir="$(dirname "$_dir")"
+  done
+done
+[[ -n "$_RUNTIME" ]] || { echo 'ERROR: runtime.sh not found. Submit qsub from within repository tree or set SPEED_LLM_RAG_ROOT.' >&2; exit 2; }
+source "$_RUNTIME"
 # Exactly the original formal PBS runner, but with independently trained
 # NO RETRIEVAL model/forecast adapter. Not an evidence-disabled full checkpoint.
 export ABLATION=no_retrieval
-ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
-cd "$ROOT"
 exec bash Mask_RAFT-STLA/pbs/formal.pbs

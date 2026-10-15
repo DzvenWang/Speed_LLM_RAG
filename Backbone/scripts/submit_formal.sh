@@ -15,7 +15,8 @@ case "$TARGET" in speed|flow) ;; *) echo "ERROR TARGET=$TARGET" >&2; exit 2;; es
 [[ "$SEED" == "10" ]] || { echo "ERROR Formal seed is fixed to 10" >&2; exit 2; }
 case "$TRAIN_DATA_MODE" in incomplete|complete) ;; *) echo "ERROR invalid TRAIN_DATA_MODE=$TRAIN_DATA_MODE" >&2; exit 2;; esac
 
-ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
+SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+ROOT=${SPEED_LLM_RAG_ROOT:-$SCRIPT_ROOT}
 if [[ "$(basename "$ROOT")" == "Backbone" ]]; then ROOT="$(cd "$ROOT/.." && pwd)"; fi
 PROJ="$ROOT/Backbone"
 ENVROOT=${TFP_ENV_ROOT:-${CONDA_PREFIX:-}}

@@ -16,7 +16,7 @@ Proof responsibility: trained_until must be externally auditable (fold training 
 import _bootstrap,argparse,json
 from pathlib import Path
 import numpy as np,torch
-from fare.config import read_config,cache_dir,hash_file,dump_json
+from fare.config import read_config,cache_dir,hash_file,dump_json,project_path
 from fare.protocol import SupportDataset
 from fare.backbone import load_stla
 
@@ -28,7 +28,8 @@ def main():
     ds=SupportDataset(cache_dir(cfg),'train')
     starts=ds.meta.window_start.to_numpy(np.int64)
     _,indices=np.unique(starts,return_index=True)
-    manifest=json.loads(Path(a.manifest).read_text())
+    manifest_path=project_path(a.manifest,must_exist=True)
+    manifest=json.loads(manifest_path.read_text())
     if not manifest.get('folds'):raise RuntimeError('No chronological OOS folds')
     device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     results={};provenance=[]
@@ -37,7 +38,11 @@ def main():
         if cutoff>=lo:raise RuntimeError('Fold leakage: producer training end must precede evaluation start')
         relevant=[int(i) for i in indices if lo<=starts[i]<=hi and starts[i]>cutoff]
         if not relevant:continue
-        checkpoint=Path(fold['checkpoint']).expanduser().resolve()
+        checkpoint=Path(fold['checkpoint']).expanduser()
+        if not checkpoint.is_absolute():
+            candidate=manifest_path.parent/checkpoint
+            checkpoint=candidate.resolve() if candidate.is_file() else project_path(checkpoint,must_exist=True)
+        else:checkpoint=checkpoint.resolve()
         model=load_stla(checkpoint,device)
         if model.n!=ds.n:raise ValueError('Fold checkpoint nodes mismatch')
         with torch.no_grad():
@@ -58,7 +63,7 @@ def main():
         if torch.cuda.is_available():torch.cuda.empty_cache()
     if not results:raise RuntimeError('No OOS forecast windows produced')
     ordered=sorted(results)
-    path=Path(a.output);path.parent.mkdir(parents=True,exist_ok=True)
+    path=project_path(a.output);path.parent.mkdir(parents=True,exist_ok=True)
     np.savez_compressed(path,window_start=np.asarray(ordered,dtype=np.int64),
                         trained_until=np.asarray([results[x][1] for x in ordered],dtype=np.int64),
                         prediction=np.stack([results[x][0] for x in ordered]))

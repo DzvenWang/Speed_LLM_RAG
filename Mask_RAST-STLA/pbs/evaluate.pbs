@@ -8,15 +8,26 @@
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -j oe
 set -euo pipefail
+# Find runtime helper from the submission working directory (PBS scripts can be spooled).
+_RUNTIME=""
+for _dir in "${SPEED_LLM_RAG_ROOT:-}" "${PBS_O_WORKDIR:-}" "${PWD:-}"; do
+  [[ -n "$_dir" && -d "$_dir" ]] || continue
+  _dir="$(cd "$_dir" && pwd -P)"
+  while :; do
+    if [[ -f "$_dir/Mask_RAST-STLA/pbs/runtime.sh" ]]; then
+      _RUNTIME="$_dir/Mask_RAST-STLA/pbs/runtime.sh"; break 2
+    fi
+    [[ "$_dir" == / ]] && break
+    _dir="$(dirname "$_dir")"
+  done
+done
+[[ -n "$_RUNTIME" ]] || { echo 'ERROR: runtime.sh not found. Submit qsub from within repository tree or set SPEED_LLM_RAG_ROOT.' >&2; exit 2; }
+source "$_RUNTIME"
 
 TARGET=${TARGET:-${TRAFFIDENT_TARGET:-speed}}
 SEVERITIES=${SEVERITIES:-"20 40 60 90"}
 case "$TARGET" in speed|flow) ;; *) echo "ERROR TARGET=$TARGET (expected speed|flow)"; exit 2;; esac
 
-ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
-ENVROOT=${TFP_ENV_ROOT:-/scratch/mh20/zw1165/envs/TFP}
-PYTHON="$ENVROOT/bin/python"
-[[ -x "$PYTHON" ]] || { echo "ERROR Python not executable: $PYTHON"; exit 3; }
 
 if [[ -n "${CHECKPOINT:-}" ]]; then
   CKPT="$CHECKPOINT"
@@ -28,14 +39,10 @@ fi
 [[ "$CKPT" = /* ]] || CKPT="$ROOT/$CKPT"
 [[ -f "$CKPT" ]] || { echo "ERROR checkpoint not found: $CKPT"; exit 5; }
 
-export SPEED_LLM_RAG_ROOT="$ROOT"
 export TRAFFIDENT_TARGET="$TARGET"
 export PYTHONUNBUFFERED=1
 export PYTHONDONTWRITEBYTECODE=1
-export PYTHONPATH="$ROOT/Mask_RAST-STLA:$ROOT/Base_SupportBench:${PYTHONPATH:-}"
-export PATH="$ENVROOT/bin:$PATH"
 
-cd "$ROOT"
 mkdir -p "Mask_RAST-STLA_logs/$TARGET"
 STAMP=$(date +%Y%m%d_%H%M%S)
 JOBID=${PBS_JOBID:-local}

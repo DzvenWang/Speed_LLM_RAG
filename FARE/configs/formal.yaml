@@ -1,4 +1,4 @@
-version: '3.0.2'
+version: '4.0.1'
 experiment:
   dataset: TraffiDent_Net_06
   target: speed
@@ -19,6 +19,9 @@ backbone:
 traffic:
   region_size: 24
   neighbor_count: 4
+  max_hops: 3
+  path_sources: 16
+  max_temporal_lag: 3
 memory:
   max_episodes: 50000
   residual_mode: external_oos
@@ -29,9 +32,13 @@ retrieval:
   coarse_k: 64
   shortlist_k: 16
   final_k: 8
+  chunk_size: 4096
 teacher:
+  support_queries: 512
+  support_batch_size: 8
   max_queries: 2000
   batch_size: 2
+  nodes_per_query: 12
   refresh_every_epochs: 3
 training:
   batch_size: 32
@@ -54,6 +61,8 @@ evaluation:
   include_val: false  # Default: Test s20/s40/s60/s90 only. Optional --eval-val.
 analysis:
   enabled: true
+  max_intervention_queries: 1024
+  save_intervention_traces: false
   counterfactual_split: s40  # Test-only LOO/Replacement/Scaling diagnostics.
   max_counterfactual_queries: 250
   bootstrap_samples: 1000

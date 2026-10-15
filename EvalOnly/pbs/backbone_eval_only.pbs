@@ -16,7 +16,26 @@ case "$TARGET" in speed|flow) ;; *) echo "Invalid TARGET=$TARGET"; exit 2;; esac
 case "$MODE" in incomplete|complete) ;; *) echo "Invalid MODE=$MODE"; exit 2;; esac
 PROJECT_ROOT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}"
 ROOT="$PROJECT_ROOT/Backbone"
-ENVROOT="${TFP_ENV_ROOT:-/scratch/mh20/zw1165/envs/TFP}"
+# Resolve the Python environment without assuming a machine-specific location.
+# PBS_O_PATH is captured by PBS at qsub time, even if -V is not used.
+resolve_tfp_environment() {
+  local candidate part old_ifs
+  for candidate in "${TFP_ENV_ROOT:-}" "${CONDA_PREFIX:-}"; do
+    if [[ -n "$candidate" && -x "$candidate/bin/python" && -d "$candidate/conda-meta" ]]; then
+      ENVROOT="$(cd "$candidate" && pwd -P)"; return 0
+    fi
+  done
+  old_ifs="$IFS"; IFS=':'
+  for part in ${PBS_O_PATH:-}; do
+    if [[ "$part" == */bin && -x "$part/python" && -d "${part%/bin}/conda-meta" ]]; then
+      ENVROOT="$(cd "${part%/bin}" && pwd -P)"; IFS="$old_ifs"; return 0
+    fi
+  done
+  IFS="$old_ifs"
+  echo "ERROR: No Conda Python environment found. Activate TFP before qsub, or pass -v TFP_ENV_ROOT=\$CONDA_PREFIX" >&2
+  return 3
+}
+resolve_tfp_environment
 PY="$ENVROOT/bin/python"
 [[ -x "$PY" ]] || { echo "Python not found $PY"; exit 3; }
 [[ -f "$CKPT" ]] || { echo "Checkpoint not found: $CKPT"; exit 3; }

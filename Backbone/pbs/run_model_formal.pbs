@@ -19,7 +19,26 @@ case "$TARGET" in speed|flow) ;; *) echo "ERROR TARGET=$TARGET"; exit 2;; esac
 case "$TRAIN_DATA_MODE" in incomplete|complete) ;; *) echo "ERROR TRAIN_DATA_MODE must be incomplete or complete"; exit 2;; esac
 ROOT=${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}
 PROJ="$ROOT/Backbone"
-ENVROOT=${TFP_ENV_ROOT:-/scratch/mh20/zw1165/envs/TFP}
+# Resolve the Python environment without assuming a machine-specific location.
+# PBS_O_PATH is captured by PBS at qsub time, even if -V is not used.
+resolve_tfp_environment() {
+  local candidate part old_ifs
+  for candidate in "${TFP_ENV_ROOT:-}" "${CONDA_PREFIX:-}"; do
+    if [[ -n "$candidate" && -x "$candidate/bin/python" && -d "$candidate/conda-meta" ]]; then
+      ENVROOT="$(cd "$candidate" && pwd -P)"; return 0
+    fi
+  done
+  old_ifs="$IFS"; IFS=':'
+  for part in ${PBS_O_PATH:-}; do
+    if [[ "$part" == */bin && -x "$part/python" && -d "${part%/bin}/conda-meta" ]]; then
+      ENVROOT="$(cd "${part%/bin}" && pwd -P)"; IFS="$old_ifs"; return 0
+    fi
+  done
+  IFS="$old_ifs"
+  echo "ERROR: No Conda Python environment found. Activate TFP before qsub, or pass -v TFP_ENV_ROOT=\$CONDA_PREFIX" >&2
+  return 3
+}
+resolve_tfp_environment
 PYTHON="$ENVROOT/bin/python"
 PYTHON3="$ENVROOT/bin/python3"
 [[ -x "$PYTHON" ]] || { echo "ERROR Python not executable: $PYTHON"; exit 3; }
@@ -38,6 +57,6 @@ echo "START USER_SELECTED_FORMAL model=$MODEL target=$TARGET seed=$SEED train_da
 echo "ROOT=$ROOT PYTHON=$PYTHON TRAFFIDENT_TARGET=$TRAFFIDENT_TARGET"
 "$PYTHON" -V; nvidia-smi || true
 [[ -d "$PROJ/vendor/$MODEL" ]] || { echo "ERROR missing vendor/$MODEL"; exit 4; }
-"$PYTHON" -u scripts/preflight.py --stage formal --train-data-mode "$TRAIN_DATA_MODE" --config configs/backbone.yaml
+"$PYTHON" -u scripts/preflight.py --model "$MODEL" --stage formal --train-data-mode "$TRAIN_DATA_MODE" --config configs/backbone.yaml
 "$PYTHON" -u scripts/run_model_formal.py --model "$MODEL" --train-data-mode "$TRAIN_DATA_MODE" --seed "$SEED" --run-stamp "$STAMP" --config configs/backbone.yaml --recipes configs/model_recipes.yaml
 echo "FINISH model=$MODEL target=$TARGET seed=$SEED"

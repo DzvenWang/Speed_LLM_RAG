@@ -16,4 +16,4 @@ def test_episode_key_does_not_depend_on_future(fixture_data):
 
 def test_support_direction_provenance(fixture_data):
     model,_,_=fixture_data
-    assert model.graph.metadata_source=='undirected_topology'
+    assert model.graph.metadata_source=='adjacency_topology_proxy'

@@ -1,4 +1,4 @@
-"""Fresh FARE-3 configuration and strictly resolved shared data contracts."""
+"""FARE v4 paths are resolved from the source tree, independent of the launch CWD."""
 from __future__ import annotations
 from pathlib import Path
 import os, json, hashlib, yaml, sys
@@ -8,8 +8,26 @@ PACKAGE_ROOT=Path(__file__).resolve().parents[1]
 def root():
     return Path(os.environ.get('SPEED_LLM_RAG_ROOT', PACKAGE_ROOT.parent)).expanduser().resolve()
 
+def project_path(path, *, must_exist=False):
+    """Resolve CLI paths without requiring the caller to cd into the repo.
+
+    Absolute paths are honored; existing relative paths may be relative to the
+    current directory, workspace root, or the FARE package. Missing output
+    paths default to the workspace root. No HPC-specific path is hardcoded.
+    """
+    p=Path(os.path.expandvars(str(path))).expanduser()
+    if p.is_absolute():
+        result=p.resolve()
+    else:
+        candidates=[Path.cwd()/p, root()/p, PACKAGE_ROOT/p]
+        result=next((x.resolve() for x in candidates if x.exists()),(root()/p).resolve())
+    if must_exist and not result.exists():
+        raise FileNotFoundError(f'Cannot resolve project path: {path}; looked under current directory, {root()}, and {PACKAGE_ROOT}')
+    return result
+
+
 def read_config(path=None, dataset=None, target=None, seed=None, smoke=False):
-    p=Path(path) if path else PACKAGE_ROOT/'configs'/'pilot.yaml'
+    p=project_path(path, must_exist=True) if path else PACKAGE_ROOT/'configs'/'pilot.yaml'
     c=yaml.safe_load(p.read_text(encoding='utf8'))
     c.setdefault('evaluation',{}).setdefault('include_val', False)
     c.setdefault('analysis',{}).setdefault('counterfactual_split','s40')
@@ -49,14 +67,15 @@ def cache_dir(c, split='formal', severity=None):
     if not y.is_file():raise FileNotFoundError(f'Build Base_SupportBench cache before FARE: {y}')
     cfg=yaml.safe_load(os.path.expandvars(y.read_text().replace('${SPEED_LLM_RAG_ROOT}',str(root())).replace('${TRAFFIDENT_TARGET}',e['target'])))
     from experiment_common.cache import cache_dir as resolve
-    out=Path(resolve(cfg,split))
+    out=Path(resolve(cfg,split)).expanduser()
+    if not out.is_absolute():out=(root()/out).resolve()
     if not (out/'READY.json').exists() or not (out/'cache_manifest.json').exists():
         raise RuntimeError(f'Missing complete Base_SupportBench cache: {out}')
     return out
 
 def backbone_checkpoint(c, explicit=None):
     if explicit:
-        p=Path(explicit).expanduser().resolve()
+        p=project_path(explicit,must_exist=True)
         if not p.is_file():raise FileNotFoundError(p)
         return p
     e=c['experiment'];base=root()/'Backbone_exps'/e['target']/'STLAformer'/e['dataset']/'formal'

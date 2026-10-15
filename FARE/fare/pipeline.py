@@ -1,7 +1,7 @@
 """Run one FARE model through memory, staged training, automatic evaluation and internal attribution."""
 from pathlib import Path
 import time,os,json,torch
-from .config import root,cache_dir,backbone_checkpoint,hash_file,dump_json
+from .config import root,cache_dir,backbone_checkpoint,hash_file,dump_json,project_path
 from .protocol import SupportDataset,graph_files,directed_metadata
 from .traffic import TrafficGraph
 from .backbone import load_stla
@@ -18,15 +18,19 @@ def prepare(cfg,device,backbone_file=None,memory_file=None,build=True,oos_foreca
     adjacency=graph_files(base_cache)['adj']
     if adjacency.shape[0]!=train.n or val.n!=train.n:raise RuntimeError('Graph / dataset node count mismatch')
     direct=directed_metadata(ex['dataset'],ex['target'],root())
-    graph=TrafficGraph(adjacency,direct,cfg['traffic']['region_size'],cfg['traffic']['neighbor_count']).to(device)
+    graph=TrafficGraph(adjacency,direct,cfg['traffic']['region_size'],
+                       cfg['traffic']['neighbor_count'],cfg['traffic'].get('max_hops',3),
+                       cfg['traffic'].get('path_sources',16)).to(device)
+    graph_index=root()/'FARE_cache'/ex['dataset']/'shared_graph'/'sparse_paths.npz'
+    if not graph_index.exists():graph.save_index(graph_index)
     bk=backbone_checkpoint(cfg,backbone_file)
     backbone=load_stla(bk,device,cfg['backbone']['inject_layers'])
     if backbone.n!=train.n:raise RuntimeError('Checkpoint and dataset node count mismatch')
-    mem_path=Path(memory_file) if memory_file else root()/'FARE_cache'/ex['target']/ex['dataset']/f"memory_{ex['seed']}_{cfg['memory']['max_episodes']}.npz"
+    mem_path=project_path(memory_file) if memory_file else root()/'FARE_cache'/ex['target']/ex['dataset']/f"memory_v4_{ex['seed']}_{cfg['memory']['max_episodes']}"
     expected_memory={'dataset':ex['dataset'],'target':ex['target'],'backbone_sha256':hash_file(bk)}
     if oos_forecast_file and cfg['memory']['residual_mode']=='external_oos':
         expected_memory['oos_source_sha256']=hash_file(oos_forecast_file)
-    if mem_path.exists():
+    if mem_path.exists() and (mem_path/'manifest.json').exists():
         memory=EpisodeMemory.load(mem_path,expected=expected_memory)
     elif build:
         memory=from_support_cache(base_cache,backbone,cfg['memory']['max_episodes'],
@@ -37,18 +41,19 @@ def prepare(cfg,device,backbone_file=None,memory_file=None,build=True,oos_foreca
             memory.metadata['oos_source_sha256']=hash_file(oos_forecast_file)
         mem_path.parent.mkdir(parents=True,exist_ok=True);memory.save(mem_path)
     else:raise FileNotFoundError(mem_path)
+    memory.attach_graph(graph)
     if cfg['experiment']['run_tag']=='formal' and cfg['memory']['require_oos_for_formal'] and memory.metadata.get('residual_provenance')!='external_oos':
         raise RuntimeError('Formal FARE requires genuinely held-out/OOF residuals. Supply external_oos source.')
     model=FARE(backbone,graph,cfg).to(device)
     metadata={'dataset':ex['dataset'],'target':ex['target'],'seed':ex['seed'],
               'backbone_checkpoint':str(bk),'backbone_sha256':hash_file(bk),
-              'memory_path':str(mem_path),'memory_sha256':hash_file(mem_path),
+              'memory_path':str(mem_path),'memory_sha256':hash_file(mem_path/'manifest.json'),
               'residual_provenance':memory.metadata.get('residual_provenance'),
               'direction_provenance':graph.metadata_source,'nodes':train.n}
     return model,memory,train,val,device,metadata
 
 def create_run_dir(cfg,explicit=None):
-    if explicit:return Path(explicit).expanduser().resolve()
+    if explicit:return project_path(explicit)
     ex=cfg['experiment'];stamp=time.strftime('%Y%m%d_%H%M%S')
     return root()/'FARE_exps'/ex['target']/ex['dataset']/ex['run_tag']/f'{stamp}_seed{ex["seed"]}'
 
@@ -73,12 +78,13 @@ def post_training_datasets(cfg,val_ds=None,limit_override=None):
 def run(cfg,device,run_dir=None,backbone_file=None,memory_file=None,oos_forecast_file=None,resume=None,
         train=True,eval_only=False,analysis=True):
     seed_everything(cfg['experiment']['seed']);run_dir=create_run_dir(cfg,run_dir)
+    if resume is not None:resume=project_path(resume,must_exist=True)
     run_dir.mkdir(parents=True,exist_ok=True)
-    model,memory,train_ds,val_ds,device,meta=prepare(cfg,device,backbone_file,memory_file,True,oos_forecast_file)
-    dump_json(run_dir/'manifest.json',{'config':cfg,'metadata':meta,'run_dir':str(run_dir),'version':'3.0.2'})
+    model,memory,train_ds,val_ds,device,meta=prepare(cfg,device,backbone_file,memory_file,True,project_path(oos_forecast_file,must_exist=True) if oos_forecast_file else None)
+    dump_json(run_dir/'manifest.json',{'config':cfg,'metadata':meta,'run_dir':str(run_dir),'version':'4.0.1'})
     if train:
         best=fit(model,memory,train_ds,val_ds,device,cfg,run_dir,meta,resume)
-    else:best=Path(resume) if resume else run_dir/'best.pt'
+    else:best=project_path(resume,must_exist=True) if resume else run_dir/'best.pt'
     ck=torch.load(best,map_location=device,weights_only=False)
     if ck['metadata']['backbone_sha256']!=meta['backbone_sha256'] or ck['metadata']['memory_sha256']!=meta['memory_sha256']:
         raise RuntimeError('Backbone / Memory provenance differs from best checkpoint')
@@ -106,5 +112,5 @@ def run(cfg,device,run_dir=None,backbone_file=None,memory_file=None,oos_forecast
         if analysis and cfg['analysis']['enabled']:
             analyze(model,memory,datasets,device,cfg,run_dir/'analysis')
     dump_json(run_dir/'pipeline_complete.json',{'best_checkpoint':str(best),'finished':time.strftime('%Y-%m-%dT%H:%M:%S')})
-    print('FARE_V3_PIPELINE_COMPLETE',flush=True)
+    print('FARE_V4_PIPELINE_COMPLETE',flush=True)
     return run_dir

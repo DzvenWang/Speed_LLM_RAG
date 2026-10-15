@@ -1,133 +1,206 @@
-# FARE v3.0.2 — Traffic Propagation Support Restoration
+# FARE v4.0.1 — Full Research Implementation
 
-**A new, standalone research implementation.** No FARE v1/v2 checkpoint or project dependency; only the durable `Backbone` official STLAformer and `Base_SupportBench` data/metric contracts are required.
+**Traffic Predictive Support Restoration via Directional Evidence Retrieval and Counterfactual Utility**
 
-FARE is designed for single-run full-model training plus **fixed-checkpoint internal attribution**. Neither external baseline comparisons nor retrained ablation models are part of the automated report.
+A **single, full FARE model** with a frozen **STLAformer** forecasting backbone.  Historical candidate selection, graph-aware transport, set-conditional Keep/Swap utility, residual/evolution fusion and risk-scaled final prediction belong to **one computation graph**. There are no independently retrained FARE ablations.
 
-## Implemented architecture
+## Research implementation and provenance
 
-1. `TrafficGraph` + `PropagationSupportEncoder`: directional/undirected graph coverage, horizon-specific influence, exact contiguous missing components, observable boundary ratio and soft traffic-state features.
-2. `EpisodeMemory`: train-only historical past keys, real completed history/future, provenance-checked residuals; per-query causal future-end cutoff.
-3. `HierarchicalRetriever`: Region Top-64 → Node Top-16 with mask/support-conditioned scoring.
-4. `PropagationTransport`: sparse local-road historical future + residual movement, time-shift distribution, valid forecast evidence.
-5. `SetConditionalSelector`: two-type residual/evolution signed benefit, joint set context, Top-8 episode budget, node/horizon weights + learned Null.
-6. `ForecastIntegrator`: shared hidden evidence token injection into frozen STLAformer (layers configured) plus explicit forecast correction.
-7. `RiskController`: node/horizon predicted gain and learned scaling in `[0,1.25]` relative to exactly defined no-evidence baseline.
-8. Train-only `CounterfactualTeacher`: leave-one-out with weight-to-Null, same-weight candidate replacement, and train-time horizon-block optimal action supervision.
-9. `analysis`: 16 fixed-checkpoint inference interventions, legal random/shuffle controls, evidence interaction, block bootstrap, per-horizon/coverage/risk analysis, detailed files, and Markdown/HTML summaries.
+- **Real data input:** `Base_SupportBench` Schema v3. No changes to the existing Train/Val/Test, sensing masks, target normalization or canonical `metric_bundle`.
+- **Traffic network:** broad non-symmetric adjacency is used for context/regions. The upstream/downstream neighbor arrays determine direction-labeled sparse propagation sources. Input weights are **affinities**, never invented road distances or measured congestion-wave speeds.
+- **Memory:** completed historical episodes, target-specific future, residual and 8-dimensional capability signature. Train IDs and actual time windows remain in the cache; historical future must finish **before** query origin.
+- **Backbone:** loads the *real* `Backbone/vendor/STLAformer/model/STLformer.py` and the selected frozen checkpoint. The official vendor base weights remain frozen; the evidence-injection modules are trainable. Pre-injection activations are reused across candidate and null predictions.
+- **Evidence:** same-node and sparse path-based historical values combined using a learned path gate and bounded nonwrapping temporal alignment. Residual and Evolution VALUE paths do not read each other's values.
+- **Utility:** multihead candidate Set Attention + explicitly learned Keep/Swap heads + one legal replacement, budget Top-8 Episodes, two evidence types and Horizon-specific Null.
+- **Risk:** one unscaled `candidate_prediction`, one evidence-free `null_prediction`, final `null + alpha*(candidate-null)`, alpha in `[0,1.25]`. A train-only action teacher supervises this *exact same alpha*. Gain and Harm heads receive explicit supervision.
+- **Training:** one staged Full model with Train-only observation sensitivity teacher (a *Backbone sensitivity proxy*, not observability ground truth), exact LOO/Swap/Action teacher and replay tied to the frozen teacher candidate sets.
+- **Evaluation:** canonical metrics; validation for checkpoint selection; **Test s20/s40/s60/s90 by default**, `--eval-val` if validation also needed.
+- **Attribution:** one best checkpoint, independent inference-time interventions; common computations are cached. Expensive inference interventions are budgeted **and explicitly labeled as a sampled diagnostic**, separate from the complete-Test headline metrics. No external baselines are invoked.
 
-### Scientific scope
+### Scientific qualification
 
-Every module contribution is a **fixed-checkpoint intervention**. It does *not* claim what would occur if that module were removed and a new model retrained. Traffic-state probabilities are learned proxies unless sufficiently grounded road direction/distance and speed/density metadata exist. In undirected-only datasets, directional conclusions are disallowed.
+Graph hops, weighted direction links and learned lag are **traffic propagation proxies**. The current Net-06 processed files do not verify physical path length or measured congestion-wave velocity. Do not report them as real shockwave ground truth. Do not claim TRC novelty or accuracy improvements until real cluster experiments are completed.
 
-## Project location
+### Dataset status (audited on the user's Gadi environment)
 
-Unzip **at `Speed_LLM_RAG/`** so that `Speed_LLM_RAG/FARE`, `Speed_LLM_RAG/Backbone`, and `Speed_LLM_RAG/Base_SupportBench` are siblings. Set:
+- `TraffiDent_Net_06`, 388 nodes, H=P=12, 50,000 unique Train windows.
+- Five balanced failure types: `entry_random`, `regional_outage`, `directional_outage`, `temporal_outage`, `sensor_outage`; Train severity s40.
+- Speed and Flow share an identical adjacency and identical upstream/downstream neighbor IDs/weights and Train window/family metadata.
+- Net-01/02/03/04 are **not yet processed** in Base_SupportBench. The model is size-dynamic, but those datasets require the same upstream processing and their own STLAformer checkpoints before execution.
+
+## 1. Install without interrupting running v3 jobs
+
+The archive contains the **entire** `FARE/` folder; it does **not** contain `Base_SupportBench`, `Backbone`, raw user data or private Gadi checkpoints. If v3 PBS jobs remain active, **do not overwrite their `FARE/` sources during the run**. After old jobs finish:
 
 ```bash
-export SPEED_LLM_RAG_ROOT=/scratch/mh20/zw1165/Speed_LLM_RAG
+## Run these commands from the Speed_LLM_RAG repository directory:
+mv FARE FARE_v3_archived_20261015
+unzip FARE_v4.0.1_PortablePaths_NewTFP_Full.zip
+export SPEED_LLM_RAG_ROOT="$PWD"
+export PYTHONPATH="$PWD/FARE:${PYTHONPATH:-}"
 conda activate TFP
 ```
 
-### Preflight
+The resulting directory must be `$SPEED_LLM_RAG_ROOT/FARE`.
+
+## 2. Validate the environment/data BEFORE GPU work
 
 ```bash
-python -u FARE/scripts/preflight.py --config FARE/configs/pilot.yaml \
-  --dataset TraffiDent_Net_06 --target speed
 python -m pytest -q FARE/tests
+python -u FARE/scripts/preflight.py --config FARE/configs/pilot.yaml \
+  --dataset TraffiDent_Net_06 --target speed --checkpoint "$STLA_SPEED"
+python -u FARE/scripts/preflight.py --config FARE/configs/pilot.yaml \
+  --dataset TraffiDent_Net_06 --target flow --checkpoint "$STLA_FLOW"
 ```
 
-External `Base_SupportBench` resolved caches and official STLAformer best checkpoints **are not packaged**.
+`FARE4_PREFLIGHT_PASS` confirms input/checkpoint/direction/schema checks, **not** the result of a real V100 forward.
 
-### Pilot: full FARE model
+## 3. Run Full Pilot — one PBS job, one V100 per target
 
-Pilot uses the complete architecture and all stages, with exploratory `checkpoint_in_sample` historical residuals. These are **not OOF**; do not treat Pilot residual-attribution claims as definitive scientific proof.
+```bash
+export STLA_SPEED="$PWD/Backbone_exps/speed/STLAformer/TraffiDent_Net_06/formal/20260930_215233_seed10/best.pt"
+export STLA_FLOW="$PWD/Backbone_exps/flow/STLAformer/TraffiDent_Net_06/formal/20260930_220624_seed10/best.pt"
+
+python -u FARE/scripts/submit_gadi.py --config FARE/configs/pilot.yaml \
+  --dataset TraffiDent_Net_06 --target speed --seed 10 --checkpoint "$STLA_SPEED"
+python -u FARE/scripts/submit_gadi.py --config FARE/configs/pilot.yaml \
+  --dataset TraffiDent_Net_06 --target flow --seed 10 --checkpoint "$STLA_FLOW"
+```
+
+The default is a **full Pilot**, not a smoke. No additional `analysis.pbs` job is submitted. Each job requests `gpuvolta`, **1 V100, 12 CPU, 32 GB RAM and 48 hours**. All steps Train → Test Evaluate → Internal Attribution run sequentially inside the **same PBS job and GPU allocation**. This does **not** guarantee completion within 48 hours; actual throughput must be profiled.
+
+Outputs are in `FARE_exps/<target>/TraffiDent_Net_06/pilot/<timestamp>_seed10` and logs in `FARE_logs`.
+
+### Optional smoke for initial real GPU integration
+
+Add `--smoke` to the submit command; the same full architecture is exercised with a small number of windows/epochs. Preflight passing does not prove the vendor source or GPU activation behavior.
+
+## 4. Actual V100 profile (prebuilt Memory required)
+
+```bash
+python -u FARE/scripts/build_memory.py --config FARE/configs/pilot.yaml \
+  --target speed --checkpoint "$STLA_SPEED"
+# Run only inside GPU compute allocation:
+python -u FARE/scripts/profile_gpu.py --config FARE/configs/pilot.yaml \
+  --target speed --checkpoint "$STLA_SPEED" \
+  --memory "$PWD/FARE_cache/speed/TraffiDent_Net_06/memory_v4_10_16000" \
+  --steps 20 --out FARE_profile_speed.json
+```
+
+`profile_gpu.py` is not a GPU reservation command. Use it **inside a PBS compute job**, not a login node.
+
+## 5. Results and resume
+
+- `best.pt` and `last.pt`: Full model/optimizer/stage/RNG state.
+- `train_metrics.jsonl`: per-epoch Train/Val metrics.
+- `teacher_*.pt`: exact Train-only Counterfactual snapshots, cached with candidate evidence and labels.
+- `support_teacher.pt`: observation-removal sensitivity proxy labels.
+- `evaluation/performance_summary.csv`: complete Test s20/s40/s60/s90 + averages; Val if explicitly enabled.
+- `analysis/module_contributions.csv`, `research_findings.json`, `research_report.html`: fixed-checkpoint interventions, sampled query counts and uncertainty.
+
+If a job stops before analysis and training is already complete, use `scripts/evaluate.py` / `scripts/analyze.py` with the saved `best.pt` — **no new model training**.
+
+Manual resume from latest stage:
 
 ```bash
 python -u FARE/scripts/run_pipeline.py --config FARE/configs/pilot.yaml \
-  --dataset TraffiDent_Net_06 --target speed --seed 10
-
-# Fast complete-pipeline smoke against real external data contracts
-python -u FARE/scripts/run_pipeline.py --config FARE/configs/pilot.yaml \
-  --dataset TraffiDent_Net_06 --target flow --seed 10 --smoke
+  --target speed --checkpoint "$STLA_SPEED" \
+  --run-dir "<existing_v4_run_dir>" --resume "<existing_v4_run_dir>/last.pt"
 ```
 
-#### Gadi — one job, one V100, all phases (default)
+The current one-job scheduler requests a new allocation if invoked again; it does not silently allocate a second GPU for analysis.
 
-`submit_gadi.py` submits **one PBS job per target**, not two. In the same
-`gpuvolta` allocation, `full_pipeline.pbs` executes:
+## 6. Formal OOS residual requirement
 
-1. Train the complete FARE (uses Validation loss each epoch for checkpoint selection).
-2. Automatically evaluate **Test s20/s40/s60/s90 only** (default).
-3. Automatically run fixed-checkpoint internal attribution on those Test splits,
-   including Train-free LOO / Replacement / Scaling audit on Test s40.
-4. Generate CSV/JSON/Markdown/HTML reports.
+**Pilot** uses `checkpoint_in_sample`: exploratory only. **Formal** uses `external_oos` and refuses in-sample Memory.
 
-```bash
-python -u FARE/scripts/submit_gadi.py --config FARE/configs/pilot.yaml \
-  --dataset TraffiDent_Net_06 --target speed --seed 10 --checkpoint /abs/STLA_speed/best.pt
-python -u FARE/scripts/submit_gadi.py --config FARE/configs/pilot.yaml \
-  --dataset TraffiDent_Net_06 --target flow --seed 10 --checkpoint /abs/STLA_flow/best.pt
-```
-
-To also evaluate/analyze the Validation split **after** training, add
-`--eval-val` to each submission. This **does not** affect validation-based
-checkpoint selection during training, which is always performed.
-The standalone `run_pipeline.py`, `evaluate.py`, and `analyze.py` also accept
-`--eval-val` / `--test-only`.
-
-Each submitted job requests **12 CPUs, one V100, 32 GB, and a 48h PBS walltime**.
-The full internal attribution (16 modes × 4 test severities) can be expensive;
-if it exceeds the remaining walltime the job is terminated, even though its
-best checkpoint is saved. In that case a separate recovery invocation may be
-needed; one-job scheduling is not a guarantee that everything fits in 48h.
-
-**Existing previously submitted Train/Analysis jobs do not change** when code
-is updated. Cancel/reconcile those old jobs before submitting a new unified
-Pilot, and do not replace files while a running PBS process is using them.
-
-### Formal: **requires auditable, chronologically OOS residuals**
-
-The best existing STLAformer checkpoint may already have seen all Train labels. You cannot recover true OOS residuals from that checkpoint by merely separating the Memory indices. The formal configuration deliberately requires an `external_oos` file whose producer models were trained before the windows they predict.
-
-Prepare an OOS fold manifest (see `docs/OOS_RESIDUALS.md`). The project can **generate predictions from existing fold checkpoints**; it does not silently train a new Backbone:
+The full archive contains `scripts/build_oos_predictions.py` to combine externally trained chronological STLAformer fold checkpoints, but it **does not train those fold producers automatically**, because the private `Backbone` project and fold training commands are not in this archive. Formal can run after actual time-purged fold producer checkpoints are supplied. Their last **training label** timestamps must be earlier than the start of the corresponding OOS forecast sample. Verify the producer's training logs independently; an asserted `trained_until` field by itself is not proof of true OOF status.
 
 ```bash
 python -u FARE/scripts/build_oos_predictions.py \
-  --manifest oos_folds.json --config FARE/configs/formal.yaml \
-  --target speed --dataset TraffiDent_Net_06 \
+  --manifest FARE_oos_folds_speed.json --target speed \
   --output FARE_cache/oos_speed.npz
-
 python -u FARE/scripts/submit_gadi.py --config FARE/configs/formal.yaml \
-  --target speed --dataset TraffiDent_Net_06 --seed 10 \
-  --oos-forecast-file FARE_cache/oos_speed.npz
+  --target speed --checkpoint "$STLA_SPEED" \
+  --oos-forecast-file "$PWD/FARE_cache/oos_speed.npz"
 ```
 
-**Do not fabricate `trained_until` fields.** The fold manifest must be supported by actual dated training splits/checkpoint logs. If chronologically OOS pretrained checkpoints do not exist, formal will stop with a clear error; the explicitly marked exploratory Pilot remains runnable.
+## 7. Performance constraints
 
-## Outputs
+- Memory stored as random-access `.npy` arrays, not one compressed NPZ; compact Region keys on GPU, node/capability keys and historical values gathered only after Top-K.
+- Region Top-K computed in chunks, no `[B,G,M,D]` materialized broadcast.
+- Sparse propagation sources and factorized space/time weighting; value branches retain same-node historical evidence.
+- Set Attention on `[B,N,K,D]`, not `[B,N,K,P,D]`.
+- Frozen STLAformer Prefix shared by base, evidence and LOO/Swap outputs.
+- Teacher uses cached candidates and downstream re-execution; periodic limited replay rather than exhausting all training steps.
+- Analysis recomputes only the dependency-affected suffix, with a logged query budget for expensive interventions.
+- Use FP16 autocast + GradScaler on CUDA; gain/MAE/risk losses use FP32 where necessary.
 
-`FARE_exps/<target>/<dataset>/<pilot|formal>/<timestamp>_seed<seed>/`:
+## 8. Known limitations and important claims
 
-- `best.pt`, `last.pt`, `train_metrics.jsonl`, stage teacher cache + hash, manifests.
-- `evaluation/performance_summary.csv`: Test s20/s40/s60/s90 by default, optionally Val with Avg(s20–s90), Avg(s20–s60), MAE/RMSE/MAPE and directly masked metrics.
-- `evaluation/<severity>/full.json`, `.npz`: strict `experiment_common.metrics.metric_bundle` and raw prediction traces.
-- `analysis/module_contributions.csv`: same checkpoint effects of each internal intervention including random/shuffled legal Memory.
-- `analysis/evidence_interactions.csv`, `evidence_usage.csv`, `traffic_support_analysis.csv`, `risk_diagnostics.csv`, `horizon_metrics.csv`.
-- `analysis/counterfactual/candidate_counterfactual.csv`: LOO, same-weight replacement, scaling on a query budget.
-- `analysis/research_findings.json`, `research_report.md`, `research_report.html`.
+This release has passed **synthetic unit/integration tests** and a 388-node synthetic forward/backward. It has **not been run on the user's actual private Net-06 caches or STLAformer checkpoint on Gadi**. Real smoke/Profiling is still required to establish end-to-end vendor compatibility, throughput, peak V100 memory use, and final MAE/RMSE improvements. It is a complete model/codebase deliverable, not a claim of an empirically validated TRC contribution.
 
-### Standalone re-evaluation/analysis (no retraining)
+The Train-only support-sensitivity teacher measures the prediction impact of *additional legal observation removal* on the frozen Backbone; it is not a measured physical observability index. Historical residual producer quality and its chronological provenance remain externally auditable scientific prerequisites.
+
+
+## Path portability / moved Conda environments (v4.0.1)
+
+The repository and Python environment paths are **not hardcoded**. The repo root
+comes from the location of `FARE/fare/config.py` by default; setting
+`SPEED_LLM_RAG_ROOT` is optional. Input paths are accepted as absolute paths,
+paths relative to your current working directory, or paths relative to the
+repository. For example, from the repository root after `conda activate TFP`:
 
 ```bash
-python -u FARE/scripts/evaluate.py --checkpoint /abs/run/best.pt
-python -u FARE/scripts/analyze.py --checkpoint /abs/run/best.pt
+python -u FARE/scripts/preflight.py --target speed
+python -u FARE/scripts/submit_gadi.py --target speed --seed 10
+python -u FARE/scripts/submit_gadi.py --target flow --seed 10
 ```
 
-`analyze.py` is **read-only** on model weights; the checkpoint, Backbone and Memory hashes are validated.
+To specify a fixed checkpoint without an absolute path:
 
-## Known validation boundary
+```bash
+python -u FARE/scripts/submit_gadi.py --target speed \
+  --checkpoint Backbone_exps/speed/STLAformer/TraffiDent_Net_06/formal/<run>/best.pt
+```
 
-Local tests in this package exercise the true project data shapes with synthetic fixtures, mock Backbone and mock shared metric implementation. The official external STLAformer vendor source and genuine `Base_SupportBench` data caches are not included, so a formal Gadi run has **not yet been verified**. Run preflight + smoke on your Gadi checkout before submitting full Pilot and Formal. No numerical MAE/RMSE gains are claimed without actual experimental evaluation.
+`submit_gadi.py` transfers the **currently active** `sys.executable` and
+`sys.prefix` into the PBS job. The PBS script uses that exact Python and checks
+its prefix, rather than activating `TFP` by name. This avoids accidentally
+selecting an old `/scratch/.../envs/TFP` copy when a new environment was moved
+under `/g/data`. The transferred paths are absolute **resolved at submission
+time**, not hardcoded in FARE source code; PBS requires this to find the same
+interpreter on compute nodes. Verify that the active environment is the one
+you intend *before* submission.
 
-The model uses bounded sparse neighborhood transport and learnable lag alignment. Without reliable directed road metadata, it uses a documented undirected topological proxy; it must not be described as physically validated backward congestion-wave speed.
+You can also submit from another working directory using an absolute path to
+`FARE/scripts/submit_gadi.py`; the config is resolved against the installed
+FARE package automatically. Alternatively, use `--config configs/pilot.yaml`.
+
+`--resume` and `--memory` also accept repository-relative paths and are passed
+through to the same PBS job. To resume an earlier v4 run:
+
+```bash
+python -u FARE/scripts/submit_gadi.py --target speed \
+  --run-dir FARE_exps/speed/TraffiDent_Net_06/pilot/<run> \
+  --resume FARE_exps/speed/TraffiDent_Net_06/pilot/<run>/last.pt
+```
+
+Use `--evaluate-only` to run post-training evaluation/analysis from a saved
+checkpoint without retraining (pass a suitable `--run-dir` and `--resume`), or
+`--skip-analysis` to omit the most expensive attribution.
+
+**Legacy checkpoint caveat:** manifests from earlier runs store resolved
+checkpoint/memory locations. An unchanged project directory with a moved Conda
+environment is fine; moving the *entire workspace* afterward can require
+rewriting old saved manifest artifact paths.
+
+## v4.0.2 Teacher sampling hotfix
+
+Fixes the `IndexError` raised by `choices[empty, 0]` during
+`generate_teacher()` when the empty-candidate mask is shaped `[B,N]`.
+Legal replacements are now sampled through `sample_legal_replacement()`;
+rows with no legal unselected candidates receive an index-0 placeholder
+with `replacement_valid=False`, which is excluded from Swap supervision.
+Adds tests for mixed and all-empty candidate pools. No change to model
+architecture, Base_SupportBench cache, or STLAformer checkpoints.

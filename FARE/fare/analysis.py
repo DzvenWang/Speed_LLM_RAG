@@ -5,13 +5,18 @@ NOT equivalent to removing a module and retraining. All contrasts use one model.
 from pathlib import Path
 import csv,json
 import numpy as np, torch
-from .evaluation import evaluate
+from .evaluation import evaluate,evaluate_modes
 from .protocol import make_loader,device_batch
 from .config import dump_json
 
-MODES=['full','no_evidence','no_support','no_direction','no_regime','no_propagation_alignment',
-       'no_residual','no_evolution','no_set_utility','no_counterfactual_utility','no_null',
-       'no_risk_control','no_hidden_injection','no_forecast_correction','random_memory','shuffled_memory']
+MODES=['full','no_evidence','no_support_demand','no_direction','no_propagation_time',
+       'no_boundary_support','no_regime','no_propagation_alignment',
+       'no_capability_matching','state_similarity_only',
+       'no_residual_information','no_evolution_information',
+       'no_residual_value','no_evolution_value',
+       'no_set_interaction','no_swap_utility','no_counterfactual_utility','no_null',
+       'no_risk_control','no_hidden_injection','no_forecast_correction',
+       'random_legal_memory','shuffled_legal_memory']
 
 def write_csv(path,rows):
     p=Path(path);p.parent.mkdir(parents=True,exist_ok=True)
@@ -61,28 +66,44 @@ def _gain_by_coverage(full,alt):
 
 @torch.no_grad()
 def counterfactual_audit(model,memory,ds,device,cfg,path,split=None):
-    """Sparse in-place leave-one-out + keep-weight replacement + scaling; no training."""
-    model.eval();rows=[];budget=int(cfg['analysis']['max_counterfactual_queries']);count=0
+    """Exact shared-query snapshot LOO/Swap + unscaled candidate risk actions.
+
+    All candidate identities are fixed at the Full run. Illegal/repeated swaps
+    are explicitly skipped. No retrieval or frozen prefix recomputation per slot.
+    """
+    model.eval();rows=[];budget=int(cfg['analysis']['max_counterfactual_queries'])
+    count=0
     for raw in make_loader(ds,1,shuffle=False,workers=0):
         if count>=budget:break
-        bt=device_batch(raw,device)
-        full=model(bt,memory,purge=cfg['memory']['purge_steps'])
-        y=bt['target'];valid=bt['future_valid']
-        mae=lambda x:float((((x-y).abs())*valid).sum()/valid.sum().clamp_min(1))
+        batch=device_batch(raw,device)
+        full=model(batch,memory,purge=cfg['memory']['purge_steps'])
+        y=batch['target'];valid=batch['future_valid'].bool()
+        mae=lambda x:float(((x-y).abs()*valid).sum()/valid.sum().clamp_min(1))
         full_mae=mae(full['prediction']);base=mae(full['null_prediction'])
-        meta={'split':split,'row_id':int(bt['row_id'][0]),'origin':int(bt['origin'][0]),'full_mae_norm':full_mae,'null_mae_norm':base}
-        k=full['selection']['selected_ids'].shape[-1]
+        meta={'split':split,'row_id':int(batch['row_id'][0]),'origin':int(batch['origin'][0]),
+              'full_mae_norm':full_mae,'null_mae_norm':base}
+        selected=full['selection'];short=full['candidate_pool'];prop=full['proposals']
+        prepared=full['prepared'];k=selected['selected_ids'].shape[-1]
         for slot in range(k):
-            alt=model(bt,memory,drop_slot=slot,purge=cfg['memory']['purge_steps'])
-            rows.append({**meta,'operation':'loo','slot':slot,'candidate_position':None,'gain_normalized':mae(alt['prediction'])-full_mae})
-        pool_k=full['candidate_pool']['ids'].shape[-1]
-        for pos in range(min(pool_k,8)):
-            alt=model(bt,memory,replace_slot=0,replace_position=pos,purge=cfg['memory']['purge_steps'])
-            rows.append({**meta,'operation':'replacement','slot':0,'candidate_position':pos,'gain_normalized':full_mae-mae(alt['prediction'])})
-        for alpha in (0,.25,.5,.75,1.,1.25):
-            alt=model(bt,memory,alpha_override=alpha,purge=cfg['memory']['purge_steps'])
-            rows.append({**meta,'operation':'scaling','slot':None,'candidate_position':None,'alpha':alpha,
-                         'gain_normalized':full_mae-mae(alt['prediction'])})
+            edit=model.edit_selection(selected,prop,short,drop_slot=slot)
+            pred=model.predict_with_selection(batch,prepared,edit)['prediction']
+            rows.append({**meta,'operation':'loo','slot':slot,'candidate_position':None,
+                         'gain_normalized':mae(pred)-full_mae})
+        pool=short['ids'].shape[-1]
+        for pos in range(pool):
+            # Only meaningful legal replacement of the selected first slot.
+            legal=short['valid'][:,:,pos] & (~(selected['selected_ids']==short['ids'][:,:,pos:pos+1]).any(-1))
+            if not legal.any():continue
+            edit=model.edit_selection(selected,prop,short,replace_slot=0,replace_position=pos)
+            pred=model.predict_with_selection(batch,prepared,edit)['prediction']
+            rows.append({**meta,'operation':'replacement','slot':0,'candidate_position':pos,
+                         'eligible_nodes':int(legal.sum()),
+                         'gain_normalized':full_mae-mae(pred)})
+        delta=full['candidate_prediction']-full['null_prediction']
+        for alpha in (0.,.25,.5,.75,1.,1.25):
+            prediction=full['null_prediction']+alpha*delta
+            rows.append({**meta,'operation':'scaling','slot':None,'candidate_position':None,
+                         'alpha':alpha,'gain_normalized':full_mae-mae(prediction)})
         count+=1
     write_csv(Path(path)/'candidate_counterfactual.csv',rows)
     return rows
@@ -98,11 +119,19 @@ def analyze(model,memory,datasets,device,cfg,out_dir):
     print('FARE_COUNTERFACTUAL_AUDIT_SPLIT '+audit_split,flush=True)
     for tag,ds in datasets.items():
         base_path=root/tag
-        mode_data={};mode_results={}
-        for mode in MODES:
-            torch.manual_seed(int(cfg['experiment']['seed']))
-            res,dat=evaluate(model,memory,ds,device,cfg,base_path,mode,save_traces=True)
-            mode_data[mode]=dat;mode_results[mode]=res
+        # Pilot attribution is budgeted and explicitly labeled. Full predictions
+        # are already evaluated on the complete Test dataset by pipeline.py.
+        budget=cfg.get('analysis',{}).get('max_intervention_queries')
+        if budget and int(budget)<len(ds):
+            from torch.utils.data import Subset
+            ii=np.linspace(0,len(ds)-1,int(budget),dtype=int).tolist()
+            subset=Subset(ds,ii)
+        else:subset=ds
+        mode_results,mode_data=evaluate_modes(
+            model,memory,subset,device,cfg,base_path,MODES,
+            save_traces=bool(cfg.get('analysis',{}).get('save_intervention_traces',False)))
+        summaries.append({'split':tag,'intervention':'scope_metadata','analyzed_queries':len(subset),
+                          'total_test_queries':len(ds),'sampling':'evenly_spaced'})
         ref=mode_data['full'];ref_mae,ref_rmse=valid_metrics(mode_results['full'])
         for mode in MODES:
             mae,rmse=valid_metrics(mode_results[mode])
@@ -110,7 +139,8 @@ def analyze(model,memory,datasets,device,cfg,out_dir):
                                ref['origin'],cfg['analysis']['bootstrap_samples'],cfg['experiment']['seed'])
             summaries.append({'split':tag,'intervention':mode,'MAE':mae,'RMSE':rmse,
                               'delta_MAE_vs_full':mae-ref_mae,'delta_RMSE_vs_full':rmse-ref_rmse,**ci})
-            if mode in ('no_support','no_direction','no_propagation_alignment','no_regime','no_residual','no_evolution'):
+            if mode in ('no_support_demand','no_direction','no_propagation_alignment','no_regime',
+                           'no_residual_information','no_evolution_information'):
                 for rr in _gain_by_coverage(ref,mode_data[mode]):traffic.append({'split':tag,'intervention':mode,**rr})
         # Query/node/horizon risk diagnosis with unchanged prediction/target masks.
         nul=mode_data['no_evidence'];mask=ref['valid'].astype(bool)
@@ -135,13 +165,13 @@ def analyze(model,memory,datasets,device,cfg,out_dir):
                               'positive_gain_element_fraction':float(((gain>0)&mask).sum()/max(mask.sum(),1)),
                               'negative_gain_element_fraction':float(((gain<0)&mask).sum()/max(mask.sum(),1))})
         # Conditional interaction across the same fixed checkpoint (not retrained ablations)
-        losses={k:valid_metrics(mode_results[k])[0] for k in ('full','no_evidence','no_residual','no_evolution')}
+        losses={k:valid_metrics(mode_results[k])[0] for k in ('full','no_evidence','no_residual_information','no_evolution_information')}
         # no_residual means Evolution only; no_evolution means Residual only
-        interaction=losses['no_evolution']+losses['no_residual']-losses['full']-losses['no_evidence']
+        interaction=losses['no_evolution_information']+losses['no_residual_information']-losses['full']-losses['no_evidence']
         interactions.append({'split':tag,'residual_evolution_interaction_MAE':interaction,
                              'null_MAE':losses['no_evidence'],'full_MAE':losses['full']})
         if tag==audit_split:
-            counterfactual_audit(model,memory,ds,device,cfg,root/'counterfactual',split=tag)
+            counterfactual_audit(model,memory,subset,device,cfg,root/'counterfactual',split=tag)
     write_csv(root/'module_contributions.csv',summaries)
     write_csv(root/'traffic_support_analysis.csv',traffic)
     write_csv(root/'evidence_interactions.csv',interactions)
@@ -151,24 +181,26 @@ def analyze(model,memory,datasets,device,cfg,out_dir):
     # Machine-readable conclusions include uncertainty, never a categorical claim from 1 seed.
     statements=[]
     for r in summaries:
-        if r['intervention']=='full':continue
+        if r['intervention'] in ('full','scope_metadata'):continue
         lo=r.get('mae_ci_low');hi=r.get('mae_ci_high')
         evidence='inconclusive' if lo is None or hi is None or lo<=0<=hi else ('positive_fixed_checkpoint_dependence' if lo>0 else 'negative_fixed_checkpoint_dependence')
         statements.append({'split':r['split'],'module':r['intervention'],'interpretation':evidence,
                            'delta_MAE':r['delta_MAE_vs_full'],'confidence_interval':[lo,hi]})
-    dump_json(root/'research_findings.json',{'scope':'same trained FARE checkpoint only; no retraining; no external model comparisons',
+    dump_json(root/'research_findings.json',{'scope':'same trained FARE v4 checkpoint; budgeted test interventions; no retraining; no external model comparisons',
                                             'counterfactual_audit_split':audit_split,
                                             'module_findings':statements,'interactions':interactions})
     md=['# FARE internal attribution','',
-        'All rows are **fixed-checkpoint inference interventions**. They do not establish retrained architecture ablation effects.','',
+        'All rows are **fixed-checkpoint inference interventions** on a logged query budget (not retrained architecture ablations). Full Test metrics are produced separately by the evaluation pipeline.','',
         '| Split | Intervention | Delta MAE | Delta RMSE | 95% block bootstrap interval |','|---|---|---:|---:|---|']
     for r in summaries:
+        if r['intervention']=='scope_metadata':continue
         md.append(f"| {r['split']} | {r['intervention']} | {r['delta_MAE_vs_full']:+.4f} | {r['delta_RMSE_vs_full']:+.4f} | [{r.get('mae_ci_low',float('nan')):.4f}, {r.get('mae_ci_high',float('nan')):.4f}] |")
     (root/'research_report.md').write_text('\n'.join(md),encoding='utf-8')
     # Self-contained searchable HTML tables; no third-party plotting dependency on Gadi.
     import html
     html_rows=[]
     for r in summaries:
+        if r['intervention']=='scope_metadata':continue
         cells=[r['split'],r['intervention'],f"{r['delta_MAE_vs_full']:+.5f}",
                f"{r['delta_RMSE_vs_full']:+.5f}",f"{r.get('mae_ci_low',float('nan')):.5f}",
                f"{r.get('mae_ci_high',float('nan')):.5f}"]
@@ -179,7 +211,7 @@ article{max-width:1100px;background:white;padding:28px;border-radius:12px;box-sh
 input{padding:10px;width:350px;margin:16px 0}table{border-collapse:collapse;width:100%}th,td{padding:9px;
 text-align:left;border-bottom:1px solid #e1e7ec}th{background:#e8f0f8;position:sticky;top:0}
 small{color:#667}tr:hover{background:#f3f7ff}</style>
-<article><h1>FARE v3 — Internal Attribution</h1><p>Single-checkpoint interventions only; no external-model comparisons or retraining.</p>
+<article><h1>FARE v4 — Internal Attribution</h1><p>Single-checkpoint interventions only; no external-model comparisons or retraining.</p>
 <input id='filter' placeholder='Filter by split or intervention' oninput='for(const r of document.querySelectorAll("tbody tr"))r.hidden=!r.innerText.toLowerCase().includes(this.value.toLowerCase())'>
 <table><thead><tr><th>Split</th><th>Intervention</th><th>Δ MAE</th><th>Δ RMSE</th><th>95% CI low</th><th>95% CI high</th></tr></thead><tbody>"""+''.join(html_rows)+"</tbody></table><p><small>Positive delta indicates Full FARE performs better than the intervention under this fixed checkpoint.</small></p></article></html>"
     (root/'research_report.html').write_text(doc,encoding='utf-8')

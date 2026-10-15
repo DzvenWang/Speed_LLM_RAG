@@ -55,6 +55,8 @@ def main():
         with manifest.open('w', encoding='utf-8') as fh:
             for item in jobs: fh.write(json.dumps(item, ensure_ascii=False, sort_keys=True) + '\n')
         vars = f'KIND={kind},MANIFEST={manifest},SPEED_LLM_RAG_ROOT={root}'
+        envroot = os.environ.get('TFP_ENV_ROOT') or os.environ.get('CONDA_PREFIX')
+        if envroot: vars += f',TFP_ENV_ROOT={Path(envroot).resolve()}'
         name = 'BB_Eval1GPU' if kind == 'backbone' else 'BL_Eval1GPU'
         cmd = ['qsub', '-N', name, '-v', vars, str(pbs)]
         print(f'SUBMIT {kind}: {len(jobs)} tasks, one GPU, manifest={manifest}', flush=True)

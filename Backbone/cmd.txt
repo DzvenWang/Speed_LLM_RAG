@@ -4,7 +4,7 @@ python -u Backbone\scripts\smoke_all_formal.py --continue-on-error
 
 
 
-cd /scratch/mh20/zw1165/Speed_LLM_RAG
+cd /path/to/Speed_LLM_RAG  # replace with your checkout location
 conda activate TFP
 export SPEED_LLM_RAG_ROOT=$PWD
 

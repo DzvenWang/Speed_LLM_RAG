@@ -10,10 +10,10 @@ clone_or_keep(){
   local url="$2"
   local ref="$3"
   local dst="$VENDOR/$name"
-  # The current source_lock contract is PatchSTG-only and uses --config.
+  # The current Source lock verification warns on drift by default; require strict match for reuse.
   # Reuse a stripped PatchSTG tree only when its immutable tree lock verifies.
   if [[ "$name" == "PatchSTG" && -d "$dst" && ! -d "$dst/.git" && -f "$VENDOR/SOURCE_LOCK.json" ]]; then
-    if "$PY" "$ROOT/scripts/source_lock.py" verify --config "$ROOT/configs/backbone.yaml" >/dev/null 2>&1; then
+    if "$PY" "$ROOT/scripts/source_lock.py" verify --strict-hash --config "$ROOT/configs/backbone.yaml" >/dev/null 2>&1; then
       echo -e "$name\t$ref\t$url\tPRESERVED_TREE_LOCK"
       return 0
     fi

@@ -7,7 +7,7 @@ python -u Baseline\scripts\smoke_primary_independent.py --continue-on-error
 python -u Baseline\scripts\smoke_primary_reference_backbone.py --backbone STLAformer --continue-on-error
 
 # Gadi
-cd /scratch/mh20/zw1165/Speed_LLM_RAG
+cd /path/to/Speed_LLM_RAG  # replace with your checkout location
 conda activate TFP
 export SPEED_LLM_RAG_ROOT=$PWD
 

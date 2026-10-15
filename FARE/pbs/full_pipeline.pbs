@@ -4,11 +4,30 @@
 #PBS -l ncpus=12,ngpus=1,mem=32GB,walltime=48:00:00
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -j oe
-#PBS -N FARE3_full
+#PBS -N FARE4_full
 set -euo pipefail
-cd "${SPEED_LLM_RAG_ROOT:-$PBS_O_WORKDIR}"
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate TFP
+# The submit helper supplies these resolved values from its own Python process.
+# No /scratch, /g/data, conda base, or conda environment name is hardcoded.
+PROJECT_ROOT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-}}"
+if [[ -z "$PROJECT_ROOT" || ! -f "$PROJECT_ROOT/FARE/scripts/run_pipeline.py" ]]; then
+  echo "FARE_FATAL: invalid project root. Submit with FARE/scripts/submit_gadi.py." >&2
+  exit 2
+fi
+cd "$PROJECT_ROOT"
+PYTHON="${FARE_PYTHON:-${FARE_ENV_PREFIX:+$FARE_ENV_PREFIX/bin/python}}"
+if [[ -z "$PYTHON" ]]; then
+  PYTHON="$(command -v python || true)"
+fi
+if [[ -z "$PYTHON" || ! -x "$PYTHON" ]]; then
+  echo "FARE_FATAL: active TFP Python unavailable; submit with submit_gadi.py." >&2
+  exit 2
+fi
+# Use the exact interpreter that submitted the job, even if 'TFP' is also
+# installed in a second Conda prefix. Do not activate an environment by name.
+export PATH="$(dirname "$PYTHON"):$PATH"
+"$PYTHON" -c 'import sys, os; expected=os.environ.get("FARE_ENV_PREFIX"); actual=os.path.realpath(sys.prefix); print("FARE_PYTHON=", sys.executable, "FARE_ENV_PREFIX=", actual, flush=True); assert not expected or os.path.realpath(expected)==actual, "Wrong Python environment on compute node"'
+export SPEED_LLM_RAG_ROOT="$PROJECT_ROOT"
+export PYTHONPATH="$PROJECT_ROOT/FARE:${PYTHONPATH:-}"
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-6}"
 TARGET="${TARGET:-speed}"
@@ -17,18 +36,21 @@ SEED="${SEED:-10}"
 CONFIG="${FARE_CONFIG:-FARE/configs/pilot.yaml}"
 mkdir -p "FARE_logs/$TARGET/$DATASET"
 STAMP=$(date +%Y%m%d_%H%M%S)
-LOG="FARE_logs/$TARGET/$DATASET/FARE3.$STAMP.seed$SEED.${PBS_JOBID:-manual}.live.log"
+LOG="FARE_logs/$TARGET/$DATASET/FARE4.$STAMP.seed$SEED.${PBS_JOBID:-manual}.live.log"
 MONITOR_PREFIX="${LOG%.live.log}.resources"
-python -u FARE/scripts/resource_monitor.py --parent-pid "$$" --interval "${FARE_RESOURCE_INTERVAL:-30}" --output-prefix "$MONITOR_PREFIX" >"${MONITOR_PREFIX}.monitor.log" 2>&1 &
+"$PYTHON" -u FARE/scripts/resource_monitor.py --parent-pid "$$" --interval "${FARE_RESOURCE_INTERVAL:-30}" --output-prefix "$MONITOR_PREFIX" >"${MONITOR_PREFIX}.monitor.log" 2>&1 &
 MONITOR_PID=$!
 cleanup() { local status=$?; trap - EXIT; kill -TERM "$MONITOR_PID" 2>/dev/null || true; wait "$MONITOR_PID" 2>/dev/null || true; exit "$status"; }
 trap cleanup EXIT
-CMD=(python -u FARE/scripts/run_pipeline.py --config "$CONFIG" --dataset "$DATASET" --target "$TARGET" --seed "$SEED")
+CMD=("$PYTHON" -u FARE/scripts/run_pipeline.py --config "$CONFIG" --dataset "$DATASET" --target "$TARGET" --seed "$SEED")
 if [[ -n "${BACKBONE_CHECKPOINT:-}" ]]; then CMD+=(--checkpoint "$BACKBONE_CHECKPOINT"); fi
 if [[ -n "${FARE_OOS_FORECAST_FILE:-}" ]]; then CMD+=(--oos-forecast-file "$FARE_OOS_FORECAST_FILE"); fi
 if [[ -n "${FARE_RUN_DIR:-}" ]]; then CMD+=(--run-dir "$FARE_RUN_DIR"); fi
 if [[ -n "${FARE_RESUME:-}" ]]; then CMD+=(--resume "$FARE_RESUME"); fi
+if [[ -n "${FARE_MEMORY:-}" ]]; then CMD+=(--memory "$FARE_MEMORY"); fi
+if [[ "${FARE_EVALUATE_ONLY:-0}" == 1 ]]; then CMD+=(--evaluate-only); fi
+if [[ "${FARE_SKIP_ANALYSIS:-0}" == 1 ]]; then CMD+=(--skip-analysis); fi
 if [[ "${FARE_SMOKE:-0}" == 1 ]]; then CMD+=(--smoke); fi
 if [[ "${FARE_EVAL_VAL:-0}" == 1 ]]; then CMD+=(--eval-val); else CMD+=(--test-only); fi
 "${CMD[@]}" 2>&1 | awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush(); }' | tee "$LOG"
-echo FARE3_TRAIN_EVALUATION_ANALYSIS_PASS
+echo FARE4_TRAIN_EVALUATION_ANALYSIS_PASS

@@ -1,118 +1,167 @@
-"""Train-only episode memory; all future values are completed past episodes.
+"""FARE 4 episode store: completed historical evidence, compact keys, memmapped files.
 
-Memory uses CPU arrays and GPU-readable small keys, with sparse target/neighborhood
-value gathering. Residual provenance is verified on production starts.
+A historical future may be consulted only after it has actually ended.  Strict
+Formal residuals require separately produced, verified OOS predictions.
 """
+from __future__ import annotations
 from pathlib import Path
 import json,warnings
 import numpy as np,torch
 from .config import dump_json,hash_file
 
+
 def _episode_key(x,mask):
-    # x/mask [M,H,N]; key solely from historical information
-    ok=mask.float();count=ok.sum(1).clamp_min(1)
-    mean=(x*ok).sum(1)/count
-    var=((x-mean[:,None,:]).square()*ok).sum(1)/count
+    m=mask.float();den=m.sum(1).clamp_min(1)
+    mean=(x*m).sum(1)/den
+    std=torch.sqrt(((x-mean[:,None])**2*m).sum(1)/den+1e-5)
     trend=(x[:,-1]-x[:,0])*mask[:,-1]*mask[:,0]
-    coverage=ok.mean(1)
-    return torch.stack([mean,torch.sqrt(var+1e-5),trend,coverage],-1)
+    return torch.stack([mean,std,trend,m.mean(1)],-1)
+
+
+def _capability_key(future,valid,residual,residual_valid,history,mask):
+    # Normalized, per-node capability from *past completed* historical evidence.
+    # Summaries are descriptive, not supervised physical event labels.
+    mv=valid.float();rv=residual_valid.float()
+    last_index=torch.where(mask,torch.arange(mask.shape[1])[None,:,None],-1).amax(1)
+    h=torch.gather(history,1,last_index.clamp_min(0)[:,None,:]).squeeze(1)
+    evolution=(future-h[:,None])*mv
+    r=residual*rv
+    def mean(v,w):return (v*w).sum(1)/w.sum(1).clamp_min(1)
+    return torch.stack([mean(evolution,mv),mean(evolution.abs(),mv),
+                        mean(r,rv),mean(r.abs(),rv),
+                        (evolution[:,-1]-evolution[:,0])*mv[:,-1]*mv[:,0],
+                        mean((evolution[:,1:]-evolution[:,:-1]).abs(),mv[:,1:]*mv[:,:-1]),
+                        mv.mean(1),rv.mean(1)],-1)
+
 
 class EpisodeMemory:
     def __init__(self,history,mask,future,future_valid,starts,origin,base_forecast=None,metadata=None):
-        x=torch.as_tensor(history,dtype=torch.float32,device='cpu');m=torch.as_tensor(mask,dtype=torch.bool,device='cpu')
-        y=torch.as_tensor(future,dtype=torch.float32,device='cpu');yv=torch.as_tensor(future_valid,dtype=torch.bool,device='cpu')
-        self.x=x;self.mask=m;self.future=y;self.future_valid=yv
-        self.starts=torch.as_tensor(starts,dtype=torch.long,device='cpu')
-        self.origin=torch.as_tensor(origin,dtype=torch.long,device='cpu')
-        if base_forecast is None:self.residual=torch.zeros_like(y);self.residual_valid=torch.zeros_like(yv)
-        else:self.residual=y-torch.as_tensor(base_forecast,dtype=torch.float32,device='cpu');self.residual_valid=yv.clone()
+        def cpu(x,dtype):return torch.as_tensor(np.asarray(x),dtype=dtype,device='cpu')
+        self.x=cpu(history,torch.float32);self.mask=cpu(mask,torch.bool)
+        self.future=cpu(future,torch.float32);self.future_valid=cpu(future_valid,torch.bool)
+        self.starts=cpu(starts,torch.long);self.origin=cpu(origin,torch.long)
+        if base_forecast is None:
+            self.residual=torch.zeros_like(self.future);self.residual_valid=torch.zeros_like(self.future_valid)
+        else:
+            self.residual=self.future-cpu(base_forecast,torch.float32)
+            self.residual_valid=self.future_valid.clone()
         self.metadata=dict(metadata or {})
-        self.node_key_cpu=_episode_key(x,m)
-        self._node_keys_device={}
+        self.node_key_cpu=_episode_key(self.x,self.mask)
+        self.capability_cpu=_capability_key(self.future,self.future_valid,self.residual,
+                                             self.residual_valid,self.x,self.mask)
+        self.region_key_cpu=None;self.graph_hash=None
+        self._device_keys={}
+    @property
+    def m(self):return len(self.starts)
     @property
     def n(self):return self.x.shape[-1]
-    @property
-    def m(self):return self.x.shape[0]
+    def attach_graph(self,graph):
+        owner=graph.region_membership.detach().cpu()
+        self.region_key_cpu=torch.einsum('gn,mnd->mgd',owner,self.node_key_cpu)
+        self.region_capability_cpu=torch.einsum('gn,mnd->mgd',owner,self.capability_cpu)
+        self._device_keys.clear()
     def keys(self,device):
-        k=str(device)
-        if k not in self._node_keys_device:self._node_keys_device[k]=self.node_key_cpu.to(device)
-        return self._node_keys_device[k]
+        # Backward-compatible CPU/GPU compact features, but never place all N-node keys on GPU in v4 retrieval.
+        return self.node_key_cpu.to(device)
+    def region_keys(self,device):
+        if self.region_key_cpu is None:raise RuntimeError('attach_graph required before retrieval')
+        key=str(device)
+        if key not in self._device_keys:
+            self._device_keys[key]=(self.region_key_cpu.to(device),self.region_capability_cpu.to(device))
+        return self._device_keys[key]
     def valid_for(self,origins,device,purge=0):
-        # memory future end MUST precede current origin, including val/test.
-        ends=(self.starts+self.x.shape[1]+self.future.shape[1]-1).to(device)
-        return ends[None,:]+int(purge)<=origins[:,None]
-    def fetch_node(self,episode_ids,source,device):
-        # IDs [B,N,K] -> [B,N,K,P] without materializing [B,N,K,P,N].
-        ids=episode_ids.detach().cpu().long().clamp(0,self.m-1)
-        b,n,k=ids.shape
-        nodes=torch.arange(n).view(1,n,1)
-        table=getattr(self,source).permute(0,2,1)
-        return table[ids,nodes].to(device,non_blocking=True)
-    def fetch_neighbors(self,episode_ids,neighbor_ids,source,device):
-        # [B,N,K,L,P], bounded 1-hop graph neighborhood.
-        ids=episode_ids.detach().cpu().long().clamp(0,self.m-1)
-        neighbors=neighbor_ids.detach().cpu().long();table=getattr(self,source).permute(0,2,1)
-        return table[ids[...,None],neighbors[None,:,None,:]].to(device,non_blocking=True)
+        ends=self.starts.to(device)+self.x.shape[1]+self.future.shape[1]-1
+        return ends[None]+int(purge)<=origins[:,None]
+    def fetch(self,ids,nodes,source,device):
+        """Fetch arbitrary [B,N,K,L] node IDs, without moving full Memory to GPU."""
+        ep=ids.detach().to('cpu',dtype=torch.long).clamp(0,self.m-1)
+        src=nodes.detach().to('cpu',dtype=torch.long).clamp(0,self.n-1)
+        table=getattr(self,source)
+        if table.ndim!=3:raise ValueError('fetch source must be a temporal [M,T,N] table')
+        data=table.permute(0,2,1)[ep,src]
+        return data.to(device,non_blocking=True)
+    def fetch_node(self,ids,source,device):
+        return self.fetch(ids,torch.arange(ids.shape[1],device=ids.device)[None,:,None],source,device)
+    def fetch_paths(self,ids,path_ids,source,device):
+        return self.fetch(ids[:,:,:,None],path_ids[None,:,None,:],source,device)
+    def fetch_neighbors(self,ids,neighbor_ids,source,device):
+        return self.fetch_paths(ids,neighbor_ids,source,device)
+    def fetch_node_keys(self,ids,device,source='node_key_cpu'):
+        idx=ids.detach().cpu().long().clamp(0,self.m-1)
+        nn=torch.arange(ids.shape[1],dtype=torch.long)[None,:,None]
+        return getattr(self,source)[idx,nn].to(device,non_blocking=True)
     def save(self,path):
-        p=Path(path);p.parent.mkdir(parents=True,exist_ok=True)
-        np.savez_compressed(p,x=self.x.numpy().astype('float16'),mask=self.mask.numpy(),future=self.future.numpy().astype('float16'),
-                            future_valid=self.future_valid.numpy(),starts=self.starts.numpy(),origin=self.origin.numpy(),
-                            residual=self.residual.numpy().astype('float16'),residual_valid=self.residual_valid.numpy())
-        dump_json(p.with_suffix('.json'),{'sha256':hash_file(p),'episodes':self.m,'nodes':self.n,**self.metadata})
+        """Directory of contiguous .npy files; efficient random access and no ZIP inflation."""
+        root=Path(path)
+        if root.suffix=='.npz':root=root.with_suffix('')
+        root.mkdir(parents=True,exist_ok=True)
+        names=('x','mask','future','future_valid','starts','origin','residual','residual_valid')
+        for name in names:
+            value=getattr(self,name).detach().cpu().numpy()
+            if name in ('x','future','residual'):value=value.astype('float16')
+            np.save(root/f'{name}.npy',value,allow_pickle=False)
+        dump_json(root/'manifest.json',{'format':'fare4_memmap','episodes':self.m,'nodes':self.n,
+                                        'fields':list(names),**self.metadata})
     @classmethod
     def load(cls,path,expected=None):
-        p=Path(path);meta=json.loads(p.with_suffix('.json').read_text())
-        if hash_file(p)!=meta['sha256']:raise RuntimeError('Memory SHA mismatch')
+        root=Path(path)
+        if root.suffix=='.npz':root=root.with_suffix('')
+        meta=json.loads((root/'manifest.json').read_text())
         for k,v in (expected or {}).items():
-            if meta.get(k)!=v:raise RuntimeError(f'Memory {k} mismatch: {meta.get(k)} vs {v}')
-        z=np.load(p,allow_pickle=False)
-        obj=cls(z['x'],z['mask'],z['future'],z['future_valid'],z['starts'],z['origin'],metadata=meta)
-        obj.residual=torch.as_tensor(np.array(z['residual'],dtype=np.float32,copy=True))
-        obj.residual_valid=torch.as_tensor(np.array(z['residual_valid'],dtype=bool,copy=True))
+            if meta.get(k)!=v:raise RuntimeError(f'Memory provenance mismatch {k}: {meta.get(k)} vs {v}')
+        def get(name):return np.load(root/f'{name}.npy',mmap_mode='r',allow_pickle=False)
+        obj=cls(get('x'),get('mask'),get('future'),get('future_valid'),get('starts'),get('origin'),metadata=meta)
+        obj.residual=torch.as_tensor(np.asarray(get('residual'),dtype=np.float32).copy())
+        obj.residual_valid=torch.as_tensor(np.asarray(get('residual_valid'),dtype=bool).copy())
+        obj.capability_cpu=_capability_key(obj.future,obj.future_valid,obj.residual,obj.residual_valid,obj.x,obj.mask)
         return obj
 
+
 @torch.no_grad()
-def from_support_cache(cache,backbone,max_episodes,mode='checkpoint_in_sample',external_base_file=None,device='cpu',batch_size=16):
-    from .protocol import SupportDataset,make_loader,device_batch
+def from_support_cache(cache,backbone,max_episodes,mode='checkpoint_in_sample',external_base_file=None,
+                       device='cpu',batch_size=16):
+    from .protocol import SupportDataset
     ds=SupportDataset(cache,'train')
     starts=ds.meta.window_start.to_numpy(np.int64)
-    _,uni=np.unique(starts,return_index=True)
-    ix=np.sort(uni)
-    oos=None;lookup=None
+    _,unique=np.unique(starts,return_index=True)
+    ix=np.sort(unique)
+    src=None;lookup=None
     if mode=='external_oos':
-        if not external_base_file:raise RuntimeError('external_oos requires --oos-forecast-file')
-        oos=np.load(external_base_file,allow_pickle=False)
-        if not all(k in oos for k in ('window_start','prediction','trained_until')):
-            raise RuntimeError('OOF file must contain window_start, prediction, trained_until')
-        lookup={int(k):i for i,k in enumerate(oos['window_start'])}
-        # Chronological OOF warm-up interval can have no eligible producer model.
+        if not external_base_file:raise RuntimeError('Formal requires externally verified OOS forecast file')
+        src=np.load(external_base_file,allow_pickle=False)
+        required=('window_start','prediction','trained_until')
+        if any(k not in src for k in required):raise RuntimeError(f'OOS source must contain {required}')
+        lookup={int(s):i for i,s in enumerate(src['window_start'])}
         ix=np.asarray([i for i in ix if int(starts[i]) in lookup],dtype=np.int64)
-        if len(ix)==0:raise RuntimeError('No eligible OOF memory episodes')
-    if max_episodes and len(ix)>max_episodes:ix=ix[np.linspace(0,len(ix)-1,max_episodes,dtype=np.int64)]
-    arr=ds.arr
-    obs=np.asarray(arr['x_obs_norm'][ix],dtype='float32');mask=np.asarray(arr['history_observed'][ix],dtype=bool)
-    y=np.asarray(arr['y_norm'][ix],dtype='float32');valid=np.asarray(arr['future_valid'][ix],dtype=bool)
-    starts_sel=starts[ix]
+        if not len(ix):raise RuntimeError('No OOS episodes match Train cache')
+    if max_episodes and len(ix)>max_episodes:
+        ix=ix[np.linspace(0,len(ix)-1,int(max_episodes),dtype=np.int64)]
+    a=ds.arr
+    x=np.asarray(a['x_obs_norm'][ix],dtype=np.float32)
+    mask=np.asarray(a['history_observed'][ix],dtype=bool)
+    y=np.asarray(a['y_norm'][ix],dtype=np.float32)
+    valid=np.asarray(a['future_valid'][ix],dtype=bool)
+    selected=starts[ix]
     if mode=='external_oos':
-        matches=[lookup[int(s)] for s in starts_sel]
-        training_cutoff=np.asarray(oos['trained_until'][matches],dtype='int64')
-        if np.any(training_cutoff>=starts_sel):
-            raise RuntimeError('OOF leakage: a producer model trained through its historical prediction window')
-        base=np.asarray(oos['prediction'][matches],dtype='float32')
-        if base.shape!=y.shape:raise RuntimeError('OOF prediction shape mismatch')
-        if not np.isfinite(base).all():raise RuntimeError('Nonfinite OOF predictions')
+        match=[lookup[int(s)] for s in selected]
+        cutoff=np.asarray(src['trained_until'][match],dtype=np.int64)
+        # training until MUST end before the episode historical past begins;
+        # not sufficient to compare the producer training window START.
+        if np.any(cutoff>=selected):raise RuntimeError('Leakage in OOS producer label end times')
+        prediction=np.asarray(src['prediction'][match],dtype=np.float32)
+        if prediction.shape!=y.shape or not np.isfinite(prediction).all():
+            raise RuntimeError('OOS prediction tensor incompatible')
         provenance='external_oos'
     elif mode=='checkpoint_in_sample':
-        warnings.warn('EXPLORATORY residuals: backbone trained on overlapping train data; not OOF.',RuntimeWarning)
-        preds=[]
-        for low in range(0,len(ix),batch_size):
-            ids=ix[low:low+batch_size]
-            x=torch.as_tensor(np.asarray(arr['x_obs_norm'][ids],dtype='float32'),device=device)
-            m=torch.as_tensor(np.asarray(arr['history_observed'][ids],dtype=bool),device=device)
-            tod=torch.as_tensor(np.asarray(arr['tod_hist'][ids]),device=device)
-            dow=torch.as_tensor(np.asarray(arr['dow_hist'][ids]),device=device)
-            preds.append(backbone(x,m,tod,dow)['prediction'].cpu())
-        base=torch.cat(preds,0).numpy();provenance='checkpoint_in_sample_NOT_OOF'
-    else:raise ValueError('residual mode must be external_oos or checkpoint_in_sample')
-    memory=EpisodeMemory(obs,mask,y,valid,starts_sel,starts_sel+ds.h-1,base,metadata={'residual_provenance':provenance})
-    return memory
+        warnings.warn('EXPLORATORY ONLY: In-sample residuals are not OOS/OOF',RuntimeWarning)
+        prediction=np.empty_like(y)
+        for i in range(0,len(ix),batch_size):
+            idx=ix[i:i+batch_size]
+            tx=lambda name,dt:torch.as_tensor(np.asarray(a[name][idx]),device=device,dtype=dt)
+            out=backbone(tx('x_obs_norm',torch.float32),tx('history_observed',torch.bool),
+                         tx('tod_hist',torch.long),tx('dow_hist',torch.long))
+            prediction[i:i+len(idx)]=out['prediction'].detach().cpu().numpy()
+        provenance='checkpoint_in_sample_NOT_OOF'
+    else:raise ValueError(f'Unknown residual mode: {mode}')
+    return EpisodeMemory(x,mask,y,valid,selected,selected+ds.h-1,prediction,
+                         metadata={'residual_provenance':provenance,'history':ds.h,'horizon':ds.p})

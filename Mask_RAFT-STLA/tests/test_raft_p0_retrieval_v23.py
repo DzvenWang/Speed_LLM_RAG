@@ -48,7 +48,7 @@ def test_oracle_candidate_and_calibration():
        'candidate_weights':weights,
        'risk_probability':torch.tensor([[[.7,.8]]]),
        'ungated_correction':torch.tensor([[[-1.,1.]]]),
-       'forecast_gate':torch.tensor([[[.9,.9]]]),
+       'gate':torch.tensor([[[.9,.9]]]),
        'router':None}
     values,bins=candidate_probe_batch(o,b,max_delta=100.,margin=.02)
     assert values['best_single_candidate_gain_norm'][0] > .3
@@ -66,7 +66,7 @@ def test_oracle_no_candidate_and_none_weight():
        'candidate_weights':torch.tensor([[[[0.,0.]],[[1.,1.]]]]),
        'base_prediction':torch.ones((1,1,2)), 'prediction':torch.ones((1,1,2)),
        'risk_probability':torch.zeros((1,1,2)), 'ungated_correction':torch.zeros((1,1,2)),
-       'forecast_gate':torch.zeros((1,1,2)),'router':None}
+       'gate':torch.zeros((1,1,2)),'router':None}
     row,_=candidate_probe_batch(o,b,max_delta=3)
     assert row['best_single_candidate_gain_norm'][0]==0.
     assert row['candidate_available_rate'][0]==0.

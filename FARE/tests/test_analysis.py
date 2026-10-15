@@ -19,7 +19,7 @@ def test_full_internal_analysis_with_dummy_protocol(fixture_data,tmp_path,monkey
     c={'training':{'batch_size':2,'workers':0},'memory':{'purge_steps':0},
        'analysis':{'max_counterfactual_queries':1,'bootstrap_samples':20},'experiment':{'seed':10}}
     records=analyze(model,mem,{'val':Tiny()},torch.device('cpu'),c,tmp_path)
-    assert len(records)==len(MODES)
+    assert len(records)==len(MODES)+1
     assert (tmp_path/'module_contributions.csv').exists()
     assert (tmp_path/'candidate_counterfactual.csv').exists() or (tmp_path/'counterfactual'/'candidate_counterfactual.csv').exists()
     assert (tmp_path/'research_report.md').exists()

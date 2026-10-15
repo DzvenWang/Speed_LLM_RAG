@@ -21,7 +21,7 @@ def main():
     else:
         print('LOG_MODE PBS_LIVE_ONLY')
     print('BACKBONE_VERSION',cfg['version'])
-    subprocess.check_call([sys.executable,str(ROOT/'scripts/source_lock.py'),'verify','--config',a.config]); validate_shared_cache(cfg,a.stage); cache=cache_path(cfg,a.stage)
+    subprocess.check_call([sys.executable,str(ROOT/'scripts/source_lock.py'),'verify','--config',a.config,'--model','PatchSTG']); validate_shared_cache(cfg,a.stage); cache=cache_path(cfg,a.stage)
     b=SupportBench(cfg['experiment']['subgraph'],root=cfg['project']['benchmark_root']); st=b.stats['channels'][b.manifest['primary_channel']]
     run=Path(cfg['project']['exp_root'])/'PatchSTG'/cfg['experiment']['subgraph']/mode_stage/f'{stamp}_seed{a.seed}'; log(f'train_data_mode={train_data_mode} run_dir={run}'); log(f'cache_dir={cache}')
     if a.smoke:

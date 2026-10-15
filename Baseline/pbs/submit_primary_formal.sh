@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
-ROOT="${SPEED_LLM_RAG_ROOT:-$PWD}"
+SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+ROOT="${SPEED_LLM_RAG_ROOT:-$SCRIPT_ROOT}"
+ENVROOT="${TFP_ENV_ROOT:-${CONDA_PREFIX:-}}"
+[[ -n "$ENVROOT" && -x "$ENVROOT/bin/python" ]] || { echo "ERROR: activate TFP before submitting" >&2; exit 3; }
 PBS="$ROOT/Baseline/pbs/methods/formal_primary.pbs"
 SEED="${SEED:-10}"
 BACKBONE="${BACKBONE:-STLAformer}"
@@ -22,10 +25,10 @@ for method in "${methods[@]}"; do
     name="$(short_name "$method")_${target}"
     if [[ "$method" == "ImputeFormer" || "$method" == "LRTC-TMCP" ]]; then
       echo "SUBMIT $name METHOD=$method TARGET=$target SEED=$SEED BACKBONE=$BACKBONE"
-      qsub -N "$name" -v METHOD="$method",TARGET="$target",SEED="$SEED",BACKBONE="$BACKBONE" "$PBS"
+      qsub -N "$name" -v METHOD="$method",TARGET="$target",SEED="$SEED",BACKBONE="$BACKBONE",TFP_ENV_ROOT="$ENVROOT",SPEED_LLM_RAG_ROOT="$ROOT" "$PBS"
     else
       echo "SUBMIT $name METHOD=$method TARGET=$target SEED=$SEED"
-      qsub -N "$name" -v METHOD="$method",TARGET="$target",SEED="$SEED" "$PBS"
+      qsub -N "$name" -v METHOD="$method",TARGET="$target",SEED="$SEED",TFP_ENV_ROOT="$ENVROOT",SPEED_LLM_RAG_ROOT="$ROOT" "$PBS"
     fi
   done
 done

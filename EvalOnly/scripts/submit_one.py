@@ -67,6 +67,9 @@ def main():
         pbs = root/'EvalOnly/pbs/baseline_eval_only.pbs'
     if not pbs.is_file(): p.error(f'PBS file missing: {pbs}')
     envvars['SPEED_LLM_RAG_ROOT'] = str(root)
+    envroot = os.environ.get('TFP_ENV_ROOT') or os.environ.get('CONDA_PREFIX')
+    if envroot:
+        envvars['TFP_ENV_ROOT'] = str(Path(envroot).resolve())
     vars_str = ','.join(f'{k}={v}' for k,v in envvars.items())
     if ',' in str(root) or any(',' in str(v) or '\n' in str(v) for v in envvars.values()):
         p.error('qsub -v does not support commas/newlines in checkpoint paths')
