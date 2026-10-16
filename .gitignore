@@ -122,6 +122,15 @@ Mask_RAST-STLA_logs/
 Mask_RAST-STLA_store/
 
 EvalOnly_logs/
+FARE_cache/
+
+PCFT-STLA_exps/
+PCFT-STLA_logs/
+PCFT-STLA_store/
+
+TCRR-STLA_exps/
+TCRR-STLA_logs/
+TCRR-STLA_cache/
 
 
 model_cache/

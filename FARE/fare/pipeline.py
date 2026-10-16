@@ -7,11 +7,12 @@ from .traffic import TrafficGraph
 from .backbone import load_stla
 from .memory import EpisodeMemory,from_support_cache
 from .model import FARE
+from .cuda_preflight import run_cuda_preflight
 from .training import fit,seed_everything
 from .evaluation import evaluate
 from .analysis import analyze
 
-def prepare(cfg,device,backbone_file=None,memory_file=None,build=True,oos_forecast_file=None):
+def prepare(cfg,device,backbone_file=None,memory_file=None,build=True,oos_forecast_file=None,cuda_safety=False):
     ex=cfg['experiment'];base_cache=cache_dir(cfg,'formal')
     train=SupportDataset(base_cache,'train',ex.get('train_limit'),strategy=ex.get('sample_strategy','spread'))
     val=SupportDataset(base_cache,'val',ex.get('val_limit'),strategy='spread')
@@ -26,6 +27,8 @@ def prepare(cfg,device,backbone_file=None,memory_file=None,build=True,oos_foreca
     bk=backbone_checkpoint(cfg,backbone_file)
     backbone=load_stla(bk,device,cfg['backbone']['inject_layers'])
     if backbone.n!=train.n:raise RuntimeError('Checkpoint and dataset node count mismatch')
+    if cuda_safety and cfg.get('training',{}).get('cuda_preflight',True):
+        run_cuda_preflight(backbone,graph,train,cfg,device)
     mem_path=project_path(memory_file) if memory_file else root()/'FARE_cache'/ex['target']/ex['dataset']/f"memory_v4_{ex['seed']}_{cfg['memory']['max_episodes']}"
     expected_memory={'dataset':ex['dataset'],'target':ex['target'],'backbone_sha256':hash_file(bk)}
     if oos_forecast_file and cfg['memory']['residual_mode']=='external_oos':
@@ -80,8 +83,9 @@ def run(cfg,device,run_dir=None,backbone_file=None,memory_file=None,oos_forecast
     seed_everything(cfg['experiment']['seed']);run_dir=create_run_dir(cfg,run_dir)
     if resume is not None:resume=project_path(resume,must_exist=True)
     run_dir.mkdir(parents=True,exist_ok=True)
-    model,memory,train_ds,val_ds,device,meta=prepare(cfg,device,backbone_file,memory_file,True,project_path(oos_forecast_file,must_exist=True) if oos_forecast_file else None)
-    dump_json(run_dir/'manifest.json',{'config':cfg,'metadata':meta,'run_dir':str(run_dir),'version':'4.0.1'})
+    model,memory,train_ds,val_ds,device,meta=prepare(cfg,device,backbone_file,memory_file,True,project_path(oos_forecast_file,must_exist=True) if oos_forecast_file else None,
+                                                         cuda_safety=train)
+    dump_json(run_dir/'manifest.json',{'config':cfg,'metadata':meta,'run_dir':str(run_dir),'version':'4.0.3'})
     if train:
         best=fit(model,memory,train_ds,val_ds,device,cfg,run_dir,meta,resume)
     else:best=project_path(resume,must_exist=True) if resume else run_dir/'best.pt'

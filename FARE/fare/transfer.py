@@ -7,6 +7,7 @@ relative alignment in 5-minute steps, not a measured traffic shockwave speed.
 import torch
 from torch import nn
 import torch.nn.functional as F
+from .numerics import mask_invalid_logits
 
 
 class PropagationTransport(nn.Module):
@@ -54,7 +55,8 @@ class PropagationTransport(nn.Module):
             log_weight=log_weight*0
             logits=logits*0
         logits=logits+log_weight+conf.clamp_min(.01).log()
-        logits=logits.masked_fill(~path_valid,-1e7)
+        # Softmax masked logits computed in FP32: -1e7 overflows FP16.
+        logits=mask_invalid_logits(logits,~path_valid)
         all_invalid=~path_valid.any(-1)
         logits=torch.where(all_invalid[...,None],torch.zeros_like(logits),logits)
         w=logits.softmax(-1)*path_valid.float()
@@ -90,7 +92,7 @@ class PropagationTransport(nn.Module):
         lag_logits=self.time(temporal_in)
         if intervention=='no_propagation_alignment':
             lag_probs=torch.zeros_like(lag_logits);lag_probs[...,0]=1
-        else:lag_probs=lag_logits.softmax(-1)
+        else:lag_probs=lag_logits.float().softmax(-1)
         def lagged(values,valid):
             out=torch.zeros_like(values);den=torch.zeros_like(values)
             for lag in range(self.max_lag+1):

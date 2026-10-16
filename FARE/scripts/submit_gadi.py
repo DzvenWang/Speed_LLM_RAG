@@ -22,6 +22,8 @@ def main():
     p.add_argument('--resume',help='Existing v4 last.pt, relative to repo or absolute')
     p.add_argument('--evaluate-only',action='store_true')
     p.add_argument('--skip-analysis',action='store_true')
+    p.add_argument('--skip-precheck',action='store_true',help='Bypass CPU safety gate (not recommended)')
+    p.add_argument('--check-only',action='store_true',help='Run the full CPU safety gate without submitting PBS')
     g=p.add_mutually_exclusive_group()
     g.add_argument('--eval-val',action='store_true',help='Also evaluate/analyze Val after training')
     g.add_argument('--test-only',action='store_true',help='Only Test s20/s40/s60/s90 after training')
@@ -29,6 +31,19 @@ def main():
     cfg=read_config(a.config,a.dataset,a.target,a.seed,a.smoke)
     if a.eval_val:cfg['evaluation']['include_val']=True
     if a.test_only:cfg['evaluation']['include_val']=False
+    if not a.skip_precheck:
+        checker=root()/'FARE/scripts/pre_submit_check.py'
+        if not checker.is_file():raise FileNotFoundError(checker)
+        check_cmd=[sys.executable,'-u',str(checker),'--config',str(project_path(a.config,must_exist=True)),
+                   '--dataset',a.dataset,'--target',a.target,'--seed',str(a.seed)]
+        if a.checkpoint:check_cmd+=['--checkpoint',str(project_path(a.checkpoint,must_exist=True))]
+        if a.smoke:check_cmd+=['--smoke']
+        print('FARE_PRE_SUBMIT_GATE_START',flush=True)
+        subprocess.check_call(check_cmd)
+        print('FARE_PRE_SUBMIT_GATE_PASS',flush=True)
+    if a.check_only:
+        print('FARE_CHECK_ONLY_NO_QSUB',flush=True)
+        return
     run_dir=(project_path(a.run_dir) if a.run_dir else
              root()/'FARE_exps'/a.target/a.dataset/cfg['experiment']['run_tag']/f'{time.strftime("%Y%m%d_%H%M%S")}_seed{a.seed}')
     run_dir.mkdir(parents=True,exist_ok=True)

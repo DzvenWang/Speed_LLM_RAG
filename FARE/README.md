@@ -1,4 +1,4 @@
-# FARE v4.0.1 — Full Research Implementation
+# FARE v4.0.3 — Full Research Implementation
 
 **Traffic Predictive Support Restoration via Directional Evidence Retrieval and Counterfactual Utility**
 
@@ -35,7 +35,7 @@ The archive contains the **entire** `FARE/` folder; it does **not** contain `Bas
 ```bash
 ## Run these commands from the Speed_LLM_RAG repository directory:
 mv FARE FARE_v3_archived_20261015
-unzip FARE_v4.0.1_PortablePaths_NewTFP_Full.zip
+unzip FARE_v4.0.3_AMP_Safety_PreSubmit_Full.zip
 export SPEED_LLM_RAG_ROOT="$PWD"
 export PYTHONPATH="$PWD/FARE:${PYTHONPATH:-}"
 conda activate TFP
@@ -204,3 +204,20 @@ rows with no legal unselected candidates receive an index-0 placeholder
 with `replacement_valid=False`, which is excluded from Swap supervision.
 Adds tests for mixed and all-empty candidate pools. No change to model
 architecture, Base_SupportBench cache, or STLAformer checkpoints.
+
+
+## v4.0.3 FP16 numerical stability and fail-closed pre-submit check
+
+The 2026-10-16 Gadi job `181327616.gadi-pbs` failed on the first GPU training batch because an FP16 retrieval score was masked with `-1e7`, outside the finite FP16 range. The fix covers **all** such masked score/logit paths in Retrieval, Evidence Transport and Set Utility, with production-sized FP16 CPU autocast regressions.
+
+Before queueing a V100, run:
+
+```bash
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python -m pytest -q FARE/tests
+python -u FARE/scripts/submit_gadi.py --check-only --target speed \
+  --checkpoint Backbone_exps/speed/STLAformer/TraffiDent_Net_06/formal/20260930_215233_seed10/best.pt
+```
+
+`--check-only` runs the CPU FP16 regressions, checks Test Cache s20/s40/s60/s90, strictly loads the **real** vendor STLAformer checkpoint and executes one actual-data CPU STLAformer forward. It then exits **without qsub**. Normal `submit_gadi.py` also runs this gate **by default**, and does not submit if the gate fails. When an actual V100 allocation begins, `training.cuda_preflight: true` also executes a small real STLAformer + FARE CUDA FP16 forward/backward check **before** expensive Memory construction; the test-only evidence is discarded.
+
+See [AMP_SAFETY_4_0_3.md](docs/AMP_SAFETY_4_0_3.md). CPU autocast tests do not guarantee a successful V100 CUDA run.

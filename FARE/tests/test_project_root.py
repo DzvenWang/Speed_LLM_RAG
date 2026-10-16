@@ -15,8 +15,8 @@ def test_repo_relative_config_works_from_elsewhere(monkeypatch,tmp_path):
     from fare.config import read_config, project_path, PACKAGE_ROOT
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv('SPEED_LLM_RAG_ROOT',raising=False)
-    assert read_config('FARE/configs/pilot.yaml')['version']=='4.0.1'
-    assert read_config('configs/pilot.yaml')['version']=='4.0.1'
+    assert read_config('FARE/configs/pilot.yaml')['version']==(PACKAGE_ROOT/'VERSION').read_text().strip()
+    assert read_config('configs/pilot.yaml')['version']==(PACKAGE_ROOT/'VERSION').read_text().strip()
     assert project_path('FARE/configs/pilot.yaml',must_exist=True) == (PACKAGE_ROOT/'configs/pilot.yaml').resolve()
 
 

@@ -6,6 +6,7 @@ Hard discrete swaps receive explicit train-only counterfactual supervision.
 import torch
 from torch import nn
 import torch.nn.functional as F
+from .numerics import mask_invalid_logits
 
 class SetConditionalSelector(nn.Module):
     def __init__(self,d=64,horizon=12,final_k=8,heads=4):
@@ -62,9 +63,11 @@ class SetConditionalSelector(nn.Module):
         if intervention in ('no_counterfactual_utility','state_similarity_only'):
             signed=short['scores'][:,:,:,None,None].expand_as(signed)*0.1
         # Do not rank using invalid horizon/type evidence.
-        hard=signed.masked_fill(~valid,-1e6)
+        # Selection scores and masked logits must be FP32 under CUDA AMP.
+        # -1e6/-1e7 cannot be represented by FP16.
+        hard=mask_invalid_logits(signed,~valid,value=-1e6)
         rank=hard.amax(3).masked_fill(~valid.any(3),0).mean(-1)
-        rank=rank.masked_fill(~availability,-1e7)
+        rank=mask_invalid_logits(rank,~availability)
         take=min(k,self.final_k)
         initial=(forced_initial.to(rank.device).long() if forced_initial is not None
                  else rank.topk(take,-1).indices)
@@ -84,9 +87,9 @@ class SetConditionalSelector(nn.Module):
         pair=pair+self.swap_bias(pair_features).squeeze(-1)
         already=(initial[...,None]==torch.arange(k,device=tok.device)[None,None,None,:]).any(2)
         legal=availability&(~already)
-        pair=pair.masked_fill(~legal[:,:,None,:],-1e7)
+        pair=mask_invalid_logits(pair,~legal[:,:,None,:])
         selected_valid=availability.gather(2,initial)
-        pair=pair.masked_fill(~selected_valid[...,None],-1e7)
+        pair=mask_invalid_logits(pair,~selected_valid[...,None])
         chosen=initial.clone()
         if intervention not in ('no_swap_utility','no_set_utility','no_set_interaction','no_counterfactual_utility'):
             flat=pair.reshape(b,n,-1)
@@ -108,7 +111,7 @@ class SetConditionalSelector(nn.Module):
         if intervention=='no_null':null_logits=null_logits-10
         flat=sc.permute(0,1,4,2,3).reshape(b,n,p,-1)
         active=good.permute(0,1,4,2,3).reshape(b,n,p,-1)
-        flat=flat.masked_fill(~active,-1e7)
+        flat=mask_invalid_logits(flat,~active)
         weights=torch.cat([flat,null_logits[...,None]],-1).softmax(-1)
         w=weights[...,:take*t].view(b,n,p,take,t).permute(0,1,3,4,2)
         null=weights[...,-1]

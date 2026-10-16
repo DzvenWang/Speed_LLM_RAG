@@ -1,4 +1,4 @@
-version: '4.0.1'
+version: '4.0.3'
 experiment:
   dataset: TraffiDent_Net_06
   target: speed
@@ -41,6 +41,7 @@ teacher:
   nodes_per_query: 12
   refresh_every_epochs: 3
 training:
+  cuda_preflight: true
   batch_size: 32
   workers: 2
   amp: true

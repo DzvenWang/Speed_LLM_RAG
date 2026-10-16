@@ -3,6 +3,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from .memory import _episode_key
+from .numerics import mask_invalid_logits
 
 class HierarchicalRetriever(nn.Module):
     def __init__(self,d,coarse=64,shortlist=16,chunk=4096):
@@ -19,8 +20,11 @@ class HierarchicalRetriever(nn.Module):
         vals=[];indices=[]
         for low in range(0,M,chunk):
             sub=keys[low:low+chunk]
-            score=torch.einsum('bgd,mgd->bgm',F.normalize(q,dim=-1),F.normalize(sub,dim=-1))
-            score=score.masked_fill(~lawful[:,None,low:low+len(sub)],-1e7)
+            score=torch.einsum('bgd,mgd->bgm',F.normalize(q.float(),dim=-1,eps=1e-6),
+                               F.normalize(sub.float(),dim=-1,eps=1e-6))
+            # Autocast may return FP16 even for float inputs. Score masks/ranking
+            # are FP32: the invalid sentinel (-1e7) overflows FP16.
+            score=mask_invalid_logits(score,~lawful[:,None,low:low+len(sub)])
             v,i=score.topk(min(k,len(sub)),dim=-1)
             vals.append(v);indices.append(i+low)
         cat=torch.cat(vals,-1);idx=torch.cat(indices,-1)
@@ -32,7 +36,7 @@ class HierarchicalRetriever(nn.Module):
         query=_episode_key(x,mask)
         demand=support['embedding'].mean(2)
         state=query+self.gain.tanh()*self.state_query(demand).tanh()
-        cap=F.normalize(self.cap_query(demand),dim=-1)
+        cap=F.normalize(self.cap_query(demand).float(),dim=-1,eps=1e-6)
         r=graph.region_membership
         state_r=torch.einsum('gn,bnd->bgd',r,state)
         cap_r=torch.einsum('gn,bnd->bgd',r,cap)
@@ -57,7 +61,7 @@ class HierarchicalRetriever(nn.Module):
             # Duplicate episodes mask, then refill with state candidates if needed.
             for j in range(1,ids.shape[-1]):
                 dup=(ids[...,:j]==ids[...,j:j+1]).any(-1)
-                sc[...,j]=sc[...,j].masked_fill(dup,-1e7)
+                sc[...,j]=mask_invalid_logits(sc[...,j],dup)
         rvalid=lawful.gather(1,ids.reshape(b,-1)).reshape_as(ids) & (sc>-1e6)
         node_ids=ids[:,graph.owner,:]
         node_valid=rvalid[:,graph.owner,:]
@@ -74,11 +78,11 @@ class HierarchicalRetriever(nn.Module):
             score=state_dist
         else:
             d=demand[:,:,None,:].expand(-1,-1,node_ids.shape[-1],-1)
-            compat=(cap_q*F.normalize(node_cap,dim=-1)).sum(-1)
+            compat=(cap_q*F.normalize(node_cap.float(),dim=-1,eps=1e-6)).sum(-1)
             feat=torch.cat([d,node_key,node_cap,
                             (state[:,:,None,:]-node_key).abs()],-1)
             score=state_dist+.2*compat+.3*self.matcher(feat).squeeze(-1)
-        score=score.masked_fill(~node_valid,-1e7)
+        score=mask_invalid_logits(score,~node_valid)
         k=min(self.shortlist,ids.shape[-1])
         v,sl=score.topk(k,-1)
         cid=node_ids.gather(-1,sl)
