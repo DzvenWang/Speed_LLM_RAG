@@ -1,3 +1,7 @@
+# FARE v4.0.4 — Full Integrated Source
+
+**New one-pass diagnostic documentation:** [`docs/FARE_V4_0_4_ONE_PASS.md`](docs/FARE_V4_0_4_ONE_PASS.md). Existing v4.0.3 research implementation, training and evaluation details follow.
+
 # FARE v4.0.3 — Full Research Implementation
 
 **Traffic Predictive Support Restoration via Directional Evidence Retrieval and Counterfactual Utility**

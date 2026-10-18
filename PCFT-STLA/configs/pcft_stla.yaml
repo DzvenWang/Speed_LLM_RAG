@@ -78,11 +78,14 @@ training:
   alignment_temperature: 0.10
   min_delta: 0.00000001
 runtime:
-  num_workers: 4
+  num_workers: 0
   pin_memory: true
-  persistent_workers: true
+  persistent_workers: false
   prefetch_factor: 2
   preload_repository_gpu: true
+  eval_batch_size: 8
+  eval_num_workers: 0
+  eval_preload_repository_gpu: false
   gpu_future_store: true
   gpu_monitor_interval_sec: 30
   amp: true

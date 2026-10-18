@@ -9,7 +9,7 @@ from pcft_stla.data import FullTrainRepository
 from pcft_stla.seasonal import seasonal_innovation,train_future_reference
 from pcft_stla.trainer import compute_alignment,losses
 from pcft_stla.wrong_evidence import legal_wrong_indices
-from test_rast_v2 import STLA
+from test_pcft_v2 import STLA
 
 
 def make_repo(tmp_path,M=35,H=12,P=12,N=7):

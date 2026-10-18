@@ -43,3 +43,11 @@ New project only: no `Mask_RAFT-STLA` or `Mask_RAST-STLA` path dependency, and n
 ## Evaluation and experiment controls
 
 Main metric **MAE**, auxiliary **RMSE/MAPE**. Full run automatically evaluates s20/40/60/90. `ABLATION=full` runs the complete new model, not a reduced control. PBS requests gpuvolta, V100, 12 CPU, 32 GB, 48 h per job. Preflight and real Gadi smoke/formal runs remain necessary.
+
+## v1.0.1 resource safety hotfix (2026-10-18)
+
+For the existing Speed/Flow `best.pt` produced before this hotfix, **do not
+retrain** just to resolve an evaluator OOM or DataLoader SIGBUS. See
+[`docs/GADI_EVALUATION_RECOVERY_v1.0.1.md`](docs/GADI_EVALUATION_RECOVERY_v1.0.1.md)
+for checkpoint checks and separate Gadi `qsub` commands. The original trained
+checkpoint schema remains `version=1.0.0`; the source package is `1.0.1`.

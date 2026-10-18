@@ -30,4 +30,4 @@ mkdir -p "$LOGDIR"
 exec "$PYTHON" -u "PCFT-STLA/scripts/p0_candidate_probe.py" \
   --checkpoint "$FULL_CHECKPOINT" \
   --max-queries "${P0_MAX_QUERIES:-0}" \
-  --batch-size "${P0_BATCH_SIZE:-32}"
+  --batch-size "${P0_BATCH_SIZE:-8}"

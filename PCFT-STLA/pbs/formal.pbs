@@ -75,6 +75,7 @@ log_line "START model=PCFT-STLA backbone_mode=$BACKBONE_MODE checkpoint=$BACKBON
 log_line "ROOT=$ROOT PYTHON=$PYTHON"
 log_line "INIT_POLICY=backbone_only; mask_v23_full_initialization=forbidden; resume=disabled"
 log_line "OUTPUT_POLICY=isolated_project_directories"
+log_line "RESOURCE_SAFETY train_workers_default=0 eval_batch_default=8 eval_workers=0 eval_repository_gpu=off"
 run_logged "$PYTHON" -V
 run_logged nvidia-smi || true
 

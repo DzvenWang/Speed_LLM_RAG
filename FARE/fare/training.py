@@ -35,7 +35,7 @@ def forecasting_loss(out,batch,cfg):
 
 def checkpoint(path,model,opt,cfg,state,metadata,scaler=None):
     p=Path(path);p.parent.mkdir(parents=True,exist_ok=True)
-    torch.save({'version':'4.0.3','state_dict':model.state_dict(),
+    torch.save({'version':'4.0.4','state_dict':model.state_dict(),
                 'optimizer_state':opt.state_dict(),'scaler_state':scaler.state_dict() if scaler is not None else None,
                 'config':cfg,'training_state':state,'metadata':metadata,
                 'torch_rng':torch.get_rng_state(),'numpy_rng':np.random.get_state(),
@@ -65,7 +65,7 @@ def fit(model,memory,train_ds,val_ds,device,cfg,run_dir,metadata,resume=None):
     best=float('inf');steps=0;start_stage=0;start_epoch=0
     if resume:
         saved=torch.load(resume,map_location=device,weights_only=False)
-        if saved.get('version') not in ('4.0.0','4.0.1','4.0.2','4.0.3'):raise RuntimeError('Only FARE 4 training checkpoints can resume')
+        if saved.get('version') not in ('4.0.0','4.0.1','4.0.2','4.0.3','4.0.4'):raise RuntimeError('Only FARE 4 training checkpoints can resume')
         if saved['metadata'].get('backbone_sha256')!=metadata.get('backbone_sha256'):
             raise RuntimeError('Checkpoint Backbone hash mismatch')
         model.load_state_dict(saved['state_dict'],strict=True);opt.load_state_dict(saved['optimizer_state'])

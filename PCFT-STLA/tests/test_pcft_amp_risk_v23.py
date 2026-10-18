@@ -7,8 +7,8 @@ from pcft_stla.config import load_config
 from pcft_stla.model import PCFTSTLA
 from pcft_stla.memory import build_memory_index
 from pcft_stla.trainer import losses
-from test_rast_v2 import STLA
-from test_rast_v23 import make_repo
+from test_pcft_v2 import STLA
+from test_pcft_v23 import make_repo
 
 
 def test_amp_risk_logit_loss_backward(tmp_path):

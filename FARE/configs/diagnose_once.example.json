@@ -1,0 +1,10 @@
+{
+  "dataset": "TraffiDent_Net_06",
+  "expected_targets": ["speed", "flow"],
+  "expected_severities": [20, 40, 60, 90],
+  "expected_families": [],
+  "expected_family_count": 5,
+  "split": "val",
+  "seed": 10,
+  "notes": "Empty expected_families means infer actual family names from exported shards; strict coverage requires at least five distinct families with both targets and all severities. Replace with actual Base_SupportBench family list when known."
+}

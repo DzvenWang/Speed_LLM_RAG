@@ -12,6 +12,8 @@ def main():
     p.add_argument('--ablation',choices=['full','no_retrieval','no_future','no_regional','global_only','no_none','shuffled','no_risk','no_innovation'])
     p.add_argument('--resume',help='Path to last.pt from the SAME v1.0 experiment')
     p.add_argument('--skip-retrieval-audit',action='store_true');p.add_argument('--skip-evaluate',action='store_true')
+    p.add_argument('--eval-batch-size',type=int,default=None,
+                   help='Separate evaluation batch size (default 8, OOM auto-retry)')
     a=p.parse_args()
     if a.target:os.environ['TRAFFIDENT_TARGET']=a.target
     cfg=load_config(a.config);cfg['experiment']['seed']=a.seed
@@ -24,7 +26,12 @@ def main():
     run=Path(a.resume).resolve().parent if a.resume else Path(cfg['project']['exp_root'])/cfg['experiment']['dataset']/tag/f'{stamp}_seed{a.seed}_{cfg["training"]["ablation"]}'
     best=train(cfg,cache,ck,run,a.smoke,resume=a.resume);print(f'BEST_CHECKPOINT={best}',flush=True)
     if not a.smoke and not a.skip_evaluate:
-        subprocess.check_call([sys.executable,'-u',str(ROOT/'scripts/evaluate.py'),'--checkpoint',str(best),'--severities',*[str(s) for s in cfg['experiment']['severities']]],cwd=ROOT)
+        eval_batch=int(a.eval_batch_size or os.environ.get('EVAL_BATCH_SIZE')
+                       or cfg['runtime'].get('eval_batch_size',8))
+        print(f'AUTO_EVALUATE_SAFE batch={eval_batch} workers=0 repository_gpu=False',flush=True)
+        subprocess.check_call([sys.executable,'-u',str(ROOT/'scripts/evaluate.py'),
+            '--checkpoint',str(best),'--batch-size',str(eval_batch),'--num-workers','0',
+            '--severities',*[str(s) for s in cfg['experiment']['severities']]],cwd=ROOT)
         print('AUTO_EVALUATE_PASS',best,flush=True)
         if cfg['training'].get('ablation','full')=='full' and not a.skip_retrieval_audit:
             subprocess.check_call([sys.executable,'-u',str(ROOT/'scripts/evaluate_retrieval.py'),

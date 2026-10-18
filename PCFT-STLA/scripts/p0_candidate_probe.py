@@ -15,6 +15,7 @@ from pcft_stla.p0 import candidate_probe_batch,aggregate_calibration,sha256,supp
 from pcft_stla.trainer import build_model,make_loader,move
 from pcft_stla.data import SupportSplit,FullTrainRepository
 from pcft_stla.memory import LatentMemoryIndex
+from pcft_stla.runtime_safety import safe_evaluation_config
 
 
 def main():
@@ -29,9 +30,12 @@ def main():
     cp=Path(args.checkpoint).resolve();ck=torch.load(cp,map_location='cpu',weights_only=False)
     if ck.get('version')!='1.0.0' or ck['config']['training'].get('ablation','full')!='full':
         raise ValueError('P0 candidate oracle must use a v1.0 FULL checkpoint')
-    cfg=relocate_saved_config(ck['config']);os.environ['TRAFFIDENT_TARGET']=cfg['experiment']['target']
+    cfg=safe_evaluation_config(relocate_saved_config(ck['config']),batch_size=args.batch_size,
+                                  num_workers=0,preload_repository_gpu=False)
+    os.environ['TRAFFIDENT_TARGET']=cfg['experiment']['target']
     dev=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    backbone=Path(args.backbone_checkpoint or os.environ.get('BACKBONE_CHECKPOINT') or ck['backbone_checkpoint'])
+    # Ignore inherited BACKBONE_CHECKPOINT from another target: saved ckpt wins.
+    backbone=Path(args.backbone_checkpoint or ck['backbone_checkpoint'])
     if not backbone.is_file():raise FileNotFoundError(backbone)
     if ck.get('backbone_sha256') and file_sha256(backbone)!=ck['backbone_sha256']:
         raise ValueError('Backbone SHA256 mismatch with full checkpoint')
@@ -49,7 +53,7 @@ def main():
     output.mkdir(parents=True,exist_ok=True)
     for sev in args.severities:
         ds=SupportSplit(cache_path(cfg,'evaluation',sev),'test',limit=args.max_queries or None)
-        dl=make_loader(ds,int(args.batch_size or cfg['training']['batch_size']),False,cfg)
+        dl=make_loader(ds,int(cfg['training']['batch_size']),False,cfg)
         batch_count=0
         for bb in dl:
             b=move(bb,dev)

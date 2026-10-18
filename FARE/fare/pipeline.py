@@ -85,7 +85,7 @@ def run(cfg,device,run_dir=None,backbone_file=None,memory_file=None,oos_forecast
     run_dir.mkdir(parents=True,exist_ok=True)
     model,memory,train_ds,val_ds,device,meta=prepare(cfg,device,backbone_file,memory_file,True,project_path(oos_forecast_file,must_exist=True) if oos_forecast_file else None,
                                                          cuda_safety=train)
-    dump_json(run_dir/'manifest.json',{'config':cfg,'metadata':meta,'run_dir':str(run_dir),'version':'4.0.3'})
+    dump_json(run_dir/'manifest.json',{'config':cfg,'metadata':meta,'run_dir':str(run_dir),'version':'4.0.4'})
     if train:
         best=fit(model,memory,train_ds,val_ds,device,cfg,run_dir,meta,resume)
     else:best=project_path(resume,must_exist=True) if resume else run_dir/'best.pt'

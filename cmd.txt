@@ -1,4 +1,9 @@
+qstat -u "$USER"
 
+nci_account -P mh20
+
+conda activate TFP
+conda activate /g/data/mh20/zw1165/envs/TFP
 
 
 cd /scratch/mh20/zw1165/Speed_LLM_RAG

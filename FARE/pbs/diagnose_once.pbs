@@ -1,0 +1,35 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12,ngpus=1,mem=32GB,walltime=48:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -N FARE404_DIAG
+set -euo pipefail
+PROJECT_ROOT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-}}"
+if [[ -z "$PROJECT_ROOT" || ! -f "$PROJECT_ROOT/FARE/scripts/diagnose_once.py" ]]; then
+  echo 'FARE_FATAL: execute from Speed_LLM_RAG project root' >&2; exit 2
+fi
+cd "$PROJECT_ROOT"
+PYTHON="${FARE_PYTHON:-${FARE_ENV_PREFIX:+$FARE_ENV_PREFIX/bin/python}}"
+if [[ -z "$PYTHON" ]]; then PYTHON="$(command -v python || true)"; fi
+if [[ ! -x "$PYTHON" ]]; then echo 'FARE_FATAL: Python interpreter unavailable' >&2; exit 2; fi
+export PATH="$(dirname "$PYTHON"):$PATH"
+export SPEED_LLM_RAG_ROOT="$PROJECT_ROOT"
+export PYTHONPATH="$PROJECT_ROOT/FARE:${PYTHONPATH:-}"
+export PYTHONUNBUFFERED=1
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-6}"
+export MKL_NUM_THREADS="${MKL_NUM_THREADS:-6}"
+CONFIG="${DIAG_CONFIG:-FARE/configs/diagnose_once.json}"
+IN="${DIAG_INPUT_DIR:-FARE_diagnostics/one_pass_inputs}"
+OUT="${DIAG_OUTPUT_DIR:-FARE_diagnostics/diagnose_once_${PBS_JOBID%%.*}}"
+SPEED="${FARE_SPEED_CHECKPOINT:?Supply FARE_SPEED_CHECKPOINT via qsub -v}"
+FLOW="${FARE_FLOW_CHECKPOINT:?Supply FARE_FLOW_CHECKPOINT via qsub -v}"
+mkdir -p "$IN" "$OUT" FARE_logs/diagnostic
+STAMP=$(date +%Y%m%d_%H%M%S)
+LOG="FARE_logs/diagnostic/FARE404.${STAMP}.${PBS_JOBID:-manual}.live.log"
+ARGS=(--config "$CONFIG" --input-dir "$IN" --output-dir "$OUT" --seed "${SEED:-10}" --max-queries-per-group "${DIAG_MAX_QUERIES:-64}" --bootstrap "${DIAG_BOOTSTRAP:-400}" --adapter fare.diagnostics_once.native_export:export_once --speed-checkpoint "$SPEED" --flow-checkpoint "$FLOW" --strict-coverage --strict-modes --strict-oracle)
+"$PYTHON" -u FARE/scripts/diagnose_preflight.py --config "$CONFIG" --speed-checkpoint "$SPEED" --flow-checkpoint "$FLOW" 2>&1 | awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush(); }' | tee -a "$LOG"
+"$PYTHON" -u FARE/scripts/diagnose_once.py "${ARGS[@]}" --preflight 2>&1 | awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush(); }' | tee -a "$LOG"
+"$PYTHON" -u FARE/scripts/diagnose_once.py "${ARGS[@]}" 2>&1 | awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush(); }' | tee -a "$LOG"
+echo FARE404_ONE_PASS_COMPLETE
