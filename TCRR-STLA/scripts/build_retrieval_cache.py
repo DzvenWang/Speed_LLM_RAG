@@ -11,7 +11,7 @@ from tcrr_stla.config import resolve_stla_checkpoint
 
 def ensure_cache(cfg,source,split,severity=None,smoke=False,force=False):
     tag=f'eval_s{int(severity)}' if severity is not None else ('formal_smoke' if smoke else 'formal')
-    out=Path(cfg['project']['retrieval_root'])/cfg['experiment']['dataset']/('tcrr_v1_'+tag)/f'{split}.mask_raft_topk.npz'
+    out=Path(cfg['project']['retrieval_root'])/cfg['experiment']['dataset']/('tcrr_v2_'+tag)/f'{split}.mask_raft_topk.npz'
     source=Path(source)
     formal=cache_path(cfg,'formal')
     def signature(p):
@@ -21,7 +21,7 @@ def ensure_cache(cfg,source,split,severity=None,smoke=False,force=False):
                     source/f'{split}_manifest.csv',formal/'train_x_full_norm.npy',formal/'train_manifest.csv']
     expected={'file_signatures':{str(p):signature(p) for p in expected_files},
               'top_k':int(cfg['retrieval']['top_k']),'periods':[int(v) for v in cfg['retrieval']['periods']],
-              'split':split,'severity':severity,'version':'1.0.0','dataset':cfg['experiment']['dataset']}
+              'split':split,'severity':severity,'version':'2.0.0','dataset':cfg['experiment']['dataset']}
     meta=out.with_suffix('.json')
     if out.is_file() and meta.is_file() and not force:
         try:

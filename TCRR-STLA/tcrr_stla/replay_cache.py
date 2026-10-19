@@ -55,11 +55,11 @@ def prepare_bank(cfg,split,dataset,cache,memory,teacher,checkpoint_path,retrieva
     n=len(dataset) if num_queries is None else min(int(num_queries),len(dataset))
     h=int(cfg['experiment']['horizon']);nodes=int(memory.arrays['x'].shape[-1])
     name=f'{split}.teacher_replay_k{k}_{dtype}.npy'
-    folder=Path(cfg['project']['retrieval_root'])/cfg['experiment']['dataset']/'formal'/'teacher_replay_v23'
+    folder=Path(cfg['project']['retrieval_root'])/cfg['experiment']['dataset']/'formal'/'teacher_replay_v2'
     folder.mkdir(parents=True,exist_ok=True)
     path=folder/name;meta_file=folder/(name+'.json')
     source={
-        'schema':23,'split':split,'target':cfg['experiment']['target'],
+        'schema':26,'split':split,'target':cfg['experiment']['target'],
         'dataset':cfg['experiment']['dataset'],'num_queries':n,'num_candidates':k,
         'horizon':h,'nodes':nodes,'dtype':dtype,
         'pretrained_backbone_sha256':file_sha256(checkpoint_path),

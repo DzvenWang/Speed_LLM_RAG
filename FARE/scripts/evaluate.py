@@ -21,5 +21,5 @@ def main():
     model.load_state_dict(ck['state_dict'],strict=True)
     for name,ds in post_training_datasets(cfg,val).items():
         result,_=evaluate(model,memory,ds,device,cfg,(project_path(a.out) if a.out else project_path(a.checkpoint).parent/'evaluation')/name)
-        print('FARE_V4_EVALUATION',name,result.get('overall_MAE'),result.get('overall_RMSE'),flush=True)
+        print('FARE_V5_EVALUATION',name,result.get('overall_MAE'),result.get('overall_RMSE'),flush=True)
 if __name__=='__main__':main()

@@ -25,7 +25,8 @@ MODES=(
     'full','no_retrieval','no_future','no_regional','global_only',
     'no_none','shuffled','random_future','cross_history','no_innovation',
     'no_risk','legacy_v23','no_prop_retrieval','no_lag_alignment',
-    'no_prop_control','no_prop_support'
+    'no_prop_control','no_prop_support','legacy_only',
+    'propagation_only','observed_support_only','no_local_regime','no_directional_graph','no_action_utility'
 )
 
 
@@ -47,8 +48,8 @@ def main():
         raise ValueError('Use non-empty severities from 20 40 60 90')
     cp=Path(a.checkpoint).expanduser().resolve()
     ck=torch.load(cp,map_location='cpu',weights_only=False)
-    if str(ck.get('version',''))!='1.0.0':
-        raise RuntimeError('PCFT v1.0 evaluator requires a v1.0 checkpoint')
+    if str(ck.get('version',''))!='2.0.0':
+        raise RuntimeError('PCFT v2.0 evaluator requires a v2.0 checkpoint')
     saved_cfg=relocate_saved_config(ck['config'])
     if a.target and a.target!=saved_cfg['experiment']['target']:
         raise RuntimeError('Target does not match saved checkpoint')

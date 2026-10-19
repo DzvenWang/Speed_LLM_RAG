@@ -43,8 +43,8 @@ def prepare_forecast_pool(cfg, formal, query_root, split, raw_path, backbone_pat
     from .stla import load_pretrained_stla, MaskAwareSTLAformer
     formal=Path(formal);query_root=Path(query_root);raw_path=Path(raw_path)
     use_traffic=bool(cfg.get('traffic',{}).get('enabled',True)) and cfg.get('training',{}).get('ablation','full') not in ('legacy_v23','no_traffic_retrieval')
-    out=raw_path.with_name(raw_path.stem+('.tcrr_traffic_v1.npz' if use_traffic else '.tcrr_original_v1.npz'))
-    expected={'schema':24,'raw_sha256':file_sha256(raw_path),
+    out=raw_path.with_name(raw_path.stem+('.tcrr_traffic_v2.npz' if use_traffic else '.tcrr_original_v2.npz'))
+    expected={'schema':25,'raw_sha256':file_sha256(raw_path),
               'backbone_sha256':file_sha256(backbone_path),
               'query_x':file_sha256(query_root/f'{split}_x_obs_norm.npy'),
               'query_mask':file_sha256(query_root/f'{split}_history_observed.npy'),
@@ -53,6 +53,7 @@ def prepare_forecast_pool(cfg, formal, query_root, split, raw_path, backbone_pat
               'score_weight':float(cfg['retrieval']['history_similarity_weight']),
               'split':split,
               'traffic':cfg.get('traffic',{}), 'traffic_route':use_traffic,
+              'training_ablation':cfg.get('training',{}).get('ablation','full'),
               'train_history':file_sha256(formal/'train_x_full_norm.npy'),
               'train_starts':file_sha256(formal/'train_manifest.csv'),
               'query_starts':file_sha256(query_root/f'{split}_manifest.csv')}
@@ -74,7 +75,7 @@ def prepare_forecast_pool(cfg, formal, query_root, split, raw_path, backbone_pat
     query_starts=pd.read_csv(query_root/f'{split}_manifest.csv').window_start.to_numpy(np.int64)
     if use_traffic:
         memsig=signature_bank(train_x[:(256 if smoke else len(train_x))],device,
-                    int(cfg['traffic'].get('signature_chunk_size',2048)))
+                    int(cfg.get('traffic',{}).get('signature_chunk_size',2048)))
         memory_starts_t=torch.tensor(memory_starts[:len(memsig)],device=device)
     else:memsig=None
     x=np.load(query_root/f'{split}_x_obs_norm.npy',mmap_mode='r')
@@ -98,26 +99,35 @@ def prepare_forecast_pool(cfg, formal, query_root, split, raw_path, backbone_pat
                 ti,ts=traffic_topk(qs,ms,memsig,memory_starts_t,
                       torch.as_tensor(query_starts[start:stop],device=device),
                       int(cfg['experiment']['history'])+int(cfg['experiment']['horizon']),
-                      min(int(cfg['traffic'].get('memory_candidate_k',12)),memsig.shape[0]//2))
+                      min(int(cfg.get('traffic',{}).get('memory_candidate_k',12)),memsig.shape[0]//2))
                 tk=ti.cpu().numpy().astype(np.int64)
                 tscore=ts.cpu().numpy().astype(np.float32)
-                w=float(cfg['traffic'].get('traffic_score_weight',0.25))
+                w=float(cfg.get('traffic',{}).get('traffic_score_weight',0.25))
                 ids=np.concatenate([ids,tk],axis=1)
                 hscore=np.concatenate([hscore,tscore],axis=1)
-                hc=np.concatenate([hc,np.ones_like(tscore,dtype=np.float32)],axis=1)
+                hc=np.concatenate([hc,np.full_like(tscore,ms.mean().item(),dtype=np.float32)],axis=1)
             cy=torch.as_tensor(np.array(futures[ids],copy=True),device=device,dtype=torch.float32)
             # Per-case centered forecast shape: focus on future evolution rather than scale.
             qv=pred.flatten(1);yv=cy.flatten(2)
             qz=qv-qv.mean(-1,keepdim=True);yz=yv-yv.mean(-1,keepdim=True)
             dot=(qz[:,None]*yz).sum(-1)
             sim=dot/(qz.norm(dim=-1)[:,None]*yz.norm(dim=-1)+1e-6)
-            sim=torch.nan_to_num(sim,nan=-1.).clamp(-1,1).cpu().numpy()
+            sim=torch.nan_to_num(sim,nan=-1.).clamp(-1,1)
+            # Query-mask-matched reranking: all candidate traffic values are
+            # compared on precisely the query-observed history coordinates.
+            raw_history=torch.as_tensor(np.array(train_x[ids],copy=True),device=device,dtype=torch.float32)
+            mm=ms[:,None]
+            observed_difference=((raw_history-qs[:,None]).abs()*mm).sum((2,3))/mm.sum((2,3)).clamp_min(1.)
+            matched_similarity=torch.exp(-observed_difference.clamp_min(0.)).clamp(0,1)
+            if cfg.get('training',{}).get('ablation')!='no_mask_matched_retrieval':
+                sim=0.8*sim+0.2*(2*matched_similarity-1)
+            sim=sim.cpu().numpy()
             ci,cs,cc=select_unique(ids,hscore,hc,sim,k,bw)
             selected[start:stop]=ci;scores[start:stop]=cs;covers[start:stop]=cc
             if start % max(bs*100,bs)==0:print(f'FORECAST_POOL_PROGRESS split={split} {stop}/{count}',flush=True)
     out.parent.mkdir(parents=True,exist_ok=True)
     tmp=out.with_name(out.name+'.tmp.npz')
-    np.savez_compressed(tmp,indices=selected,scores=scores,coverage=covers,version=np.int32(24))
+    np.savez_compressed(tmp,indices=selected,scores=scores,coverage=covers,version=np.int32(25))
     os.replace(tmp,out);meta.write_text(json.dumps(expected,indent=2))
     print(f'FORECAST_POOL_PASS split={split} selected={k} path={out}',flush=True)
     return out

@@ -1,11 +1,14 @@
-version: 1.0.0
+version: 2.0.0
 method: TCRR-STLA
 traffic:
   enabled: true
   hidden: 48
-  memory_candidate_k: 12
+  memory_candidate_k: 16
+  mask_matched_rerank: true
+  horizon_utility: true
   traffic_score_weight: 0.25
   signature_chunk_size: 2048
+  graph_neighbors: 8
 
 project:
   root: ${SPEED_LLM_RAG_ROOT}
@@ -74,15 +77,16 @@ training:
   gate_reg_weight: 0.0005
   min_delta: 0.00000001
 runtime:
-  num_workers: 4
+  eval_batch_size: 8
+  num_workers: 0
   pin_memory: true
-  persistent_workers: true
+  persistent_workers: false
   prefetch_factor: 2
-  preload_retrieval_memory_gpu: true
+  preload_retrieval_memory_gpu: false
   frozen_replay_teacher: true
   replay_bank_dtype: float16
-  replay_bank_on_gpu: true
-  normal_teacher_on_gpu: true
+  replay_bank_on_gpu: false
+  normal_teacher_on_gpu: false
   replay_query_batch_size: 12
   gpu_monitor_interval_sec: 30
   amp: true

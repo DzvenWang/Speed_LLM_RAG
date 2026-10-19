@@ -122,8 +122,11 @@ class PropagationTransport(nn.Module):
         if intervention in ('no_evolution','no_evolution_value','no_evolution_information'):v_e=v_e*False
         if intervention in ('no_residual_information',):r_delta=r_delta*0
         if intervention in ('no_evolution_information',):e_delta=e_delta*0
-        delta=torch.stack([r_delta,e_delta],3)
-        avail=torch.stack([v_r,v_e],3)
+        failure=memory.fetch_node(ids,'failure_delta',device)
+        failure_valid=memory.fetch_node(ids,'failure_valid',device).bool() & legal[...,None]
+        # Paired OOF predictions isolate the support that the sensing failure removed.
+        delta=torch.stack([r_delta,e_delta,failure],3)
+        avail=torch.stack([v_r,v_e,failure_valid],3)
         agreement=1-(r_delta-e_delta).abs()/(1+r_delta.abs()+e_delta.abs())
         support_weight=w.sum(-1).clamp(0,1)
         # Compatibility combines path confidence, evidence validity, directional support.

@@ -11,8 +11,8 @@ def main():
     p.add_argument('--target',choices=['speed','flow']);p.add_argument('--seed',type=int,default=10)
     p.add_argument('--dataset');p.add_argument('--backbone-checkpoint');p.add_argument('--config');p.add_argument('--smoke',action='store_true')
     p.add_argument('--run-stamp');p.add_argument('--batch-size',type=int);p.add_argument('--num-workers',type=int)
-    p.add_argument('--ablation',choices=['full','no_retrieval','no_evidence','no_mask_replay','no_rerank','standard_future','shuffled','no_risk','legacy_v23','no_traffic_regime','no_traffic_retrieval','no_failure_transfer','no_utility','no_traffic_control'])
-    p.add_argument('--resume',help='Path to last.pt from the SAME v1.0 experiment')
+    p.add_argument('--ablation',choices=['full','no_retrieval','no_evidence','no_mask_replay','no_rerank','standard_future','shuffled','no_risk','legacy_v23','no_traffic_regime','no_traffic_retrieval','no_failure_transfer','no_utility','no_traffic_control','no_mask_matched_retrieval','no_failure_encoder','no_normal_residual','no_failure_residual','no_candidate_utility','no_mixture_utility'])
+    p.add_argument('--resume',help='Path to last.pt from the SAME v2.0 experiment')
     p.add_argument('--skip-retrieval-audit',action='store_true')
     p.add_argument('--skip-evaluate',action='store_true')
     a=p.parse_args()
@@ -34,6 +34,7 @@ def main():
     best=train(cfg,cache,backbone,rt,rv,run,a.smoke,resume=a.resume);print(f'BEST_CHECKPOINT={best}',flush=True)
     if not a.smoke and not a.skip_evaluate:
         cmd=[sys.executable,'-u',str(ROOT/'scripts/evaluate.py'),'--checkpoint',str(best),
+             '--batch-size',str(cfg['runtime'].get('eval_batch_size',8)),'--num-workers','0',
              '--severities',*[str(s) for s in cfg['experiment']['severities']]]
         subprocess.check_call(cmd,cwd=ROOT)
         print('AUTO_EVALUATE_PASS',best,flush=True)

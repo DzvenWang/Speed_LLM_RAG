@@ -36,6 +36,15 @@ def phase(ep,cfg):
 def build_model(cfg,checkpoint,device):
     base,ck=load_pretrained_stla(Path(cfg['project']['root']),Path(checkpoint),device)
     m=TCRRSTLA(MaskAwareSTLAformer(base),cfg).to(device)
+    if cfg.get('traffic',{}).get('enabled',True):
+        from .traffic_neighbors import train_only_neighbours
+        formal=Path(cfg['project']['root'])/'Base_SupportBench'  # resolved via protocol cache below
+        from .config import cache_path
+        train_cache=cache_path(cfg,'formal')
+        if (train_cache/'train_x_full_norm.npy').is_file():
+            nbr=train_only_neighbours(train_cache,int(cfg.get('traffic',{}).get('graph_neighbors',8)))
+            m.traffic.install_neighbors(nbr.to(device))
+            print(f'TCRR_TRAIN_NEIGHBOR_GRAPH nodes={nbr.shape[0]} degree={nbr.shape[1]}',flush=True)
     return m,ck
 
 
@@ -123,15 +132,23 @@ def compute_losses(out,b,mean,std,cfg,mode):
         target=(gain>margin).float()
         # Logit-space BCE is autocast-safe on V100 AMP and keeps the original sigmoid gate.
         risk_loss=F.binary_cross_entropy_with_logits(out['risk_logit'].float()[valid],target[valid])
-        if out.get('candidate_expected_gain') is not None:
+        if out.get('candidate_expected_gain') is not None and mode not in ('no_candidate_utility','no_utility'):
             # Candidate label matches the actual bounded evidence amplitude.
-            proposal_delta=out['candidate_residuals'].detach().float().clamp(-3,3)
+            delta=out['candidate_residuals'].detach().float()
+            limit=float(cfg['model']['max_normalized_correction'])
+            proposal_delta=limit*torch.tanh(delta/limit)
             gain_candidate=(base[:,None]-yt[:,None]).abs()-(base[:,None]+proposal_delta-yt[:,None]).abs()
             pred_candidate=out['candidate_expected_gain'].float()
             utility_loss=F.smooth_l1_loss(pred_candidate[avail],gain_candidate.detach()[avail]) if avail.any() else utility_loss
-            if out.get('mixture_expected_gain') is not None:
+            if out.get('candidate_expected_harm') is not None and avail.any():
+                harm_candidate=(-gain_candidate).clamp_min(0.)
+                utility_loss=utility_loss+0.25*F.smooth_l1_loss(pred_candidate.new_tensor(0.)+out['candidate_expected_harm'].float()[avail],harm_candidate.detach()[avail])
+            if out.get('mixture_expected_gain') is not None and mode not in ('no_mixture_utility','no_utility'):
                 mixture_pred=out['mixture_expected_gain'].float()[valid]
                 utility_loss=utility_loss+F.smooth_l1_loss(mixture_pred,gain.detach()[valid])
+                if out.get('mixture_expected_harm') is not None:
+                    harm=(-gain).clamp_min(0.)
+                    utility_loss=utility_loss+0.25*F.smooth_l1_loss(F.softplus(out['mixture_expected_harm'].float()[valid]),harm.detach()[valid])
     loss=main+float(cfg['training'].get('rmse_weight',0.0))*risk+float(cfg['training'].get('rank_weight',0.0))*rank+float(cfg['training'].get('risk_weight',0.0))*risk_loss+float(cfg['training'].get('traffic_utility_weight',0.03))*utility_loss
     return loss,dict(mae=float(err.abs().mean().detach()),rmse=float(risk.detach()),ranking=float(rank.detach()),risk=float(risk_loss.detach()),utility=float(utility_loss.detach()),
                      gate=float(out['gate'].mean().detach()),loss=float(loss.detach()))

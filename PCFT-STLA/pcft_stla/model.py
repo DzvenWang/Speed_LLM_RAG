@@ -9,7 +9,8 @@ from torch import nn
 from .encoders import StateEncoder
 from .stla import MaskSupportSTLAformer
 from .seasonal import seasonal_innovation
-from .propagation import PropagationSupport
+from .propagation_v2 import PropagationSupportV2
+from .action_v2 import ForecastActionController
 
 
 def stable_candidate_disagreement(weights: torch.Tensor, residual: torch.Tensor) -> torch.Tensor:
@@ -42,9 +43,10 @@ class PCFTSTLA(nn.Module):
         self.query_encoder=StateEncoder(num_nodes,history,td,sd,qd,rd,int(ec['spatial_heads']),float(ec['dropout']),graph_k)
         self.memory_encoder=copy.deepcopy(self.query_encoder)
         self.stla=stla
-        self.propagation=PropagationSupport(num_nodes,self.query_encoder.neighbors,
+        self.propagation=PropagationSupportV2(num_nodes,self.query_encoder.neighbors,
                  tuple(cfg.get('propagation',{}).get('lags',[1,2,3,4,5,6])))
         self.propagation_enabled=bool(cfg.get('propagation',{}).get('enabled',True))
+        self.action_controller=ForecastActionController(self.P,48,self.max_delta)
         mid=int(mc.get('node_hidden',16));hidden=int(mc.get('fusion_hidden',96))
         self.qsummary=nn.Sequential(nn.Linear(qd,mid),nn.GELU())
         self.horizon_embed=nn.Embedding(self.P,8)
@@ -89,7 +91,8 @@ class PCFTSTLA(nn.Module):
         x=batch['x'].float();mask=batch['mask'].float();tod=batch['tod'].long();dow=batch['dow'].long()
         B,H,N=x.shape
         self.memory_encoder.eval()
-        prop_on=self.propagation_enabled and mode!='legacy_v23'
+        self.propagation.force_global = (mode=='no_local_regime')
+        prop_on=self.propagation_enabled and mode not in ('legacy_v23','no_directional_graph')
         prop_retrieval=prop_on and mode!='no_prop_retrieval'
         # FP16 graph/key normalization can overflow after EMA updates even when
         # the STLA forecasting backbone is numerically stable. Preserve AMP for
@@ -207,17 +210,23 @@ class PCFTSTLA(nn.Module):
             residual=residual[:,permutation]
             futures=futures[:,permutation]
         if mode=='no_future':residual=torch.zeros_like(residual)
-        prop_support=None;prop_beta=None;prop_utility=None
+        prop_support=None;prop_beta=None;prop_utility=None;prop_field=None;prop_delta=None
         if prop_on and mode!='no_future':
-            prop_support=self.propagation.support(mask,P,query_x=x)
-            if mode=='no_prop_support':prop_support=torch.ones_like(prop_support)
-            prop_delta=self.propagation.transfer(xs,futures,P,query_x=x,query_mask=mask)
-            legacy_residual=residual
-            residual,prop_beta,prop_utility=self.propagation.blend(
-                residual,prop_delta,prop_support,score_node)
-            if mode in ('no_lag_alignment','no_prop_alignment'):
-                residual=legacy_residual
-            candidate_pred=base[:,None]+residual
+            prop_field=self.propagation.support_field(mask,P,query_x=x,base_forecast=base.detach())
+            if mode=='observed_support_only':
+                prop_field['forecast']=torch.zeros_like(prop_field['forecast'])
+            prop_support=(prop_field['observed']+0.5*prop_field['forecast']).clamp(0,1)
+            # One provenance identifier per node, not one ID for a composite region case.
+            # Propagation can only join source/target histories of identical windows.
+            region_prov=region_idx[:,region_for_node,:].permute(0,2,1)
+            provenance=torch.cat([idx[:,:,None].expand(B,G,N),region_prov],1)
+            prop_delta=self.propagation.transfer(xs,futures,P,query_x=x,query_mask=mask,
+                                                   provenance=provenance)
+            prop_delta=torch.where(future_valid,torch.nan_to_num(prop_delta),torch.zeros_like(prop_delta))
+            if mode=='no_prop_support':
+                prop_field={key:(torch.ones_like(val) if key!='uncertainty' else torch.zeros_like(val))
+                            for key,val in prop_field.items()}
+
         d_obs=(xs-x[:,None]).abs()*mask[:,None]
         distance=d_obs.sum(2)/mask[:,None].sum(2).clamp_min(1.)
         branch_parts=[torch.zeros(B,self.top_k,device=x.device),torch.ones(B,self.top_k,device=x.device)]
@@ -238,8 +247,8 @@ class PCFTSTLA(nn.Module):
         hor=h[:,None].expand(B,C,P,N,-1)
         feats=torch.cat([bs,ep,resid,delta,dis,sco,sim,cov,nb,br,summ,hor],-1)
         logits=self.scorer(feats).squeeze(-1)+score_node[:,:,None,:]
-        if prop_utility is not None and mode!='no_prop_control':
-            logits=logits+prop_utility
+        # Candidate scoring is independent of the final propagation action.
+        # No future labels are used in these logits.
         if mode=='no_regional':
             logits=score_node[:,:,None,:].expand_as(logits).clone()
             logits[:,G:]=-1e4
@@ -264,6 +273,15 @@ class PCFTSTLA(nn.Module):
         if mode=='no_risk':risk_prob=torch.ones_like(risk_prob)
         ungated=self.max_delta*torch.tanh(evidence/self.max_delta)
         correction=risk_prob*ungated
+        action=None
+        if prop_on and prop_delta is not None:
+            prop_evidence=(weights[:,:C]*prop_delta).sum(1)
+            action=self.action_controller(base, evidence, prop_evidence, prop_field, mode=mode,
+                                          risk_prior=risk_logit)
+            correction=action['correction']
+            risk_prob=(1-action['action_weights'][...,2]).clamp(1e-5,1-1e-5)
+            risk_logit=torch.logit(risk_prob)
+            prop_beta=action['action_weights'][...,1]
         if mode=='no_future':correction=torch.zeros_like(correction)
         pred=base+correction
         # Three genuine competing actions: temporal, regional, no retrieval.
@@ -276,6 +294,11 @@ class PCFTSTLA(nn.Module):
                 'candidate_residuals':residual,
                 'candidate_expected_gain':prop_utility,
                 'propagation_support':prop_support, 'propagation_beta':prop_beta,
+                'propagation_support_field':prop_field,
+                'action_weights': action['action_weights'] if action is not None else None,
+                'action_expected_gain':action['action_expected_gain'] if action is not None else None,
+                'legacy_action':action['legacy_correction'] if action is not None else None,
+                'propagation_action':action['propagation_correction'] if action is not None else None,
                 'risk_probability':risk_prob,'risk_logit':risk_logit,
                 'ungated_correction':ungated, 'candidate_logits':all_scores,
                 'query_temporal_keys':q['temporal_key'], 'query_spatial_keys':q['spatial_key'],

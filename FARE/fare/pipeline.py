@@ -29,9 +29,9 @@ def prepare(cfg,device,backbone_file=None,memory_file=None,build=True,oos_foreca
     if backbone.n!=train.n:raise RuntimeError('Checkpoint and dataset node count mismatch')
     if cuda_safety and cfg.get('training',{}).get('cuda_preflight',True):
         run_cuda_preflight(backbone,graph,train,cfg,device)
-    mem_path=project_path(memory_file) if memory_file else root()/'FARE_cache'/ex['target']/ex['dataset']/f"memory_v4_{ex['seed']}_{cfg['memory']['max_episodes']}"
+    mem_path=project_path(memory_file) if memory_file else root()/'FARE_cache'/ex['target']/ex['dataset']/f"memory_v502_{ex['seed']}_{cfg['memory']['max_episodes']}"
     expected_memory={'dataset':ex['dataset'],'target':ex['target'],'backbone_sha256':hash_file(bk)}
-    if oos_forecast_file and cfg['memory']['residual_mode']=='external_oos':
+    if oos_forecast_file and cfg['memory']['residual_mode']=='external_oos_paired':
         expected_memory['oos_source_sha256']=hash_file(oos_forecast_file)
     if mem_path.exists() and (mem_path/'manifest.json').exists():
         memory=EpisodeMemory.load(mem_path,expected=expected_memory)
@@ -40,12 +40,12 @@ def prepare(cfg,device,backbone_file=None,memory_file=None,build=True,oos_foreca
                                   cfg['memory']['residual_mode'],oos_forecast_file,device,
                                   cfg['memory']['build_batch_size'])
         memory.metadata.update({'dataset':ex['dataset'],'target':ex['target'],'backbone_sha256':hash_file(bk)})
-        if oos_forecast_file and cfg['memory']['residual_mode']=='external_oos':
+        if oos_forecast_file and cfg['memory']['residual_mode']=='external_oos_paired':
             memory.metadata['oos_source_sha256']=hash_file(oos_forecast_file)
         mem_path.parent.mkdir(parents=True,exist_ok=True);memory.save(mem_path)
     else:raise FileNotFoundError(mem_path)
     memory.attach_graph(graph)
-    if cfg['experiment']['run_tag']=='formal' and cfg['memory']['require_oos_for_formal'] and memory.metadata.get('residual_provenance')!='external_oos':
+    if cfg['experiment']['run_tag']=='formal' and cfg['memory']['require_oos_for_formal'] and memory.metadata.get('residual_provenance')!='external_oos_paired':
         raise RuntimeError('Formal FARE requires genuinely held-out/OOF residuals. Supply external_oos source.')
     model=FARE(backbone,graph,cfg).to(device)
     metadata={'dataset':ex['dataset'],'target':ex['target'],'seed':ex['seed'],
@@ -85,7 +85,7 @@ def run(cfg,device,run_dir=None,backbone_file=None,memory_file=None,oos_forecast
     run_dir.mkdir(parents=True,exist_ok=True)
     model,memory,train_ds,val_ds,device,meta=prepare(cfg,device,backbone_file,memory_file,True,project_path(oos_forecast_file,must_exist=True) if oos_forecast_file else None,
                                                          cuda_safety=train)
-    dump_json(run_dir/'manifest.json',{'config':cfg,'metadata':meta,'run_dir':str(run_dir),'version':'4.0.4'})
+    dump_json(run_dir/'manifest.json',{'config':cfg,'metadata':meta,'run_dir':str(run_dir),'version':'5.0.3'})
     if train:
         best=fit(model,memory,train_ds,val_ds,device,cfg,run_dir,meta,resume)
     else:best=project_path(resume,must_exist=True) if resume else run_dir/'best.pt'
@@ -116,5 +116,5 @@ def run(cfg,device,run_dir=None,backbone_file=None,memory_file=None,oos_forecast
         if analysis and cfg['analysis']['enabled']:
             analyze(model,memory,datasets,device,cfg,run_dir/'analysis')
     dump_json(run_dir/'pipeline_complete.json',{'best_checkpoint':str(best),'finished':time.strftime('%Y-%m-%dT%H:%M:%S')})
-    print('FARE_V4_PIPELINE_COMPLETE',flush=True)
+    print('FARE_V5_PIPELINE_COMPLETE',flush=True)
     return run_dir

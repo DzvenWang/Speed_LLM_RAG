@@ -122,7 +122,9 @@ Mask_RAST-STLA_logs/
 Mask_RAST-STLA_store/
 
 EvalOnly_logs/
+
 FARE_cache/
+FARE_diagnostics/
 
 PCFT-STLA_exps/
 PCFT-STLA_logs/

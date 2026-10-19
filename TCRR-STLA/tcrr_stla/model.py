@@ -7,7 +7,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 from .stla import MaskAwareSTLAformer
-from .traffic import TrafficResidualHead
+from .traffic_v2 import FailureConditionedTraffic
 
 
 class TCRRSTLA(nn.Module):
@@ -15,7 +15,7 @@ class TCRRSTLA(nn.Module):
         super().__init__()
         mc = cfg['model']
         self.stla = stla
-        self.traffic = TrafficResidualHead(int(cfg.get("traffic",{}).get("hidden",48)))
+        self.traffic = FailureConditionedTraffic(int(cfg["experiment"]["horizon"]), int(cfg.get("traffic",{}).get("hidden",48)))
         self.traffic_enabled=bool(cfg.get("traffic",{}).get("enabled",True))
         self.horizon = int(cfg['experiment']['horizon'])
         d = int(mc.get('latent_dim', 16))
@@ -74,7 +74,8 @@ class TCRRSTLA(nn.Module):
         K = residual.shape[1]
         traffic=None
         if self.traffic_enabled and candidate_histories is not None and mode not in ('legacy_v23','no_traffic_regime'):
-            traffic=self.traffic(x,mask,candidate_histories)
+            traffic=self.traffic(x,mask,candidate_histories,base,normal_residual if normal_residual is not None else residual,(residual-(normal_residual if normal_residual is not None else residual)),
+                                      disable_failure=(mode=='no_failure_encoder'))
         if candidate_y.shape[2:] != (P,N):
             raise ValueError('Candidate future shape does not match STLA output')
         if mode in ('shuffled', 'random_future') and K > 1:
@@ -84,7 +85,8 @@ class TCRRSTLA(nn.Module):
             residual = residual[:, permutation]
             if candidate_histories is not None:
                 candidate_histories=candidate_histories[:,permutation]
-                if traffic is not None:traffic=self.traffic(x,mask,candidate_histories)
+                if traffic is not None:traffic=self.traffic(x,mask,candidate_histories,base,normal_residual if normal_residual is not None else residual,(residual-(normal_residual if normal_residual is not None else residual)),
+                                      disable_failure=(mode=='no_failure_encoder'))
             if normal_residual is not None:normal_residual=normal_residual[:,permutation]
             if candidate_valid is not None:candidate_valid=candidate_valid[:,permutation]
         if mode == 'standard_future':
@@ -102,8 +104,10 @@ class TCRRSTLA(nn.Module):
         scale_logits=self.component_scale(compact)
         if traffic is not None:
             failure_bias=(torch.zeros_like(traffic['failure_bias']) if mode=='no_failure_transfer' else traffic['failure_bias'])
-            scale_logits=scale_logits+torch.stack([traffic['normal_bias'],failure_bias],-1)[:,:,None]
+            scale_logits=scale_logits+torch.stack([traffic['normal_bias'],failure_bias],-1)
         scales=2*torch.sigmoid(scale_logits)
+        if mode=='no_normal_residual':scales=scales.clone();scales[...,0]=0
+        if mode=='no_failure_residual':scales=scales.clone();scales[...,1]=0
         # Corrective evidence depends exclusively on the retrieved historical errors.
         effective_residual=scales[...,0]*normal_residual+scales[...,1]*failure_residual
         bs = base[:, None, :, :, None].expand(-1,K,-1,-1,-1)
@@ -121,9 +125,9 @@ class TCRRSTLA(nn.Module):
         # target-oriented reranking is trained by forecast/ranking loss.
         logits = logits + candidate_scores[:, :, None, None]
         if traffic is not None and mode not in ('no_traffic_retrieval','no_utility'):
-            logits=logits+traffic['logit_bias'][:,:,None]
-        if traffic is not None and mode!='no_utility':
-            logits=logits+float(self.max_delta)*traffic['expected_gain'][:,:,None]
+            logits=logits+traffic['logit_bias']
+        if traffic is not None and mode not in ('no_utility','no_candidate_utility'):
+            logits=logits+0.5*traffic['expected_gain']
         none = self.none_scorer(cfeat).squeeze(-1)
         if mode == 'no_rerank':
             logits = candidate_scores[:, :, None, None].expand_as(logits)
@@ -148,8 +152,9 @@ class TCRRSTLA(nn.Module):
         correction = reliability*ungated
         mix_gain=None
         if traffic is not None:
-            mix_gain=self.traffic.mixture_gain(traffic['query_features'],base,ungated,cover.squeeze(-1))
-            if mode!='no_traffic_control':
+            mix_out=self.traffic.mixture_gain(traffic['query_embedding'],base,ungated,traffic['support'],residual_var.sqrt().clamp_max(10))
+            mix_gain=mix_out[...,0]
+            if mode not in ('no_traffic_control','no_mixture_utility'):
                 # Starts with zero contribution; never creates free-form forecast evidence.
                 reliability=(reliability+0.15*torch.tanh(mix_gain)).clamp(0.,1.)
                 correction=reliability*ungated
@@ -162,6 +167,8 @@ class TCRRSTLA(nn.Module):
                 'candidate_logits': scores_all, 'correction': correction,
                 'risk_probability':reliability, 'risk_logit':risk_logit, 'ungated_correction':ungated,
                 'candidate_residuals': effective_residual,
-                'candidate_expected_gain':traffic['expected_gain'][:,:,None].expand(B,K,P,N) if traffic is not None else None,
+                'candidate_expected_gain':traffic['expected_gain'] if traffic is not None else None,
+                'candidate_expected_harm':traffic['expected_harm'] if traffic is not None else None,
+                'mixture_expected_harm':mix_out[...,1] if traffic is not None else None,
                 'mixture_expected_gain':mix_gain,'normal_component':normal_residual,
                 'failure_component':failure_residual,'teacher_discrepancy':dteacher,'candidate_available':candidate_valid.bool()}

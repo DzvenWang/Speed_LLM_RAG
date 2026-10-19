@@ -11,7 +11,7 @@ from .stla import load_pretrained_stla,MaskSupportSTLAformer
 from .model import PCFTSTLA
 from .memory import build_memory_index
 from .graph import graph_neighbours
-from .propagation import build_directional_graph
+from .propagation_v2 import build_directional_graph
 from .seasonal import train_future_reference
 from .evaluation import metrics,save_summary
 from .config import file_sha256
@@ -46,7 +46,7 @@ def setup_graph(model,cfg,cache,force=False):
     model.set_graph(graph)
     if model.propagation_enabled:
         weights,conf=build_directional_graph(cache,graph,
-            Path(cfg['project']['store_root'])/cfg['experiment']['dataset']/'train_only_directional_v1.npz',
+            Path(cfg['project']['store_root'])/cfg['experiment']['dataset']/'train_only_directional_v2.npz',
             lags=cfg.get('propagation',{}).get('lags',[1,2,3,4,5,6]),
             sampled_rows=int(cfg['retrieval'].get('graph_sampled_rows',1200)))
         model.propagation.install(weights,conf)
@@ -101,6 +101,16 @@ def losses(out,b,mean,std,cfg,mode,alignment_loss=None):
             predicted=out['candidate_expected_gain'].float()
             if available.any():
                 prop_utility_loss=F.smooth_l1_loss(predicted[available],utility.detach()[available])
+    if out.get('action_expected_gain') is not None:
+        current=out['base_prediction'].detach().float()
+        target=b['y_norm'].float()
+        legacy=out['legacy_action'].detach().float()
+        propagated=out['propagation_action'].detach().float()
+        action_targets=torch.stack([(current-target).abs()-(current+legacy-target).abs(),
+                                    (current-target).abs()-(current+propagated-target).abs()],-1)
+        action_prediction=out['action_expected_gain'].float()
+        prop_utility_loss=prop_utility_loss+F.smooth_l1_loss(
+            action_prediction[valid],action_targets.detach()[valid])
     base_error=(out['base_prediction'].float()*std+mean)[valid]-y[valid]
     base_loss=base_error.abs().mean()
     base_weight=(float(cfg['training'].get('base_preserve_weight',0.0)) if mode=='full' else 0.0)
@@ -349,7 +359,7 @@ def train(cfg,cache,checkpoint,run_dir,smoke=False,resume=None):
     vm=metrics(pred['prediction'],pred['true'],pred['valid'],pred['direct'])
     bm=metrics(pred['base'],pred['true'],pred['valid'],pred['direct'])
     np.savez_compressed(run_dir/'val_predictions.npz',**{k:v.astype(np.float32) for k,v in pred.items() if isinstance(v,np.ndarray)})
-    save_summary(run_dir/'summary.json',{'model':'PCFT-STLA-v1.0.0','best_epoch':best_ep,
+    save_summary(run_dir/'summary.json',{'model':'PCFT-STLA-v2.0.0','best_epoch':best_ep,
         'validation':vm,'base_validation':bm,'gate_mean':pred['gate_mean'],
         'backbone_checkpoint':str(checkpoint),'ablation':mode,'test_evaluated':False})
     print(f'TRAIN_PASS run_dir={run_dir} best_epoch={best_ep} val_MAE={vm["MAE"]:.6f}',flush=True)

@@ -10,6 +10,8 @@ import pandas as pd
 import torch
 from .traffic import global_signature
 
+STATE_AXES=(0,1,2,3,8,9,10)  # exclude observation coverage and missing-age from coarse retrieval
+
 
 def signature_bank(full_history,device,chunk=1024):
     chunks=[]
@@ -22,8 +24,8 @@ def signature_bank(full_history,device,chunk=1024):
 
 def traffic_topk(query_history,query_mask,memory_signatures,starts,query_starts,span,k):
     with torch.no_grad(),torch.autocast(device_type=query_history.device.type,enabled=False):
-        z=global_signature(query_history.float(),query_mask.float())
-        memory=memory_signatures.float()
+        z=global_signature(query_history.float(),query_mask.float())[:,STATE_AXES]
+        memory=memory_signatures.float()[:,STATE_AXES]
         # Train-only index standardization prevents a high-variance flow level
         # from overwhelming the trend, missing-age and state reliability axes.
         mu=memory.mean(0,keepdim=True);sd=memory.std(0,keepdim=True).clamp_min(0.05)

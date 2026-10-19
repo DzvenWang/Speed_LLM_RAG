@@ -29,7 +29,7 @@ def main():
     ap.add_argument('--output',help='default <checkpoint parent>/p0_retrieval')
     args=ap.parse_args()
     cp=Path(args.checkpoint).resolve();ck=torch.load(cp,map_location='cpu',weights_only=False)
-    if ck.get('version')!='1.0.0' or ck['config']['training'].get('ablation','full')!='full':
+    if ck.get('version')!='2.0.0' or ck['config']['training'].get('ablation','full')!='full':
         raise ValueError('P0 candidate oracle must use a v1.0 FULL checkpoint')
     cfg=relocate_saved_config(ck['config']);os.environ['TRAFFIDENT_TARGET']=cfg['experiment']['target']
     dev=torch.device('cuda' if torch.cuda.is_available() else 'cpu')

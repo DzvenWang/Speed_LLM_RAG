@@ -84,7 +84,7 @@ def test_checkpoint_protocol_validation_and_fingerprint(tmp_path):
        'training':dict(ablation='full',batch_size=64,warmup_epochs=10,partial_epochs=35,max_epochs=100,
                         patience=10,lr_backbone=1e-5,lr_new=1e-3,weight_decay=.01,grad_clip=1.)}
     import copy,json
-    first={'version':'1.0.0','config':c,'backbone_sha256':'same-sha'}
+    first={'version':'2.0.0','config':c,'backbone_sha256':'same-sha'}
     control=copy.deepcopy(first);control['config']['training']['ablation']='no_retrieval'
     a=tmp_path/'full'/'best.pt';b=tmp_path/'none'/'best.pt';a.parent.mkdir();b.parent.mkdir()
     torch.save(first,a);torch.save(control,b)

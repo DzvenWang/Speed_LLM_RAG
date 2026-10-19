@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CPU-only, fail-closed Gadi pre-submission gate for FARE v4.
+"""CPU-only, fail-closed Gadi pre-submission gate for FARE v5.
 
 Checks the **installed** source under its active Python, runs real float16
 regressions at N=388 (no mock AMP bypass), validates all evaluation caches,
@@ -24,7 +24,7 @@ from fare.backbone import load_stla
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--config', default='FARE/configs/pilot.yaml')
+    parser.add_argument('--config', default='FARE/configs/formal.yaml')
     parser.add_argument('--dataset', default='TraffiDent_Net_06')
     parser.add_argument('--target', choices=('speed','flow'),required=True)
     parser.add_argument('--checkpoint')
@@ -34,16 +34,13 @@ def main():
                         help='Only strict checkpoint load, without one real STLAformer CPU forward')
     args=parser.parse_args()
     cfg=read_config(args.config,args.dataset,args.target,args.seed,args.smoke)
-    print('FARE_PRE_SUBMIT_ENV '+str({'python':sys.executable,'env':sys.prefix,
+    print('FARE5_PRE_SUBMIT_ENV '+str({'python':sys.executable,'env':sys.prefix,
                                          'torch':torch.__version__,'target':args.target}),flush=True)
-    test_files=(PACKAGE_ROOT/'tests/test_fp16_amp_safety.py',
-                PACKAGE_ROOT/'tests/test_production_shape_amp.py',
-                PACKAGE_ROOT/'tests/test_teacher_sampling.py')
     env=os.environ.copy();env.update({'OMP_NUM_THREADS':'1','MKL_NUM_THREADS':'1'})
-    print('FARE_PRE_SUBMIT_CPU_FP16_TEST_BEGIN',flush=True)
-    subprocess.run([sys.executable,'-m','pytest','-q',*(str(x) for x in test_files)],
+    print('FARE5_CPU_TEST_BEGIN',flush=True)
+    subprocess.run([sys.executable,'-m','pytest','-q',str(PACKAGE_ROOT/'tests')],
                    check=True,cwd=PACKAGE_ROOT,env=env)
-    print('FARE_PRE_SUBMIT_CPU_FP16_TEST_PASS',flush=True)
+    print('FARE5_CPU_TEST_PASS',flush=True)
     train_cache=cache_dir(cfg)
     for severity in cfg['experiment']['severities']:
         test_cache=cache_dir(cfg,'evaluation',severity)
@@ -51,11 +48,11 @@ def main():
             raise RuntimeError(f'Missing s{severity} test data: {test_cache}')
     ds=SupportDataset(train_cache,'train',1,strategy='spread')
     source=backbone_checkpoint(cfg,args.checkpoint)
-    print('FARE_PRE_SUBMIT_VENDOR_STRICT_LOAD_BEGIN checkpoint='+str(source),flush=True)
+    print('FARE5_PRE_SUBMIT_VENDOR_STRICT_LOAD_BEGIN checkpoint='+str(source),flush=True)
     backbone=load_stla(source,'cpu',cfg['backbone']['inject_layers'])
     if backbone.n!=ds.n:
         raise RuntimeError(f'STLAformer checkpoint nodes {backbone.n} != cache nodes {ds.n}')
-    print('FARE_PRE_SUBMIT_VENDOR_STRICT_LOAD_PASS nodes='+str(backbone.n),flush=True)
+    print('FARE5_PRE_SUBMIT_VENDOR_STRICT_LOAD_PASS nodes='+str(backbone.n),flush=True)
     if not args.skip_real_forward:
         ex=ds[0]
         with torch.inference_mode():
@@ -64,8 +61,8 @@ def main():
         expected=(1,ds.p,ds.n)
         if tuple(pred.shape)!=expected or not torch.isfinite(pred).all():
             raise RuntimeError(f'Unexpected or nonfinite real vendor prediction: {tuple(pred.shape)}')
-        print('FARE_PRE_SUBMIT_REAL_VENDOR_FORWARD_PASS',flush=True)
-    print('FARE_PRE_SUBMIT_CHECK_PASS',flush=True)
+        print('FARE5_PRE_SUBMIT_REAL_VENDOR_FORWARD_PASS',flush=True)
+    print('FARE5_PRE_SUBMIT_CHECK_PASS',flush=True)
 
 
 if __name__=='__main__':

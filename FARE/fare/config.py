@@ -1,4 +1,4 @@
-"""FARE v4 paths are resolved from the source tree, independent of the launch CWD."""
+"""FARE v5 paths are resolved from the source tree, independent of the launch CWD."""
 from __future__ import annotations
 from pathlib import Path
 import os, json, hashlib, yaml, sys
@@ -27,7 +27,7 @@ def project_path(path, *, must_exist=False):
 
 
 def read_config(path=None, dataset=None, target=None, seed=None, smoke=False):
-    p=project_path(path, must_exist=True) if path else PACKAGE_ROOT/'configs'/'pilot.yaml'
+    p=project_path(path, must_exist=True) if path else PACKAGE_ROOT/'configs'/'formal.yaml'
     c=yaml.safe_load(p.read_text(encoding='utf8'))
     c.setdefault('evaluation',{}).setdefault('include_val', False)
     c.setdefault('analysis',{}).setdefault('counterfactual_split','s40')

@@ -10,7 +10,7 @@ from fare.config import read_config,root,project_path
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--config',default='FARE/configs/pilot.yaml')
+    p.add_argument('--config',default='FARE/configs/formal.yaml')
     p.add_argument('--target',required=True,choices=['speed','flow'])
     p.add_argument('--dataset',default='TraffiDent_Net_06')
     p.add_argument('--seed',type=int,default=10)
@@ -18,8 +18,8 @@ def main():
     p.add_argument('--oos-forecast-file')
     p.add_argument('--smoke',action='store_true')
     p.add_argument('--run-dir')
-    p.add_argument('--memory',help='Prebuilt v4 Memory directory, relative to repo or absolute')
-    p.add_argument('--resume',help='Existing v4 last.pt, relative to repo or absolute')
+    p.add_argument('--memory',help='Prebuilt v5 Memory directory, relative to repo or absolute')
+    p.add_argument('--resume',help='Existing v5 last.pt, relative to repo or absolute')
     p.add_argument('--evaluate-only',action='store_true')
     p.add_argument('--skip-analysis',action='store_true')
     p.add_argument('--skip-precheck',action='store_true',help='Bypass CPU safety gate (not recommended)')
@@ -40,6 +40,12 @@ def main():
         if a.smoke:check_cmd+=['--smoke']
         print('FARE_PRE_SUBMIT_GATE_START',flush=True)
         subprocess.check_call(check_cmd)
+        preflight=[sys.executable,'-u',str(root()/'FARE/scripts/preflight.py'),
+                   '--config',str(project_path(a.config,must_exist=True)),'--dataset',a.dataset,'--target',a.target]
+        if a.checkpoint:preflight+=['--checkpoint',str(project_path(a.checkpoint,must_exist=True))]
+        if a.oos_forecast_file:preflight+=['--oos-forecast-file',str(project_path(a.oos_forecast_file,must_exist=True))]
+        if a.memory:preflight+=['--memory',str(project_path(a.memory,must_exist=True))]
+        subprocess.check_call(preflight)
         print('FARE_PRE_SUBMIT_GATE_PASS',flush=True)
     if a.check_only:
         print('FARE_CHECK_ONLY_NO_QSUB',flush=True)
@@ -66,8 +72,8 @@ def main():
     if not Path(sys.executable).is_file():raise FileNotFoundError(f'Missing active Python: {sys.executable}')
     if any(',' in v or '\n' in v for v in env.values()):
         raise ValueError('PBS -v does not support commas or newlines in path values')
-    print(f'FARE4_SUBMIT_ENV python={env["FARE_PYTHON"]} prefix={env["FARE_ENV_PREFIX"]} root={root()}',flush=True)
+    print(f'FARE5_SUBMIT_ENV python={env["FARE_PYTHON"]} prefix={env["FARE_ENV_PREFIX"]} root={root()}',flush=True)
     job=subprocess.check_output(['qsub','-v',','.join(f'{k}={v}' for k,v in env.items()),str(script)],text=True).strip()
-    print(f'FARE4_FULL_PIPELINE_JOB={job}\nFARE4_RUN_DIR={run_dir}\nFARE4_POST_TRAINING_EVALUATION={"val+test" if cfg["evaluation"]["include_val"] else "test_only"}',flush=True)
+    print(f'FARE5_FULL_PIPELINE_JOB={job}\nFARE5_RUN_DIR={run_dir}\nFARE5_POST_TRAINING_EVALUATION={"val+test" if cfg["evaluation"]["include_val"] else "test_only"}',flush=True)
 
 if __name__=='__main__':main()

@@ -19,12 +19,22 @@ def main():
     ap.add_argument('--target',choices=['speed','flow'])
     ap.add_argument('--severities',nargs='+',type=int,default=[20,40,60,90])
     ap.add_argument('--backbone-checkpoint')
-    ap.add_argument('--evidence-mode',choices=['full','no_evidence','shuffled','random_future','cross_history','no_risk','standard_future','no_mask_replay','no_rerank','no_retrieval','legacy_v23','no_traffic_regime','no_traffic_retrieval','no_failure_transfer','no_utility','no_traffic_control'])
+    ap.add_argument('--batch-size',type=int,default=8,help='Separate safe evaluation batch size')
+    ap.add_argument('--num-workers',type=int,default=0)
+    ap.add_argument('--evidence-mode',choices=['full','no_evidence','shuffled','random_future','cross_history','no_risk','standard_future','no_mask_replay','no_rerank','no_retrieval','legacy_v23','no_traffic_regime','no_traffic_retrieval','no_failure_transfer','no_utility','no_traffic_control','no_mask_matched_retrieval','no_failure_encoder','no_normal_residual','no_failure_residual','no_candidate_utility','no_mixture_utility'])
     a=ap.parse_args()
     ck=torch.load(a.checkpoint,map_location='cpu',weights_only=False)
-    if str(ck.get('version',''))!='1.0.0':
+    if str(ck.get('version',''))!='2.0.0':
         raise RuntimeError('Only v2 checkpoints can be evaluated by v2 scripts')
     cfg=relocate_saved_config(ck['config'])
+    if a.evidence_mode:
+        cfg['training']['ablation']=a.evidence_mode
+    cfg['training']['batch_size']=int(a.batch_size)
+    cfg['runtime']['num_workers']=int(a.num_workers)
+    cfg['runtime']['persistent_workers']=False
+    cfg['runtime']['preload_retrieval_memory_gpu']=False
+    cfg['runtime']['replay_bank_on_gpu']=False
+    cfg['runtime']['normal_teacher_on_gpu']=False
     if a.target and a.target!=cfg['experiment']['target']:raise RuntimeError('Target must match saved checkpoint')
     os.environ['TRAFFIDENT_TARGET']=cfg['experiment']['target']
     device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -53,8 +63,19 @@ def main():
     for sev in a.severities:
         c=cache_path(cfg,'evaluation',sev)
         r=None if mode=='no_retrieval' else ensure_cache(cfg,c,'test',severity=sev)
-        ds=SupportSplit(c,'test');dl=_make_loader(ds,cfg['training']['batch_size'],False,cfg)
-        p=predict(model,dl,RetrievalCache(r) if r else None,store,device,mean,std,cfg,mode,teacher=teacher,normal_bank=normal_bank)
+        ds=SupportSplit(c,'test')
+        actual_batch=int(cfg['training']['batch_size'])
+        while True:
+            try:
+                dl=_make_loader(ds,actual_batch,False,cfg)
+                p=predict(model,dl,RetrievalCache(r) if r else None,store,device,mean,std,cfg,mode,
+                          teacher=teacher,normal_bank=normal_bank)
+                break
+            except torch.cuda.OutOfMemoryError:
+                if actual_batch<=1:raise
+                actual_batch=max(1,actual_batch//2)
+                if device.type=='cuda':torch.cuda.empty_cache()
+                print(f'EVALUATION_OOM_RETRY severity={sev} batch={actual_batch}',flush=True)
         fam=summarize_by_family(p['prediction'],p['true'],p['valid'],p['direct'],ds.meta)
         base=summarize_by_family(p['base'],p['true'],p['valid'],p['direct'],ds.meta)
         out=Path(a.checkpoint).resolve().parent/'evaluation'/f's{sev}'/mode;out.mkdir(parents=True,exist_ok=True)

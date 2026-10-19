@@ -9,8 +9,8 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--target',choices=['speed','flow']);p.add_argument('--seed',type=int,default=10)
     p.add_argument('--dataset');p.add_argument('--backbone-checkpoint');p.add_argument('--config');p.add_argument('--smoke',action='store_true')
     p.add_argument('--run-stamp');p.add_argument('--batch-size',type=int);p.add_argument('--num-workers',type=int)
-    p.add_argument('--ablation',choices=['full','no_retrieval','no_future','no_regional','global_only','no_none','shuffled','no_risk','no_innovation'])
-    p.add_argument('--resume',help='Path to last.pt from the SAME v1.0 experiment')
+    p.add_argument('--ablation',choices=['full','no_retrieval','no_future','no_regional','global_only','no_none','shuffled','no_risk','no_innovation','no_local_regime','no_directional_graph','no_action_utility','legacy_only','propagation_only','observed_support_only'])
+    p.add_argument('--resume',help='Path to last.pt from the SAME v2.0 experiment')
     p.add_argument('--skip-retrieval-audit',action='store_true');p.add_argument('--skip-evaluate',action='store_true')
     p.add_argument('--eval-batch-size',type=int,default=None,
                    help='Separate evaluation batch size (default 8, OOM auto-retry)')

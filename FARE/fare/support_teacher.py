@@ -42,7 +42,7 @@ def build_support_teacher(model,train_ds,device,limit=256,seed=10,batch_size=8):
             labels[int(row)]={'sensitivity':normalized[i].detach().cpu().half(),
                               'valid':v[i].permute(1,0).detach().cpu()}
         examples+=B
-    print(f'FARE4_SUPPORT_TEACHER_PASS queries={examples}',flush=True)
+    print(f'FARE5_SUPPORT_TEACHER_PASS queries={examples}',flush=True)
     return labels
 
 

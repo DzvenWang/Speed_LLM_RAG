@@ -4,7 +4,7 @@ import random,time,json,math
 import numpy as np,torch
 import torch.nn.functional as F
 from .protocol import make_loader,device_batch
-from .teacher import generate_teacher,save_teacher,load_teacher,replay_loss
+from .utility_teacher import generate_utility_teacher,replay_utility_loss
 from .support_teacher import build_support_teacher,support_auxiliary_loss
 from .config import dump_json,hash_file
 
@@ -35,7 +35,7 @@ def forecasting_loss(out,batch,cfg):
 
 def checkpoint(path,model,opt,cfg,state,metadata,scaler=None):
     p=Path(path);p.parent.mkdir(parents=True,exist_ok=True)
-    torch.save({'version':'4.0.4','state_dict':model.state_dict(),
+    torch.save({'version':'5.0.0','state_dict':model.state_dict(),
                 'optimizer_state':opt.state_dict(),'scaler_state':scaler.state_dict() if scaler is not None else None,
                 'config':cfg,'training_state':state,'metadata':metadata,
                 'torch_rng':torch.get_rng_state(),'numpy_rng':np.random.get_state(),
@@ -44,15 +44,16 @@ def checkpoint(path,model,opt,cfg,state,metadata,scaler=None):
 
 
 def _set_stage(model,stage):
-    # Stage-specific optimization inside one FARE model; no retrained ablation.
-    for name,par in model.named_parameters():
+    # Keep the official backbone frozen; Evidence suffix can be trained.
+    for name,param in model.named_parameters():
         if name.startswith('backbone.base.'):
-            par.requires_grad_(False)
-        elif stage=='utility':
-            par.requires_grad_(name.startswith(('utility.','risk.')))
+            param.requires_grad_(False)
+        elif stage=='retrieval':
+            param.requires_grad_(name.startswith(('ranker.','selector.','retriever.','deficit.')))
         elif stage=='risk':
-            par.requires_grad_(name.startswith('risk.'))
-        else:par.requires_grad_(True)
+            param.requires_grad_(name.startswith(('risk.','selector.null.')))
+        else:
+            param.requires_grad_(True)
 
 
 def fit(model,memory,train_ds,val_ds,device,cfg,run_dir,metadata,resume=None):
@@ -65,7 +66,7 @@ def fit(model,memory,train_ds,val_ds,device,cfg,run_dir,metadata,resume=None):
     best=float('inf');steps=0;start_stage=0;start_epoch=0
     if resume:
         saved=torch.load(resume,map_location=device,weights_only=False)
-        if saved.get('version') not in ('4.0.0','4.0.1','4.0.2','4.0.3','4.0.4'):raise RuntimeError('Only FARE 4 training checkpoints can resume')
+        if saved.get('version')!='5.0.0':raise RuntimeError('FARE v5 does not resume legacy checkpoints')
         if saved['metadata'].get('backbone_sha256')!=metadata.get('backbone_sha256'):
             raise RuntimeError('Checkpoint Backbone hash mismatch')
         model.load_state_dict(saved['state_dict'],strict=True);opt.load_state_dict(saved['optimizer_state'])
@@ -93,20 +94,21 @@ def fit(model,memory,train_ds,val_ds,device,cfg,run_dir,metadata,resume=None):
     for stage_idx in range(start_stage,len(stages)):
         stage=stages[stage_idx];_set_stage(model,stage)
         for epoch in range(start_epoch if stage_idx==start_stage else 0,int(stage_epochs[stage])):
-            if stage in ('utility','risk','joint'):
+            if stage in ('retrieval','utility','risk','joint','calibration'):
                 refresh=epoch==0 or epoch%max(1,int(cfg['teacher'].get('refresh_every_epochs',3)))==0
                 file=run_dir/f'teacher_{stage}.pt'
                 if refresh or not file.exists():
                     model.eval()
-                    teacher=generate_teacher(model,memory,train_ds,device,
+                    teacher=generate_utility_teacher(model,memory,train_ds,device,
                              cfg['teacher']['max_queries'],cfg['teacher']['batch_size'],
                              cfg['memory']['purge_steps'],cfg['experiment']['seed']+steps,
-                             cfg['teacher'].get('nodes_per_query',12))
-                    save_teacher(teacher,file,{'stage':stage,'seed':cfg['experiment']['seed'],
-                                                'rows':len(teacher),'step':steps})
-                    print('FARE4_TEACHER_REFRESH '+json.dumps({'stage':stage,'rows':len(teacher)}),flush=True)
+                             cfg['teacher'].get('nodes_per_query',16),
+                             cfg['teacher'].get('candidates_per_query',6))
+                    torch.save({'records':teacher,'metadata':{'stage':stage,'seed':cfg['experiment']['seed'],
+                                                'rows':len(teacher),'step':steps}},file)
+                    print('FARE5_TEACHER_REFRESH '+json.dumps({'stage':stage,'rows':len(teacher)}),flush=True)
                 elif not teacher:
-                    teacher=load_teacher(file,{'stage':stage,'seed':cfg['experiment']['seed']})
+                    teacher=torch.load(file,map_location='cpu',weights_only=False)['records']
             model.train();total=0;count=0;teacher_stats={'teacher_examples':0}
             loader=make_loader(train_ds,int(tc['batch_size']),shuffle=True,workers=int(tc.get('workers',0)))
             for raw in loader:
@@ -118,13 +120,13 @@ def fit(model,memory,train_ds,val_ds,device,cfg,run_dir,metadata,resume=None):
                         sup_loss,sup_diag=support_auxiliary_loss(out,batch,support_teacher,device)
                         loss=loss+float(tc.get('support_teacher_weight',.05))*sup_loss
                         diag.update(sup_diag)
-                    if teacher and stage in ('utility','risk','joint') and steps%int(tc.get('replay_interval',8))==0:
+                    if teacher and stage in ('retrieval','utility','risk','joint','calibration') and steps%int(tc.get('replay_interval',8))==0:
                         # Rotate replay labels so supervision eventually covers the Teacher cache.
                         keys=list(teacher)
                         idx=(steps//max(1,int(tc.get('replay_interval',8))))*int(tc.get('replay_batch',2))
                         selected={keys[(idx+i)%len(keys)]:teacher[keys[(idx+i)%len(keys)]]
                                   for i in range(min(len(keys),int(tc.get('replay_batch',2))))} if keys else {}
-                        aux,teacher_stats=replay_loss(model,selected,device,len(selected))
+                        aux,teacher_stats=replay_utility_loss(model,selected,device,len(selected))
                         loss=loss+float(tc.get('utility_weight',.25))*aux
                 if not torch.isfinite(loss):raise FloatingPointError('Nonfinite FARE training loss')
                 scaler.scale(loss).backward()
@@ -133,7 +135,7 @@ def fit(model,memory,train_ds,val_ds,device,cfg,run_dir,metadata,resume=None):
                 scaler.step(opt);scaler.update()
                 steps+=1;total+=float(loss.detach());count+=1
                 if steps%int(tc.get('log_every',50))==0:
-                    print('FARE4_TRAIN '+json.dumps({'stage':stage,'epoch':epoch+1,'step':steps,
+                    print('FARE5_TRAIN '+json.dumps({'stage':stage,'epoch':epoch+1,'step':steps,
                            'loss':float(loss.detach()),'mae':diag['mae'],
                            'alpha':float(out['alpha'].mean().detach()),
                            'null':float(out['selection']['null'].mean().detach()),**teacher_stats}),flush=True)
@@ -146,9 +148,9 @@ def fit(model,memory,train_ds,val_ds,device,cfg,run_dir,metadata,resume=None):
                 checkpoint(run_dir/'best.pt',model,opt,cfg,state,metadata,scaler)
             checkpoint(run_dir/'last.pt',model,opt,cfg,state,metadata,scaler)
             with log_path.open('a') as f:f.write(json.dumps(metrics)+'\n')
-            print('FARE4_EPOCH '+json.dumps(metrics),flush=True)
+            print('FARE5_EPOCH '+json.dumps(metrics),flush=True)
     dump_json(run_dir/'training_complete.json',{'best_val_normalized':best,'steps':steps})
-    print('FARE4_TRAIN_COMPLETE',flush=True)
+    print('FARE5_TRAIN_COMPLETE',flush=True)
     return run_dir/'best.pt'
 
 @torch.no_grad()

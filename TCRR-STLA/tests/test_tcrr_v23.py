@@ -22,6 +22,9 @@ def test_forecast_pool_fingerprint_and_index(tmp_path,monkeypatch):
     M,Q,H,P,N=30,24,12,12,4
     rng=np.random.default_rng(3)
     np.save(formal/'train_y_norm.npy',rng.normal(size=(M,P,N)).astype('f4'))
+    np.save(formal/'train_x_full_norm.npy',rng.normal(size=(M,H,N)).astype('f4'))
+    pd.DataFrame({'window_start':np.arange(M)*30}).to_csv(formal/'train_manifest.csv',index=False)
+    pd.DataFrame({'window_start':np.arange(Q)*30+20000}).to_csv(root/'train_manifest.csv',index=False)
     np.save(root/'train_x_obs_norm.npy',rng.normal(size=(Q,H,N)).astype('f4'))
     np.save(root/'train_history_observed.npy',(rng.random((Q,H,N))>.5).astype('f4'))
     np.save(root/'train_tod_hist.npy',np.zeros((Q,H),dtype='i8'))
@@ -37,7 +40,7 @@ def test_forecast_pool_fingerprint_and_index(tmp_path,monkeypatch):
             return (x*mask).mean(1)[:,None].expand(-1,12,-1),None
     monkeypatch.setattr(stla,'load_pretrained_stla',lambda *args:(nn.Identity(),{}))
     monkeypatch.setattr(stla,'MaskAwareSTLAformer',MockTeacher)
-    cfg={'project':{'root':str(root)},'retrieval':{'final_candidates':12,'history_similarity_weight':.55,'forecast_pool_batch_size':5}}
+    cfg={'project':{'root':str(root)},'experiment':{'history':H,'horizon':P},'retrieval':{'final_candidates':12,'history_similarity_weight':.55,'forecast_pool_batch_size':5}}
     path=prepare_forecast_pool(cfg,formal,root,'train',root/'raw.npz',ck,torch.device('cpu'),smoke=True)
     cache=RetrievalCache(path)
     a,sc,cov=shortlist(cache,np.arange(4),4,torch.device('cpu'))

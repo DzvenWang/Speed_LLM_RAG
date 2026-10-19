@@ -78,13 +78,13 @@ def main():
     if args.backbone_checkpoint:
         args.backbone_checkpoint=str(Path(args.backbone_checkpoint).expanduser().resolve())
     full_ck=torch.load(args.checkpoint,map_location='cpu',weights_only=False)
-    if full_ck.get('version')!='1.0.0':raise RuntimeError('v2.3 Retrieval Audit requires v1.0 checkpoint')
+    if full_ck.get('version')!='2.0.0':raise RuntimeError('v2.3 Retrieval Audit requires v2.0 checkpoint')
     if full_ck['config']['training'].get('ablation','full')!='full':raise ValueError('Audit requires full-mode checkpoint')
     cfg=relocate_saved_config(full_ck['config'])
     os.environ['TRAFFIDENT_TARGET']=cfg['experiment']['target']
     if args.no_retrieval_checkpoint:
         ctrl=torch.load(args.no_retrieval_checkpoint,map_location='cpu',weights_only=False)
-        if ctrl.get('version')!='1.0.0':raise RuntimeError('No-retrieval control version mismatch')
+        if ctrl.get('version')!='2.0.0':raise RuntimeError('No-retrieval control version mismatch')
         if ctrl['config']['training'].get('ablation')!='no_retrieval':raise ValueError('Independent control must be trained with no_retrieval')
         if ctrl['backbone_sha256']!=full_ck['backbone_sha256'] or ctrl['config']['experiment']!=full_ck['config']['experiment']:
             raise RuntimeError('Independent control must share backbone SHA and experiment protocol')

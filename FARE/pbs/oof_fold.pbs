@@ -1,0 +1,29 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12,ngpus=1,mem=32GB,walltime=48:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -N FARE503_fold
+set -euo pipefail
+ROOT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-}}"
+[[ -n "$ROOT" && -f "$ROOT/FARE/scripts/run_oof_pipeline.py" ]] || { echo 'Bad project root' >&2; exit 2; }
+cd "$ROOT"
+PYTHON="${FARE_PYTHON:?FARE_PYTHON must be provided by submit_oof.py}"
+[[ -x "$PYTHON" ]] || exit 2
+[[ "${TARGET:-}" == speed || "${TARGET:-}" == flow ]] || { echo 'Fold requires speed or flow' >&2;exit 2; }
+[[ "${OOF_FOLD_ID:-}" =~ ^[0-9]+$ ]] || { echo 'Missing OOF_FOLD_ID' >&2;exit 2; }
+export PATH="$(dirname "$PYTHON"):$PATH"
+export SPEED_LLM_RAG_ROOT="$ROOT" PYTHONUNBUFFERED=1
+export PYTHONPATH="$ROOT/FARE:$ROOT/Backbone:$ROOT/Base_SupportBench:${PYTHONPATH:-}"
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-6}"
+"$PYTHON" -c 'import os,sys,torch;assert os.path.realpath(sys.executable)==os.path.realpath(os.environ["FARE_PYTHON"]);assert torch.cuda.is_available();print("OOF_GPU",torch.cuda.get_device_name(0),flush=True)'
+mkdir -p "FARE_logs/oof/$TARGET"
+LOG="FARE_logs/oof/$TARGET/fold_${OOF_FOLD_ID}.${PBS_JOBID:-manual}.live.log"
+CMD=("$PYTHON" -u FARE/scripts/run_oof_pipeline.py --config "${FARE_CONFIG:-FARE/configs/formal.yaml}" --dataset "${DATASET:-TraffiDent_Net_06}" --target "$TARGET" --seed "${SEED:-10}" --nfolds "${OOF_FOLDS:-2}" --warmup "${OOF_WARMUP:-0.3}" --purge "${OOF_PURGE:-12}" --batch-size "${OOF_BATCH_SIZE:-64}" --workers "${OOF_WORKERS:-4}" --output-dir "${OOF_OUTPUT_DIR:-FARE_cache/oof_v503}" --fold-id "$OOF_FOLD_ID")
+if [[ -n "${OOF_EPOCHS:-}" ]]; then CMD+=(--epochs "$OOF_EPOCHS"); fi
+if [[ -n "${SPEED_CHECKPOINT:-}" ]]; then CMD+=(--speed-checkpoint "$SPEED_CHECKPOINT"); fi
+if [[ -n "${FLOW_CHECKPOINT:-}" ]]; then CMD+=(--flow-checkpoint "$FLOW_CHECKPOINT"); fi
+# pipefail propagates Python failure through awk/tee to PBS afterok dependents.
+"${CMD[@]}" 2>&1 | awk '{print strftime("[%Y-%m-%d %H:%M:%S]"),$0;fflush()}' | tee "$LOG"
+echo "FARE503_FOLD_PBS_PASS target=$TARGET fold=$OOF_FOLD_ID"

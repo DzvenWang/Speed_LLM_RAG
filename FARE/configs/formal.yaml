@@ -1,4 +1,4 @@
-version: '4.0.4'
+version: 5.0.3
 experiment:
   dataset: TraffiDent_Net_06
   target: speed
@@ -8,14 +8,20 @@ experiment:
   val_limit: null
   test_limit: null
   sample_strategy: spread
-  severities: [20, 40, 60, 90]
+  severities:
+  - 20
+  - 40
+  - 60
+  - 90
 model:
   history: 12
   horizon: 12
   hidden_dim: 64
   alpha_max: 1.25
 backbone:
-  inject_layers: [4, 5]
+  inject_layers:
+  - 4
+  - 5
 traffic:
   region_size: 24
   neighbor_count: 4
@@ -24,22 +30,25 @@ traffic:
   max_temporal_lag: 3
 memory:
   max_episodes: 50000
-  residual_mode: external_oos
+  residual_mode: external_oos_paired
   require_oos_for_formal: true
-  purge_steps: 0
+  purge_steps: 12
   build_batch_size: 16
 retrieval:
   coarse_k: 64
   shortlist_k: 16
   final_k: 8
   chunk_size: 4096
+  temperature: 0.25
+  gain_supervision: counterfactual_mae
 teacher:
   support_queries: 512
   support_batch_size: 8
-  max_queries: 2000
+  max_queries: 512
   batch_size: 2
-  nodes_per_query: 12
+  nodes_per_query: 24
   refresh_every_epochs: 3
+  candidates_per_query: 6
 training:
   cuda_preflight: true
   batch_size: 32
@@ -49,21 +58,24 @@ training:
   grad_clip: 5.0
   masked_weight: 0.2
   tail_weight: 0.02
-  utility_weight: 0.25
+  utility_weight: 0.5
   log_every: 50
   stage_epochs:
     evidence: 8
-    utility: 12
-    integration: 20
+    retrieval: 12
+    joint: 20
     risk: 8
-    joint: 10
+    calibration: 5
+  amp: true
+  replay_interval: 8
+  replay_batch: 2
 evaluation:
   auto_evaluate: true
-  include_val: false  # Default: Test s20/s40/s60/s90 only. Optional --eval-val.
+  include_val: false
 analysis:
-  enabled: true
+  enabled: false
   max_intervention_queries: 1024
   save_intervention_traces: false
-  counterfactual_split: s40  # Test-only LOO/Replacement/Scaling diagnostics.
+  counterfactual_split: s40
   max_counterfactual_queries: 250
   bootstrap_samples: 1000

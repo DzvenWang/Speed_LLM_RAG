@@ -1,9 +1,12 @@
-version: 1.0.0
+version: 2.0.0
 method: PCFT-STLA
 propagation:
   enabled: true
   lags: [1, 2, 3, 4, 5, 6]
   utility_weight: 0.03
+  provenance_enforced: true
+  full_horizon_support: true
+  action_controller: true
 
 project:
   root: ${SPEED_LLM_RAG_ROOT}
@@ -82,11 +85,11 @@ runtime:
   pin_memory: true
   persistent_workers: false
   prefetch_factor: 2
-  preload_repository_gpu: true
+  preload_repository_gpu: false
   eval_batch_size: 8
   eval_num_workers: 0
   eval_preload_repository_gpu: false
-  gpu_future_store: true
+  gpu_future_store: false
   gpu_monitor_interval_sec: 30
   amp: true
   amp_dtype: float16

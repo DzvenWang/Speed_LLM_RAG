@@ -6,7 +6,7 @@ import torch
 from tcrr_stla.config import load_config
 from tcrr_stla.model import TCRRSTLA
 from tcrr_stla.trainer import compute_losses
-from test_raft_v2 import STLA
+from test_tcrr_v2 import STLA
 
 
 def test_amp_risk_logit_loss_backward():

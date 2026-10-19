@@ -4,7 +4,7 @@
 #PBS -l ncpus=12,ngpus=1,mem=32GB,walltime=48:00:00
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -j oe
-#PBS -N FARE4_full
+#PBS -N FARE5_full
 set -euo pipefail
 # The submit helper supplies these resolved values from its own Python process.
 # No /scratch, /g/data, conda base, or conda environment name is hardcoded.
@@ -33,15 +33,20 @@ export OMP_NUM_THREADS="${OMP_NUM_THREADS:-6}"
 TARGET="${TARGET:-speed}"
 DATASET="${DATASET:-TraffiDent_Net_06}"
 SEED="${SEED:-10}"
-CONFIG="${FARE_CONFIG:-FARE/configs/pilot.yaml}"
+CONFIG="${FARE_CONFIG:-FARE/configs/formal.yaml}"
 mkdir -p "FARE_logs/$TARGET/$DATASET"
 STAMP=$(date +%Y%m%d_%H%M%S)
-LOG="FARE_logs/$TARGET/$DATASET/FARE4.$STAMP.seed$SEED.${PBS_JOBID:-manual}.live.log"
+LOG="FARE_logs/$TARGET/$DATASET/FARE5.$STAMP.seed$SEED.${PBS_JOBID:-manual}.live.log"
 MONITOR_PREFIX="${LOG%.live.log}.resources"
 "$PYTHON" -u FARE/scripts/resource_monitor.py --parent-pid "$$" --interval "${FARE_RESOURCE_INTERVAL:-30}" --output-prefix "$MONITOR_PREFIX" >"${MONITOR_PREFIX}.monitor.log" 2>&1 &
 MONITOR_PID=$!
 cleanup() { local status=$?; trap - EXIT; kill -TERM "$MONITOR_PID" 2>/dev/null || true; wait "$MONITOR_PID" 2>/dev/null || true; exit "$status"; }
 trap cleanup EXIT
+# Dependency-submitted jobs cannot run CPU preflight at submission time:
+# paired OOF does not yet exist. Fail immediately on worker before training.
+if [[ -n "${FARE_OOS_FORECAST_FILE:-}" ]]; then
+  "$PYTHON" -u FARE/scripts/preflight.py --config "$CONFIG" --dataset "$DATASET" --target "$TARGET" --oos-forecast-file "$FARE_OOS_FORECAST_FILE"
+fi
 CMD=("$PYTHON" -u FARE/scripts/run_pipeline.py --config "$CONFIG" --dataset "$DATASET" --target "$TARGET" --seed "$SEED")
 if [[ -n "${BACKBONE_CHECKPOINT:-}" ]]; then CMD+=(--checkpoint "$BACKBONE_CHECKPOINT"); fi
 if [[ -n "${FARE_OOS_FORECAST_FILE:-}" ]]; then CMD+=(--oos-forecast-file "$FARE_OOS_FORECAST_FILE"); fi
@@ -53,4 +58,4 @@ if [[ "${FARE_SKIP_ANALYSIS:-0}" == 1 ]]; then CMD+=(--skip-analysis); fi
 if [[ "${FARE_SMOKE:-0}" == 1 ]]; then CMD+=(--smoke); fi
 if [[ "${FARE_EVAL_VAL:-0}" == 1 ]]; then CMD+=(--eval-val); else CMD+=(--test-only); fi
 "${CMD[@]}" 2>&1 | awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush(); }' | tee "$LOG"
-echo FARE4_TRAIN_EVALUATION_ANALYSIS_PASS
+echo FARE5_TRAIN_EVALUATION_ANALYSIS_PASS

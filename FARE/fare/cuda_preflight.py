@@ -67,7 +67,7 @@ def run_cuda_preflight(backbone,graph,train,cfg,device,force_cpu=False):
     batch=device_batch(default_collate(q),device)
     if not temp_mem.valid_for(batch['origin'],device).any(-1).all():
         raise RuntimeError('CUDA preflight: no chronologically lawful historical evidence')
-    print('FARE4_CUDA_AMP_PRECHECK_START',flush=True)
+    print('FARE5_CUDA_AMP_PRECHECK_START',flush=True)
     # Avoid changing the RNG trajectory of real training model initialization.
     with torch.random.fork_rng(devices=[torch.cuda.current_device()] if torch.device(device).type=='cuda' else []):
         model=FARE(backbone,graph,cfg).to(device)
@@ -77,5 +77,5 @@ def run_cuda_preflight(backbone,graph,train,cfg,device,force_cpu=False):
             model.zero_grad(set_to_none=True)
             del model
     if torch.device(device).type=='cuda':torch.cuda.empty_cache()
-    print('FARE4_CUDA_AMP_PRECHECK_PASS '+json.dumps(report),flush=True)
+    print('FARE5_CUDA_AMP_PRECHECK_PASS '+json.dumps(report),flush=True)
     return report

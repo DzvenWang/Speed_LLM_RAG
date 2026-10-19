@@ -24,7 +24,7 @@ def main():
     cp=Path(a.checkpoint).expanduser().resolve()
     if not cp.is_file():raise FileNotFoundError(cp)
     ck=torch.load(cp,map_location='cpu',weights_only=False)
-    if str(ck.get('version'))!='1.0.0':raise RuntimeError('Expected v1.0.0 trained checkpoint')
+    if str(ck.get('version'))!='2.0.0':raise RuntimeError('Expected v2.0.0 trained checkpoint')
     if ck.get('model')!='PCFT-STLA':raise RuntimeError(f'Wrong model {ck.get("model")}')
     target=ck['config']['experiment']['target']
     if a.target and a.target!=target:raise RuntimeError(f'Wrong target {target}')
