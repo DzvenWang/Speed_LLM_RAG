@@ -24,7 +24,7 @@ class NormalTeacherBank:
 def prepare_normal_teacher_bank(cfg,memory,teacher,backbone_checkpoint,device,smoke=False):
     if teacher is None:raise RuntimeError('Normal residual decomposition requires a frozen teacher')
     n=len(memory);P=int(cfg['experiment']['horizon']);N=int(memory.arrays['x'].shape[-1])
-    folder=Path(cfg['project']['retrieval_root'])/cfg['experiment']['dataset']/('formal_smoke' if smoke else 'formal')/'normal_teacher_v2'
+    folder=Path(cfg['project']['retrieval_root'])/cfg['experiment']['dataset']/'v3'/('formal_smoke' if smoke else 'formal')/'normal_teacher_v2'
     folder.mkdir(parents=True,exist_ok=True)
     path=folder/'normal_residual_float16.npy';meta=path.with_suffix('.json')
     source=dict(schema=26,train_rows=n,target=cfg['experiment']['target'],nodes=N,horizon=P,

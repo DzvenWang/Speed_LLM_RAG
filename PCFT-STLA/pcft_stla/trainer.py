@@ -6,6 +6,7 @@ import numpy as np,pandas as pd,torch
 from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
+from .v3.losses import pcft_v3_losses
 from .data import SupportSplit,FullTrainRepository
 from .stla import load_pretrained_stla,MaskSupportSTLAformer
 from .model import PCFTSTLA
@@ -38,15 +39,20 @@ def build_model(cfg,checkpoint,device):
     return model,ck
 
 
+def dataset_store_dir(cfg):
+    """Keep train-only v3 statistical/lag graphs separate from older project stores."""
+    return Path(cfg['project']['store_root']) / cfg['experiment']['dataset'] / 'v3'
+
+
 def setup_graph(model,cfg,cache,force=False):
-    path=Path(cfg['project']['store_root'])/cfg['experiment']['dataset']/'train_only_statistical_graph_v1.npz'
+    path=dataset_store_dir(cfg)/'train_only_statistical_graph_v1.npz'
     graph=graph_neighbours(cache,path,int(cfg['retrieval']['graph_neighbors']),
                            int(cfg['retrieval'].get('graph_sampled_rows',1200)),force=force,
                            lag_steps=cfg['retrieval'].get('graph_lag_steps',[0,1,2,3]))
     model.set_graph(graph)
     if model.propagation_enabled:
         weights,conf=build_directional_graph(cache,graph,
-            Path(cfg['project']['store_root'])/cfg['experiment']['dataset']/'train_only_directional_v2.npz',
+            dataset_store_dir(cfg)/'train_only_directional_v2.npz',
             lags=cfg.get('propagation',{}).get('lags',[1,2,3,4,5,6]),
             sampled_rows=int(cfg['retrieval'].get('graph_sampled_rows',1200)))
         model.propagation.install(weights,conf)
@@ -121,6 +127,10 @@ def losses(out,b,mean,std,cfg,mode,alignment_loss=None):
            +float(cfg.get('propagation',{}).get('utility_weight',0.03))*prop_utility_loss
            +base_weight*base_loss
            +(float(cfg['training'].get('alignment_weight',0)) if mode=='full' else 0)*alignment)
+    if str(cfg.get('version','')).startswith('3.') and mode=='full':
+        extra,_=pcft_v3_losses(out,b,cfg)
+        # v3 supervision replaces conflicting v2 candidate utility/risk terms.
+        total=main+float(cfg['training'].get('rmse_weight',0.05))*rmse+base_weight*base_loss+extra
     return total,{'mae':float(e.abs().mean().detach()),'rmse':float(rmse.detach()),
                   'ranking':float(rank.detach()),'risk':float(risk_loss.detach()),'propagation_utility':float(prop_utility_loss.detach()),'alignment':float(alignment.detach()),
                   'base_loss':float(base_loss.detach()),'gate':float(out['forecast_gate'].mean().detach()),
@@ -359,7 +369,7 @@ def train(cfg,cache,checkpoint,run_dir,smoke=False,resume=None):
     vm=metrics(pred['prediction'],pred['true'],pred['valid'],pred['direct'])
     bm=metrics(pred['base'],pred['true'],pred['valid'],pred['direct'])
     np.savez_compressed(run_dir/'val_predictions.npz',**{k:v.astype(np.float32) for k,v in pred.items() if isinstance(v,np.ndarray)})
-    save_summary(run_dir/'summary.json',{'model':'PCFT-STLA-v2.0.0','best_epoch':best_ep,
+    save_summary(run_dir/'summary.json',{'model':f'PCFT-STLA-v{cfg["version"]}','best_epoch':best_ep,
         'validation':vm,'base_validation':bm,'gate_mean':pred['gate_mean'],
         'backbone_checkpoint':str(checkpoint),'ablation':mode,'test_evaluated':False})
     print(f'TRAIN_PASS run_dir={run_dir} best_epoch={best_ep} val_MAE={vm["MAE"]:.6f}',flush=True)

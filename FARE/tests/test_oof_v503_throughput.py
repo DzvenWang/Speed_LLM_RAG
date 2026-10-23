@@ -19,7 +19,7 @@ def _submit_module():
 
 def test_version_and_preserved_formal_batch():
     cfg=read_config(str(ROOT/'configs'/'formal.yaml'))
-    assert cfg['version']=='5.0.3'
+    assert cfg['version']=='6.0.0'
     assert cfg['training']['batch_size']==32
     assert cfg['memory']['require_oos_for_formal']
 

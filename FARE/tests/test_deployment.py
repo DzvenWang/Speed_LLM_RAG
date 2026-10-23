@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def test_formal_defaults():
     cfg=read_config(str(ROOT/'configs/formal.yaml'))
-    assert cfg['version']=='5.0.3'
+    assert cfg['version']=='6.0.0'
     assert cfg['memory']['residual_mode']=='external_oos_paired'
     assert cfg['memory']['require_oos_for_formal']
     assert cfg['evaluation']['auto_evaluate']

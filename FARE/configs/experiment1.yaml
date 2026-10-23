@@ -1,0 +1,81 @@
+# FARE v6.2 Experiment 1. All FARE components are freshly initialised.
+# Only frozen original STLAformer + previously generated paired chronological OOF are reused.
+version: 6.2.0
+experiment:
+  dataset: TraffiDent_Net_06
+  target: speed
+  seed: 10
+  run_tag: formal
+  train_limit: null
+  val_limit: null
+  test_limit: null
+  sample_strategy: spread
+  severities: [20,40,60,90]
+model:
+  history: 12
+  horizon: 12
+  hidden_dim: 64
+  alpha_max: 1.0
+backbone:
+  inject_layers: [4,5]
+traffic:
+  region_size: 24
+  neighbor_count: 4
+  max_hops: 3
+  path_sources: 16
+  max_temporal_lag: 3
+memory:
+  max_episodes: 50000
+  residual_mode: external_oos_paired
+  require_oos_for_formal: true
+  purge_steps: 12
+  build_batch_size: 16
+retrieval:
+  coarse_k: 64
+  shortlist_k: 16
+  final_k: 8
+  chunk_size: 4096
+  temperature: 0.25
+  gain_supervision: counterfactual_mae
+teacher:
+  support_queries: 0
+  max_queries: 0
+training:
+  cuda_preflight: false
+  batch_size: 16
+  workers: 4
+  lr: 0.0001
+  grad_clip: 5.0
+  cache_gpu_memory: true
+  gpu_cache_budget_gb: 5.0
+  initialize_from: null
+  stage_epochs:
+    support: 0
+    utility: 0
+    joint: 0
+    risk: 0
+    calibration: 0
+evaluation:
+  auto_evaluate: false
+  include_val: false
+analysis:
+  enabled: false
+  counterfactual_split: s40
+innovation_audit:
+  required: false
+experiment1:
+  min_audit_queries: 512
+  support_epochs: 6
+  support_batch_size: 32
+  support_lr: 0.0001
+  # Fixed candidate bank from 12k Train + 2k Validation windows.
+  # This is a DECISION PILOT, not a final 50k-window TRC formal result.
+  pilot_train_limit: 12000
+  pilot_val_limit: 2000
+  candidate_batch_size: 16
+  candidate_temperature: 0.25
+  transfer_epochs: 4
+  transfer_batch_size: 8
+  transfer_lr: 0.0001
+  gpu_cache_budget_gb: 5.0
+  workers: 4

@@ -4,16 +4,24 @@ import numpy as np, pandas as pd, torch
 from torch.utils.data import Dataset
 
 class SupportSplit(Dataset):
-    def __init__(self, cache: str|Path, split: str, limit: int|None=None):
+    def __init__(self, cache: str|Path, split: str, limit: int|None=None, cf_training: bool=False):
         r=Path(cache); self.root=r; self.split=split
         def mm(name): return np.load(r/f'{split}_{name}.npy',mmap_mode='r')
         self.x_obs=mm('x_obs_norm'); self.y_norm=mm('y_norm'); self.y_raw=mm('y_raw')
         self.observed=mm('history_observed'); self.valid=mm('future_valid'); self.direct=mm('direct_mask')
         self.tod=mm('tod_hist'); self.dow=mm('dow_hist'); self.meta=pd.read_csv(r/f'{split}_manifest.csv')
         self.n=len(self.meta) if limit is None else min(int(limit),len(self.meta))
+        self.window_starts=self.meta.window_start.to_numpy(np.int64)
+        self.x_full=None
+        if cf_training:
+            if split!='train':raise ValueError('Counterfactual full-history supervision is Train-only')
+            full_path=r/f'{split}_x_full_norm.npy'
+            if not full_path.exists():
+                raise FileNotFoundError(f'Counterfactual training input unavailable: {full_path}')
+            self.x_full=np.load(full_path,mmap_mode='r')
     def __len__(self): return self.n
     def __getitem__(self,i):
-        return {
+        sample = {
             'index':int(i),'x':torch.from_numpy(np.array(self.x_obs[i],np.float32,copy=True)),
             'mask':torch.from_numpy(np.array(self.observed[i],np.float32,copy=True)),
             'y_norm':torch.from_numpy(np.array(self.y_norm[i],np.float32,copy=True)),
@@ -22,8 +30,11 @@ class SupportSplit(Dataset):
             'direct_mask':torch.from_numpy(np.array(self.direct[i],np.bool_,copy=True)),
             'tod':torch.from_numpy(np.array(self.tod[i],np.int64,copy=True)),
             'dow':torch.from_numpy(np.array(self.dow[i],np.int64,copy=True)),
-            'window_start':int(self.meta.iloc[i].window_start),
+            'window_start':int(self.window_starts[i]),
         }
+        if self.x_full is not None:
+            sample['x_full_training_only']=torch.from_numpy(np.array(self.x_full[i],np.float32,copy=True))
+        return sample
 
 class RetrievalCache:
     """New-format forecast-conditioned shortlist; incompatible with pre-v2.3 files."""

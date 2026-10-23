@@ -1,9 +1,9 @@
-version: 2.0.0
+version: 3.0.0
 method: PCFT-STLA
 propagation:
   enabled: true
   lags: [1, 2, 3, 4, 5, 6]
-  utility_weight: 0.03
+  utility_weight: 0.0
   provenance_enforced: true
   full_horizon_support: true
   action_controller: true
@@ -14,7 +14,7 @@ project:
   supportbench_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench
   exp_root: ${SPEED_LLM_RAG_ROOT}/PCFT-STLA_exps/${TRAFFIDENT_TARGET}
   log_root: ${SPEED_LLM_RAG_ROOT}/PCFT-STLA_logs/${TRAFFIDENT_TARGET}
-  store_root: ${SPEED_LLM_RAG_ROOT}/PCFT-STLA_store/${TRAFFIDENT_TARGET}
+  store_root: ${SPEED_LLM_RAG_ROOT}/PCFT-STLA_cache/${TRAFFIDENT_TARGET}
 experiment:
   dataset: TraffiDent_Net_06
   target: ${TRAFFIDENT_TARGET}
@@ -56,7 +56,7 @@ training:
   batch_size: 64
   fallback_batch_sizes: [64, 48, 32, 16]
   max_epochs: 80
-  schedule: progressive
+  schedule: frozen
   ablation: full
   patience: 20
   warmup_epochs: 10
@@ -67,11 +67,11 @@ training:
   weight_decay: 0.0001
   grad_clip: 5.0
   forecast_loss: mae
-  rank_weight: 0.05
+  rank_weight: 0.0
   base_preserve_weight: 0.15
   utility_margin: 0.02
   score_margin: 0.0
-  risk_weight: 0.03
+  risk_weight: 0.0
   memory_momentum: 0.995
   utility_temperature: 0.25
   rmse_weight: 0.05
@@ -98,3 +98,10 @@ runtime:
 
 # v2.2: preserve an accurate STLA base while learning evidence transfer.
 # A weight of zero restores the v2.1 forecast objective.
+
+# M0 plain historical Future; M1 support anchor; M2 coherent episodes; M3 utility policy.
+v3:
+  contribution: M3
+  branch_weight: 0.025
+  utility_weight: 0.03
+  tail_weight: 0.01

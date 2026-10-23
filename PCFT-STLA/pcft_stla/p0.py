@@ -44,12 +44,12 @@ def sha256(path):
 def validate_pair(full_ck, independent_ck, method):
     """Independent no-retrieval comparison is impossible without a second checkpoint."""
     full = torch.load(full_ck, map_location='cpu', weights_only=False)
-    if full.get('version') != '2.0.0' or full['config']['training'].get('ablation', 'full') != 'full':
+    if full.get('version') not in ('2.0.0','3.0.0') or full['config']['training'].get('ablation', 'full') != 'full':
         raise ValueError('Full checkpoint must be an independently trained v2.3 full checkpoint.')
     if independent_ck is None:
         return full, None
     ctrl = torch.load(independent_ck, map_location='cpu', weights_only=False)
-    if ctrl.get('version') != '2.0.0' or ctrl['config']['training'].get('ablation') != 'no_retrieval':
+    if ctrl.get('version') != full.get('version') or ctrl['config']['training'].get('ablation') != 'no_retrieval':
         raise ValueError('Control checkpoint must be a separately trained no_retrieval v2.3 run.')
     if full.get('backbone_sha256') != ctrl.get('backbone_sha256'):
         raise ValueError('Full and independent controls must share the EXACT initial backbone SHA256.')

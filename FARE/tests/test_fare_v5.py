@@ -103,7 +103,7 @@ def test_resume_and_checkpoint_version(fixture_data,tmp_path):
     ck=fit(m,bank,Small(),Small(),torch.device('cpu'),cfg,tmp_path,{'unit_test':True})
     assert ck.exists()
     obj=torch.load(ck,map_location='cpu',weights_only=False)
-    assert obj['version']=='5.0.0'
+    assert obj['version']=='6.0.0'
     assert (tmp_path/'train_metrics.jsonl').exists()
 
 

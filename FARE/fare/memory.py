@@ -62,6 +62,9 @@ class EpisodeMemory:
                                              self.residual_valid,self.x,self.mask)
         self.region_key_cpu=None;self.graph_hash=None
         self._device_keys={}
+        self._gpu_tables={}
+        self._residual_complete=None
+        self._cache_max_bytes=0
     @property
     def m(self):return len(self.starts)
     @property
@@ -71,6 +74,30 @@ class EpisodeMemory:
         self.region_key_cpu=torch.einsum('gn,mnd->mgd',owner,self.node_key_cpu)
         self.region_capability_cpu=torch.einsum('gn,mnd->mgd',owner,self.capability_cpu)
         self._device_keys.clear()
+    def enable_gpu_cache(self, device, budget_gb=4.0, sources=None):
+        """All-or-nothing tensor cache within a strict byte budget; safe CPU fallback."""
+        self._gpu_tables.clear()
+        if torch.device(device).type != 'cuda' or budget_gb <= 0:
+            return {'cached':[], 'bytes':0}
+        names=sources or ('residual','residual_complete','residual_valid','future','future_valid',
+                          'failure_delta','failure_valid','node_key_cpu','capability_cpu','x','mask')
+        budget=int(float(budget_gb)*1024**3);used=0
+        for name in names:
+            value=getattr(self,name)
+            cost=value.numel()*value.element_size()
+            if used+cost>budget:continue
+            try:self._gpu_tables[name]=value.to(device,non_blocking=False);used+=cost
+            except torch.cuda.OutOfMemoryError:
+                self._gpu_tables.clear()
+                if torch.cuda.is_available():torch.cuda.empty_cache()
+                return {'cached':[], 'bytes':0, 'fallback':'CUDA OOM'}
+        return {'cached':list(self._gpu_tables),'bytes':used}
+    @property
+    def residual_complete(self):
+        """Paired OOF decomposition: r_inc = r_complete + sensing_delta."""
+        if self._residual_complete is None:
+            self._residual_complete=self.residual-self.failure_delta
+        return self._residual_complete
     def keys(self,device):
         # Compact CPU/GPU features; never move all per-node historical keys to GPU.
         return self.node_key_cpu.to(device)
@@ -85,6 +112,11 @@ class EpisodeMemory:
         return ends[None]+int(purge)<=origins[:,None]
     def fetch(self,ids,nodes,source,device):
         """Fetch arbitrary [B,N,K,L] node IDs, without moving full Memory to GPU."""
+        cached=self._gpu_tables.get(source)
+        if cached is not None and torch.device(device)==cached.device:
+            ep=ids.long().clamp(0,self.m-1)
+            src=nodes.long().clamp(0,self.n-1)
+            return cached.permute(0,2,1)[ep,src]
         ep=ids.detach().to('cpu',dtype=torch.long).clamp(0,self.m-1)
         src=nodes.detach().to('cpu',dtype=torch.long).clamp(0,self.n-1)
         table=getattr(self,source)
@@ -98,6 +130,11 @@ class EpisodeMemory:
     def fetch_neighbors(self,ids,neighbor_ids,source,device):
         return self.fetch_paths(ids,neighbor_ids,source,device)
     def fetch_node_keys(self,ids,device,source='node_key_cpu'):
+        cached=self._gpu_tables.get(source)
+        if cached is not None and cached.device==torch.device(device):
+            idx=ids.long().clamp(0,self.m-1)
+            nn=torch.arange(ids.shape[1],device=ids.device)[None,:,None]
+            return cached[idx,nn]
         idx=ids.detach().cpu().long().clamp(0,self.m-1)
         nn=torch.arange(ids.shape[1],dtype=torch.long)[None,:,None]
         return getattr(self,source)[idx,nn].to(device,non_blocking=True)

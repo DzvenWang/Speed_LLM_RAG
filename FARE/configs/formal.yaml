@@ -1,4 +1,4 @@
-version: 5.0.3
+version: 6.0.0
 experiment:
   dataset: TraffiDent_Net_06
   target: speed
@@ -58,17 +58,21 @@ training:
   grad_clip: 5.0
   masked_weight: 0.2
   tail_weight: 0.02
-  utility_weight: 0.5
+  utility_weight: 0.2
   log_every: 50
   stage_epochs:
-    evidence: 8
-    retrieval: 12
-    joint: 20
+    support: 6
+    utility: 8
+    joint: 24
     risk: 8
     calibration: 5
   amp: true
   replay_interval: 8
   replay_batch: 2
+  cache_gpu_memory: true
+  gpu_cache_budget_gb: 5.0
+  support_weight: 0.0
+  support_teacher_weight: 0.05
 evaluation:
   auto_evaluate: true
   include_val: false
@@ -79,3 +83,20 @@ analysis:
   counterfactual_split: s40
   max_counterfactual_queries: 250
   bootstrap_samples: 1000
+innovation_audit:
+  required: true
+  stage_enabled: true
+  stage_queries: 32
+  validation_queries: 512
+  candidate_queries: 128
+  stage_candidate_queries: 16
+  stage_candidate_nodes: 16
+  stage_candidate_slots: 4
+  candidate_nodes: 32
+  candidate_slots: 8
+  candidate_alphas: [0.0, 0.1, 0.25, 0.5, 1.0]
+  candidate_progress_every: 16
+  progress_every_batches: 4
+  bootstrap_samples: 1000
+  seed: 10
+  require_independent_retraining_for_publication: true

@@ -12,7 +12,8 @@ from test_tcrr_v2 import STLA
 def test_amp_risk_logit_loss_backward():
     torch.manual_seed(1001)
     B, H, P, N, K = 2, 12, 12, 7, 6
-    model = TCRRSTLA(STLA(), load_config())
+    legacy_cfg=load_config();legacy_cfg['version']='2.0.0'
+    model = TCRRSTLA(STLA(), legacy_cfg)
     x = torch.randn(B, H, N)
     mask = (torch.rand(B, H, N) > 0.4).float()
     td = torch.zeros(B, H, dtype=torch.long)
@@ -23,7 +24,7 @@ def test_amp_risk_logit_loss_backward():
     batch = dict(y_norm=y, y_raw=y, future_valid=torch.ones(B, P, N, dtype=torch.bool))
     with torch.autocast(device_type='cpu', dtype=torch.bfloat16):
         out = model(x, mask, td, td, **ev)
-        loss, logs = compute_losses(out, batch, 0., 1., load_config(), 'full')
+        loss, logs = compute_losses(out, batch, 0., 1., legacy_cfg, 'full')
     assert torch.isfinite(loss)
     assert abs(logs['risk']) < 1e4
     assert torch.allclose(out['risk_probability'].float(), torch.sigmoid(out['risk_logit'].float()), atol=2e-3)

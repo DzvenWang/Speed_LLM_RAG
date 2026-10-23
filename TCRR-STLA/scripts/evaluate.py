@@ -21,11 +21,11 @@ def main():
     ap.add_argument('--backbone-checkpoint')
     ap.add_argument('--batch-size',type=int,default=8,help='Separate safe evaluation batch size')
     ap.add_argument('--num-workers',type=int,default=0)
-    ap.add_argument('--evidence-mode',choices=['full','no_evidence','shuffled','random_future','cross_history','no_risk','standard_future','no_mask_replay','no_rerank','no_retrieval','legacy_v23','no_traffic_regime','no_traffic_retrieval','no_failure_transfer','no_utility','no_traffic_control','no_mask_matched_retrieval','no_failure_encoder','no_normal_residual','no_failure_residual','no_candidate_utility','no_mixture_utility'])
+    ap.add_argument('--evidence-mode',choices=['full','no_evidence','shuffled','random_future','cross_history','no_risk','standard_future','no_mask_replay','no_rerank','no_retrieval','legacy_v23','no_traffic_regime','no_traffic_retrieval','no_failure_transfer','no_utility','no_traffic_control','no_mask_matched_retrieval','no_failure_encoder','no_normal_residual','no_failure_residual','no_candidate_utility','no_mixture_utility','shuffled_cf_pairing','no_support_conditioning','no_gain_harm'])
     a=ap.parse_args()
     ck=torch.load(a.checkpoint,map_location='cpu',weights_only=False)
-    if str(ck.get('version',''))!='2.0.0':
-        raise RuntimeError('Only v2 checkpoints can be evaluated by v2 scripts')
+    if str(ck.get('version','')) not in ('2.0.0','3.0.0'):
+        raise RuntimeError('Only v2/v3 checkpoints can be evaluated')
     cfg=relocate_saved_config(ck['config'])
     if a.evidence_mode:
         cfg['training']['ablation']=a.evidence_mode
@@ -86,7 +86,9 @@ def main():
         print('EVAL '+json.dumps(rows[-1]),flush=True)
     out=Path(a.checkpoint).resolve().parent/'evaluation';out.mkdir(exist_ok=True)
     pd.DataFrame(rows).to_csv(out/f'severity_summary.{mode}.csv',index=False)
-    if mode==cfg['training'].get('ablation','full'):
+    if mode==ck['config']['training'].get('ablation','full'):
+        # Only the ORIGINAL checkpoint training mode updates the official
+        # summary. Inference interventions must not overwrite Full results.
         pd.DataFrame(rows).to_csv(out/'severity_summary.csv',index=False)
         root=Path(a.checkpoint).resolve().parent/'summary.json'
         payload=json.loads(root.read_text()) if root.is_file() else {}

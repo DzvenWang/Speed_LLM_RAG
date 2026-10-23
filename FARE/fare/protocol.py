@@ -15,6 +15,7 @@ class SupportDataset(Dataset):
         if limit is not None and int(limit)<len(ix):
             ix=ix[np.linspace(0,len(ix)-1,int(limit),dtype=np.int64)] if strategy=='spread' else ix[:int(limit)]
         self.ix=ix
+        self._window_starts=self.meta.window_start.to_numpy(dtype=np.int64,copy=True)
         self.n=int(self.arr['x_obs_norm'].shape[-1]);self.h=int(self.arr['x_obs_norm'].shape[-2]);self.p=int(self.arr['y_norm'].shape[-2])
     def __len__(self):return len(self.ix)
     def __getitem__(self,i):
@@ -27,12 +28,13 @@ class SupportDataset(Dataset):
                 'raw_valid':ob|missing,'target':t('y_norm',torch.float32),'target_raw':t('y_raw',torch.float32),
                 'future_valid':t('future_valid',torch.bool),'direct_mask':t('direct_mask',torch.bool),
                 'tod':t('tod_hist',torch.long),'dow':t('dow_hist',torch.long),
-                'origin':torch.tensor(int(self.meta.iloc[j].window_start)+self.h-1,dtype=torch.long),
+                'origin':torch.tensor(int(self._window_starts[j])+self.h-1,dtype=torch.long),
                 'row_id':torch.tensor(j,dtype=torch.long)}
 
 def make_loader(ds,batch_size,shuffle=False,workers=0):
     return DataLoader(ds,batch_size=batch_size,shuffle=shuffle,num_workers=workers,
-                      pin_memory=torch.cuda.is_available(),drop_last=False)
+                      pin_memory=torch.cuda.is_available(),drop_last=False,
+                      persistent_workers=bool(workers),prefetch_factor=2 if workers else None)
 
 def device_batch(b,device):return {k:v.to(device,non_blocking=True) if torch.is_tensor(v) else v for k,v in b.items()}
 

@@ -104,8 +104,9 @@ def prepare_forecast_pool(cfg, formal, query_root, split, raw_path, backbone_pat
                 tscore=ts.cpu().numpy().astype(np.float32)
                 w=float(cfg.get('traffic',{}).get('traffic_score_weight',0.25))
                 ids=np.concatenate([ids,tk],axis=1)
-                hscore=np.concatenate([hscore,tscore],axis=1)
-                hc=np.concatenate([hc,np.full_like(tscore,ms.mean().item(),dtype=np.float32)],axis=1)
+                hscore=np.concatenate([hscore,tscore*float(cfg.get('traffic',{}).get('traffic_score_weight',.25))],axis=1)
+                query_coverage=ms.float().mean(dim=(1,2)).cpu().numpy().astype(np.float32)
+                hc=np.concatenate([hc,np.broadcast_to(query_coverage[:,None],tscore.shape).copy()],axis=1)
             cy=torch.as_tensor(np.array(futures[ids],copy=True),device=device,dtype=torch.float32)
             # Per-case centered forecast shape: focus on future evolution rather than scale.
             qv=pred.flatten(1);yv=cy.flatten(2)

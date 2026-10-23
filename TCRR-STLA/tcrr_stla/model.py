@@ -8,6 +8,7 @@ import torch
 from torch import nn
 from .stla import MaskAwareSTLAformer
 from .traffic_v2 import FailureConditionedTraffic
+from .v3.transfer import CounterfactualResidualTransfer
 
 
 class TCRRSTLA(nn.Module):
@@ -45,6 +46,11 @@ class TCRRSTLA(nn.Module):
         nn.init.zeros_(self.control_adapter[-1].weight)
         nn.init.zeros_(self.control_adapter[-1].bias)
         self.register_buffer('hids', torch.arange(self.horizon), persistent=False)
+        self.v3_enabled=str(cfg.get('version','')).startswith('3.')
+        if self.v3_enabled:
+            self.v3=CounterfactualResidualTransfer(
+                self.horizon,d,hid,self.max_delta,
+                str(cfg.get('v3',{}).get('contribution','M3')))
 
     def set_train_phase(self, phase: str, last_layers: int = 2):
         self.stla.set_train_phase(phase, last_layers)
@@ -52,12 +58,22 @@ class TCRRSTLA(nn.Module):
     def forward(self, x, mask, tod, dow, candidate_y=None, residual=None,
                 candidate_scores=None, candidate_coverage=None, hist_distance=None,
                 candidate_valid=None,normal_residual=None,teacher_base=None,
-                candidate_histories=None,mode='full'):
+                candidate_histories=None,candidate_ids=None,mode='full'):
         base, z = self.stla(x, mask, tod, dow)
         B, P, N = base.shape
         if P != self.horizon:
             raise ValueError(f'Forecast horizon mismatch: {P} != {self.horizon}')
         ctx = self.latent_proj(z)[:, None].expand(-1, P, -1, -1)
+        if self.v3_enabled and mode!='no_retrieval':
+            if residual is None or candidate_y is None:raise ValueError('v3 needs legal train-only evidence')
+            if normal_residual is None:raise ValueError('v3 paired teacher normal residual required')
+            result=self.v3(x,mask,base,self.latent_proj(z),normal_residual,residual,
+                           candidate_y,candidate_scores,candidate_coverage,candidate_valid,
+                           candidate_histories=candidate_histories,
+                           neighbours=self.traffic.neighbors,mode=mode)
+            result['retrieval_prediction']=base+result['candidate_residuals'].mean(1)
+            result['candidate_ids']=candidate_ids
+            return result
         h = self.horizon_embed(self.hids)[None, :, None].expand(B, -1, N, -1)
         cover = mask.mean(1)[:, None, :, None].expand(B, P, N, 1)
         b = base[..., None]

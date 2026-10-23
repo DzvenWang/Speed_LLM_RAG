@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+from .v3.losses import mechanism_losses
 import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader
@@ -94,7 +95,7 @@ def evidence_for_batch(model,b,cache,memory,device,cfg,mode,bank=None,teacher=No
     normal=normal_bank.fetch(ids,device) if normal_bank is not None else None
     with torch.no_grad():
         teacher_base=teacher(query_x,query_mask,b['tod'].long(),b['dow'].long())[0] if teacher is not None else None
-    return dict(candidate_histories=candidates['x'],normal_residual=normal,teacher_base=teacher_base,candidate_y=candidates['y'],candidate_valid=candidates['future_valid'],residual=residual,
+    return dict(candidate_ids=ids,candidate_histories=candidates['x'],normal_residual=normal,teacher_base=teacher_base,candidate_y=candidates['y'],candidate_valid=candidates['future_valid'],residual=residual,
                 candidate_scores=scores,candidate_coverage=cov,hist_distance=dist)
 
 
@@ -150,6 +151,14 @@ def compute_losses(out,b,mean,std,cfg,mode):
                     harm=(-gain).clamp_min(0.)
                     utility_loss=utility_loss+0.25*F.smooth_l1_loss(F.softplus(out['mixture_expected_harm'].float()[valid]),harm.detach()[valid])
     loss=main+float(cfg['training'].get('rmse_weight',0.0))*risk+float(cfg['training'].get('rank_weight',0.0))*rank+float(cfg['training'].get('risk_weight',0.0))*risk_loss+float(cfg['training'].get('traffic_utility_weight',0.03))*utility_loss
+    if str(cfg.get('version','')).startswith('3.') and mode!='no_retrieval':
+        cfg3=cfg.get('v3',{})
+        extra,extra_stats=mechanism_losses(out,b,cf_target=b.get('cf_target_training_only'),
+            cf_weight=float(cfg3.get('cf_weight',.02)),
+            ranking_weight=float(cfg3.get('ranking_weight',.03)),
+            harm_weight=float(cfg3.get('harm_weight',.02)),
+            control_weight=float(cfg3.get('control_weight',.01)))
+        loss=main+float(cfg['training'].get('rmse_weight',0.05))*risk+extra
     return loss,dict(mae=float(err.abs().mean().detach()),rmse=float(risk.detach()),ranking=float(rank.detach()),risk=float(risk_loss.detach()),utility=float(utility_loss.detach()),
                      gate=float(out['gate'].mean().detach()),loss=float(loss.detach()))
 
@@ -163,6 +172,13 @@ def run_epoch(model,loader,rc,memory,device,mean,std,cfg,mode,opt=None,epoch=1,b
             batch=_batch_to_device(raw_batch,device)
             if tr:opt.zero_grad(set_to_none=True)
             ev=evidence_for_batch(model,batch,rc,memory,device,cfg,mode,bank=bank,teacher=teacher,normal_bank=normal_bank)
+            if str(cfg.get('version','')).startswith('3.') and mode!='no_retrieval' and 'x_full_training_only' in batch:
+                if teacher is None:raise RuntimeError('v3 requires one frozen paired teacher')
+                with torch.no_grad(),torch.autocast(device_type=device.type,enabled=False):
+                    ref_full=teacher(batch['x_full_training_only'].float(),torch.ones_like(batch['mask']).float(),
+                                     batch['tod'].long(),batch['dow'].long())[0].float()
+                    if ev.get('teacher_base') is None:raise RuntimeError('Missing masked teacher response')
+                    batch['cf_target_training_only']=ref_full-ev['teacher_base'].float().detach()
             with torch.autocast(device_type=device.type,dtype=torch.float16,enabled=bool(cfg['runtime'].get('amp',False)) and device.type=='cuda'):
                 out=model(batch['x'].float(),batch['mask'].float(),batch['tod'].long(),batch['dow'].long(),mode=mode,**ev)
                 loss,ls=compute_losses(out,batch,mean,std,cfg,mode)
@@ -220,11 +236,15 @@ def train(cfg,cache,ckpt,retrieval_train,retrieval_val,run_dir,smoke=False,resum
     seed_all(int(cfg['experiment']['seed']));device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model,bc=build_model(cfg,ckpt,device)
     mean=float(bc['mean']);std=float(bc['std']);limit=24 if smoke else None
-    tr=SupportSplit(cache,'train',limit);va=SupportSplit(cache,'val',limit)
+    cf_source=str(cfg.get('version','')).startswith('3.') and cfg.get('v3',{}).get('contribution','M3')!='M0'
+    tr=SupportSplit(cache,'train',limit,cf_training=cf_source)
+    va=SupportSplit(cache,'val',limit,cf_training=False)
     memory=FutureMemory(cache,256 if smoke else None)
     if not smoke and cfg['runtime'].get('preload_retrieval_memory_gpu',False):
         loaded=memory.preload(device);print(f'RETRIEVAL_MEMORY_GPU loaded={loaded}',flush=True)
     mode=str(cfg['training'].get('ablation','full'))
+    if str(cfg.get('version','')).startswith('3.') and not cfg['runtime'].get('frozen_replay_teacher',True):
+        raise RuntimeError('TCRR v3 CF attribution requires a frozen replay teacher')
     rt=RetrievalCache(retrieval_train) if retrieval_train else None;rv=RetrievalCache(retrieval_val) if retrieval_val else None
     bs=3 if smoke else int(cfg['training']['batch_size'])
     tl=_make_loader(tr,bs,True,cfg,smoke);vl=_make_loader(va,bs,False,cfg,smoke)
@@ -278,7 +298,7 @@ def train(cfg,cache,ckpt,retrieval_train,retrieval_val,run_dir,smoke=False,resum
     p=predict(model,vl,rv,memory,device,mean,std,cfg,mode,bankval,teacher,normal_bank)
     vm=metrics(p['prediction'],p['true'],p['valid'],p['direct']);bm=metrics(p['base'],p['true'],p['valid'],p['direct'])
     np.savez_compressed(run_dir/'val_predictions.npz',**{k:v.astype(np.float32) for k,v in p.items() if isinstance(v,np.ndarray)})
-    save_summary(run_dir/'summary.json',{'model':'TCRR-STLA-v1.0.0','best_epoch':best_epoch,
+    save_summary(run_dir/'summary.json',{'model':f'TCRR-STLA-v{cfg["version"]}','best_epoch':best_epoch,
                  'validation':vm,'base_validation':bm,'gate_mean':p['gate_mean'],
                  'backbone_checkpoint':str(ckpt),'ablation':mode,
                  'replay_mode':'frozen_cached' if teacher is not None else 'dynamic','test_evaluated':False})

@@ -104,6 +104,10 @@ if [[ -n "${V23_CHECKPOINT:-}" ]]; then
   exit 2
 fi
 if [[ -n "${BATCH_SIZE:-}" ]]; then EXTRA_ARGS+=(--batch-size "$BATCH_SIZE"); fi
+CONTRIBUTION=${CONTRIBUTION:-M3}
+case "$CONTRIBUTION" in M0|M1|M2|M3) ;; *) echo "Invalid CONTRIBUTION=$CONTRIBUTION" >&2; exit 2;; esac
+EXTRA_ARGS+=(--contribution "$CONTRIBUTION")
+log_line "TRC_ATTRIBUTION contribution=$CONTRIBUTION frozen_backbone=true"
 run_logged "$PYTHON" -u PCFT-STLA/scripts/train.py --target "$TARGET" --seed "$SEED" --dataset "$DATASET" --ablation "$ABLATION" --run-stamp "$STAMP" --backbone-checkpoint "$BACKBONE_CHECKPOINT" "${EXTRA_ARGS[@]}"
 
 log_line "FINISH model=PCFT-STLA target=$TARGET seed=$SEED"

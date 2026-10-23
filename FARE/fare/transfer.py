@@ -25,7 +25,7 @@ class PropagationTransport(nn.Module):
         b,n,k=ids.shape;p=base_prediction.shape[1];L=graph.path_nodes.shape[1]
         src=graph.path_nodes
         # Historical values are gathered only for the bounded sparse path set.
-        residual=memory.fetch_paths(ids,src,'residual',device)
+        residual=memory.fetch_paths(ids,src,'residual' if intervention=='ordinary_residual' else 'residual_complete',device)
         residual_valid=memory.fetch_paths(ids,src,'residual_valid',device).bool()
         future=memory.fetch_paths(ids,src,'future',device)
         future_valid=memory.fetch_paths(ids,src,'future_valid',device).bool()
@@ -71,7 +71,7 @@ class PropagationTransport(nn.Module):
         fut,fv=spatial(future,future_valid)
         # Preserve the historical target-node Episode evidence. A node with no
         # incoming physical path still has a legitimate same-node residual/future.
-        self_r=memory.fetch_node(ids,'residual',device)
+        self_r=memory.fetch_node(ids,'residual' if intervention=='ordinary_residual' else 'residual_complete',device)
         self_rv=memory.fetch_node(ids,'residual_valid',device).bool()
         self_y=memory.fetch_node(ids,'future',device)
         self_yv=memory.fetch_node(ids,'future_valid',device).bool()

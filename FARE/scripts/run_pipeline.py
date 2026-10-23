@@ -4,13 +4,13 @@ from fare.config import read_config
 from fare.pipeline import run
 
 def cli():
-    p=argparse.ArgumentParser(description='FARE v5 full single-model train/evaluate/analyze')
+    p=argparse.ArgumentParser(description='FARE v6 full train / mandatory innovation audit / evaluate')
     p.add_argument('--config',default='FARE/configs/formal.yaml')
     p.add_argument('--dataset');p.add_argument('--target',choices=['speed','flow']);p.add_argument('--seed',type=int)
     p.add_argument('--checkpoint',help='External frozen STLAformer best.pt')
     p.add_argument('--memory',help='Prebuilt FARE v5 episode Memory directory')
     p.add_argument('--oos-forecast-file',help='Explicit external OOF prediction .npz (formal)')
-    p.add_argument('--run-dir');p.add_argument('--resume',help='Resume from FARE v5 last.pt')
+    p.add_argument('--run-dir');p.add_argument('--resume',help='Resume ONLY an explicitly supplied, compatible FARE v6 checkpoint')
     p.add_argument('--device');p.add_argument('--smoke',action='store_true')
     p.add_argument('--evaluate-only',action='store_true');p.add_argument('--skip-analysis',action='store_true')
     g=p.add_mutually_exclusive_group()

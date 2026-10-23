@@ -128,6 +128,7 @@ FARE_diagnostics/
 
 PCFT-STLA_exps/
 PCFT-STLA_logs/
+PCFT-STLA_cache/
 PCFT-STLA_store/
 
 TCRR-STLA_exps/

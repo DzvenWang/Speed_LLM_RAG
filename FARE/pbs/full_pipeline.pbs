@@ -4,7 +4,7 @@
 #PBS -l ncpus=12,ngpus=1,mem=32GB,walltime=48:00:00
 #PBS -l storage=scratch/mh20+gdata/mh20
 #PBS -j oe
-#PBS -N FARE5_full
+#PBS -N FARE6_full
 set -euo pipefail
 # The submit helper supplies these resolved values from its own Python process.
 # No /scratch, /g/data, conda base, or conda environment name is hardcoded.
@@ -52,6 +52,7 @@ if [[ -n "${BACKBONE_CHECKPOINT:-}" ]]; then CMD+=(--checkpoint "$BACKBONE_CHECK
 if [[ -n "${FARE_OOS_FORECAST_FILE:-}" ]]; then CMD+=(--oos-forecast-file "$FARE_OOS_FORECAST_FILE"); fi
 if [[ -n "${FARE_RUN_DIR:-}" ]]; then CMD+=(--run-dir "$FARE_RUN_DIR"); fi
 if [[ -n "${FARE_RESUME:-}" ]]; then CMD+=(--resume "$FARE_RESUME"); fi
+if [[ -n "${FARE_INIT_FROM:-}" ]]; then echo "FARE_FATAL: warm-start from older FARE weights is forbidden" >&2; exit 2; fi
 if [[ -n "${FARE_MEMORY:-}" ]]; then CMD+=(--memory "$FARE_MEMORY"); fi
 if [[ "${FARE_EVALUATE_ONLY:-0}" == 1 ]]; then CMD+=(--evaluate-only); fi
 if [[ "${FARE_SKIP_ANALYSIS:-0}" == 1 ]]; then CMD+=(--skip-analysis); fi

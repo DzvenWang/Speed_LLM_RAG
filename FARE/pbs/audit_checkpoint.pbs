@@ -1,0 +1,35 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12,ngpus=1,mem=32GB,walltime=24:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+#PBS -N FARE6_audit
+set -euo pipefail
+PROJECT_ROOT="${SPEED_LLM_RAG_ROOT:?SPEED_LLM_RAG_ROOT required}"
+PYTHON="${FARE_PYTHON:?FARE_PYTHON required}"
+[[ -x "$PYTHON" ]] || { echo "Missing executable $PYTHON" >&2; exit 2; }
+[[ -f "$PROJECT_ROOT/FARE/scripts/innovation_audit.py" ]] || { echo "Wrong FARE project root" >&2; exit 2; }
+cd "$PROJECT_ROOT"
+export PYTHONPATH="$PROJECT_ROOT/FARE:$PROJECT_ROOT/Backbone:$PROJECT_ROOT/Base_SupportBench:${PYTHONPATH:-}"
+export PYTHONUNBUFFERED=1
+export OMP_NUM_THREADS=6
+: "${TARGET:?TARGET required}"
+: "${FARE_AUDIT_CHECKPOINT:?FARE_AUDIT_CHECKPOINT required}"
+: "${BACKBONE_CHECKPOINT:?BACKBONE_CHECKPOINT required}"
+: "${FARE_MEMORY:?FARE_MEMORY required}"
+: "${FARE_AUDIT_OUTPUT:?FARE_AUDIT_OUTPUT required}"
+CONFIG="${FARE_AUDIT_CONFIG:-FARE/configs/formal.yaml}"
+LOGDIR="FARE_logs/$TARGET/TraffiDent_Net_06"
+mkdir -p "$LOGDIR"
+LOG="$LOGDIR/FARE6_audit.${PBS_JOBID:-manual}.live.log"
+CMD=("$PYTHON" -u FARE/scripts/innovation_audit.py
+   --target "$TARGET"
+   --config "$CONFIG"
+   --checkpoint "$FARE_AUDIT_CHECKPOINT"
+   --backbone-checkpoint "$BACKBONE_CHECKPOINT"
+   --memory "$FARE_MEMORY"
+   --output "$FARE_AUDIT_OUTPUT")
+if [[ "${FARE_AUDIT_SMOKE:-0}" == 1 ]]; then CMD+=(--smoke); fi
+"${CMD[@]}" 2>&1 | \
+  awk '{print strftime("[%Y-%m-%d %H:%M:%S]"),$0;fflush()}' | tee "$LOG"

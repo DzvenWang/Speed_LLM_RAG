@@ -42,7 +42,7 @@ def evaluate(model,memory,ds,device,cfg,output,mode='full',save_traces=True):
     return result,data
 
 @torch.no_grad()
-def evaluate_modes(model,memory,ds,device,cfg,output,modes,save_traces=False):
+def evaluate_modes(model,memory,ds,device,cfg,output,modes,save_traces=False,progress_every=0):
     """Evaluate fixed-checkpoint interventions in ONE pass over query batches.
 
     Full output is reused by downstream interventions; no repeated Backbone
@@ -54,7 +54,7 @@ def evaluate_modes(model,memory,ds,device,cfg,output,modes,save_traces=False):
                'forward_coverage':[],'backward_coverage':[],'regime':[],
                'residual_weight_mean':[],'evolution_weight_mean':[]} for m in modes}
     common={'target':[],'valid':[],'direct':[],'row_id':[],'origin':[]}
-    for raw in make_loader(ds,cfg['training']['batch_size'],workers=cfg['training']['workers']):
+    for batch_i,raw in enumerate(make_loader(ds,cfg['training']['batch_size'],workers=cfg['training']['workers'])):
         batch=device_batch(raw,device)
         full=model(batch,memory,purge=cfg['memory']['purge_steps'],return_details=True)
         for m in modes:
@@ -75,6 +75,8 @@ def evaluate_modes(model,memory,ds,device,cfg,output,modes,save_traces=False):
         common['direct'].append(raw['direct_mask'].numpy())
         common['row_id'].append(raw['row_id'].numpy())
         common['origin'].append(raw['origin'].numpy())
+        if progress_every and (batch_i+1) % int(progress_every)==0:
+            print(f'FARE6_AUDIT_MODES_PROGRESS batches={batch_i+1} queries={(batch_i+1)*cfg["training"]["batch_size"]}',flush=True)
     common={k:np.concatenate(v) for k,v in common.items()}
     output=Path(output);output.mkdir(parents=True,exist_ok=True)
     results={};data={}
@@ -82,7 +84,7 @@ def evaluate_modes(model,memory,ds,device,cfg,output,modes,save_traces=False):
         trace={**common,**{k:np.concatenate(v) for k,v in items.items()}}
         res=dict(canonical_metric_bundle()(trace['prediction'],trace['target'],trace['valid'],trace['direct']))
         res.update({'evaluation_mode':mode,'rows':len(trace['row_id']),
-                    'analysis_scope':'fixed_checkpoint_budgeted' if cfg['analysis'].get('max_intervention_queries') else 'fixed_checkpoint_full'})
+                    'analysis_scope':'fixed_checkpoint_budgeted' if cfg.get('analysis',{}).get('max_intervention_queries') else 'fixed_checkpoint_full'})
         dump_json(output/f'{mode}.json',res)
         if save_traces:np.savez_compressed(output/f'{mode}.npz',**trace)
         results[mode]=res;data[mode]=trace

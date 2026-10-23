@@ -19,7 +19,7 @@ def main():
     p.add_argument('--smoke',action='store_true')
     p.add_argument('--run-dir')
     p.add_argument('--memory',help='Prebuilt v5 Memory directory, relative to repo or absolute')
-    p.add_argument('--resume',help='Existing v5 last.pt, relative to repo or absolute')
+    p.add_argument('--resume',help='Existing v6 last.pt, relative to repo or absolute')
     p.add_argument('--evaluate-only',action='store_true')
     p.add_argument('--skip-analysis',action='store_true')
     p.add_argument('--skip-precheck',action='store_true',help='Bypass CPU safety gate (not recommended)')
@@ -67,13 +67,15 @@ def main():
     if a.oos_forecast_file:env['FARE_OOS_FORECAST_FILE']=str(project_path(a.oos_forecast_file,must_exist=True))
     if a.memory:env['FARE_MEMORY']=str(project_path(a.memory,must_exist=True))
     if a.resume:env['FARE_RESUME']=str(project_path(a.resume,must_exist=True))
+    if cfg['training'].get('initialize_from'):
+        raise ValueError('FARE requires fresh initialization; remove training.initialize_from')
     script=root()/'FARE/pbs/full_pipeline.pbs'
     if not script.is_file():raise FileNotFoundError(f'Missing PBS script: {script}')
     if not Path(sys.executable).is_file():raise FileNotFoundError(f'Missing active Python: {sys.executable}')
     if any(',' in v or '\n' in v for v in env.values()):
         raise ValueError('PBS -v does not support commas or newlines in path values')
-    print(f'FARE5_SUBMIT_ENV python={env["FARE_PYTHON"]} prefix={env["FARE_ENV_PREFIX"]} root={root()}',flush=True)
+    print(f'FARE6_SUBMIT_ENV python={env["FARE_PYTHON"]} prefix={env["FARE_ENV_PREFIX"]} root={root()}',flush=True)
     job=subprocess.check_output(['qsub','-v',','.join(f'{k}={v}' for k,v in env.items()),str(script)],text=True).strip()
-    print(f'FARE5_FULL_PIPELINE_JOB={job}\nFARE5_RUN_DIR={run_dir}\nFARE5_POST_TRAINING_EVALUATION={"val+test" if cfg["evaluation"]["include_val"] else "test_only"}',flush=True)
+    print(f'FARE6_FULL_PIPELINE_JOB={job}\nFARE5_RUN_DIR={run_dir}\nFARE5_POST_TRAINING_EVALUATION={"val+test" if cfg["evaluation"]["include_val"] else "test_only"}',flush=True)
 
 if __name__=='__main__':main()

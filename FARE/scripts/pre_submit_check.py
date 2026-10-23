@@ -37,6 +37,9 @@ def main():
     print('FARE5_PRE_SUBMIT_ENV '+str({'python':sys.executable,'env':sys.prefix,
                                          'torch':torch.__version__,'target':args.target}),flush=True)
     env=os.environ.copy();env.update({'OMP_NUM_THREADS':'1','MKL_NUM_THREADS':'1'})
+    env['PYTHONPATH']=os.pathsep.join((str(PACKAGE_ROOT),str(PACKAGE_ROOT.parent/'Backbone'),
+                                       str(PACKAGE_ROOT.parent/'Base_SupportBench'),
+                                       env.get('PYTHONPATH','')))
     print('FARE5_CPU_TEST_BEGIN',flush=True)
     subprocess.run([sys.executable,'-m','pytest','-q',str(PACKAGE_ROOT/'tests')],
                    check=True,cwd=PACKAGE_ROOT,env=env)

@@ -20,7 +20,7 @@ class STLA(nn.Module):
 
 def test_full_model(tmp_path):
     torch.manual_seed(1);B,H,P,N=3,12,12,7
-    cfg=load_config();cfg['experiment']['horizon']=12
+    cfg=load_config();cfg['version']='2.0.0';cfg['experiment']['horizon']=12
     model=TCRRSTLA(STLA(),cfg)
     x=torch.randn(B,H,N);mask=(torch.rand(B,H,N)>.4).float()
     t=torch.zeros(B,H,dtype=torch.long);d=t.clone()

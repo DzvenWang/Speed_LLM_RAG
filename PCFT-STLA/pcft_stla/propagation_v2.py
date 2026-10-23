@@ -99,10 +99,13 @@ class PropagationSupportV2(nn.Module):
             f.extend([v.mean(1),v.std(1,unbiased=False),v.abs().mean(1)])
         return torch.stack(f,-1).float().clamp(-30,30)
 
-    def support_field(self,mask,horizon,query_x=None,base_forecast=None):
+    def support_field(self,mask,horizon,query_x=None,base_forecast=None,uniform_graph=False,lag_override=None):
         b,h,n=mask.shape;p=int(horizon)
         _,confidence=self.active_graph(query_x,mask,batch_size=b)
         confidence=confidence.abs()
+        if uniform_graph:
+            # Preserve the same neighbor set, remove only directional strength.
+            confidence=torch.ones_like(confidence)
         neighbour=self.neighbors
         m=mask.float()
         observed=torch.zeros(b,p,n,device=mask.device,dtype=torch.float32)
@@ -111,7 +114,7 @@ class PropagationSupportV2(nn.Module):
         for li,lag in enumerate(self.lags.tolist()):
             strength=confidence[:,:,:,li]
             for pi in range(p):
-                t=h+pi-lag
+                t=h+pi-(int(lag_override) if lag_override is not None else lag)
                 if 0<=t<h:
                     observed[:,pi]+=(m[:,t,neighbour]*strength).sum(-1)
                 elif t>=h and base_forecast is not None and t<h+p:
@@ -127,7 +130,7 @@ class PropagationSupportV2(nn.Module):
         d=self.support_field(mask,horizon,query_x,base_forecast)
         return (d['observed']+0.5*d['forecast']).clamp(0,1)
 
-    def transfer(self,history,future,horizon,query_x=None,query_mask=None,provenance=None):
+    def transfer(self,history,future,horizon,query_x=None,query_mask=None,provenance=None,uniform_graph=False,lag_override=None):
         b,c,h,n=history.shape;p=int(horizon)
         origin=history[:,:,-1:,:]
         # historical future innovation on one coherent historical case
@@ -137,9 +140,14 @@ class PropagationSupportV2(nn.Module):
         denom=torch.zeros_like(output)
         if provenance is not None and tuple(provenance.shape)!=(b,c,n):
             raise ValueError('Expected candidate provenance [B,C,N]')
+        if uniform_graph:
+            # Uniform over the *same* valid neighbors/lag support, preserving
+            # graph topology and candidate provenance while removing edge scores.
+            weight=torch.ones_like(weight)/max(1,weight.shape[-2])
+            confidence=torch.ones_like(confidence)
         for li,lag in enumerate(self.lags.tolist()):
             for pi in range(p):
-                t=h+pi-lag
+                t=h+pi-(int(lag_override) if lag_override is not None else lag)
                 if not (0<=t<h+p):continue
                 values=both[:,:,t,:]
                 take=values[:,:,self.neighbors]

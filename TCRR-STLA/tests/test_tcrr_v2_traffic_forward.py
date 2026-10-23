@@ -7,7 +7,8 @@ from test_tcrr_v2 import STLA
 def test_full_traffic_utility_is_node_horizon_specific():
     torch.manual_seed(77)
     B,H,P,N,K=2,12,12,7,4
-    model=TCRRSTLA(STLA(),load_config())
+    legacy_cfg=load_config();legacy_cfg['version']='2.0.0'
+    model=TCRRSTLA(STLA(),legacy_cfg)
     x=torch.randn(B,H,N);mask=(torch.rand(B,H,N)>.65).float()
     mask[0,:,1]=0
     cand=torch.randn(B,K,H,N)

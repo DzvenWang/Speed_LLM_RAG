@@ -1,3 +1,20 @@
+# v3.0 Research Release — TRC C1/C2/C3
+
+This source tree now defaults to **v3.0.0**, with independently trained M0–M3 contribution levels. **Read `TRC_V3_DESIGN.md` and repository-level `V3_RELEASE_NOTES.md` first.** Legacy v2 implementation details below are retained for compatibility; they do not supersede v3 training/evaluation instructions.
+
+## v3 stable directories and formal jobs
+
+The v3 code uses stable `PCFT-STLA_cache`, `PCFT-STLA_exps`, and
+`PCFT-STLA_logs` top-level folders. The source checks cache compatibility
+using versioned internal paths and checkpoint/parameter metadata.
+`--smoke` is **optional** and is not required for submission to gpuvolta.
+Submit `pbs/formal.pbs` directly from the Gadi login node after specifying
+`TARGET`, `SEED`, `CONTRIBUTION`, `BACKBONE_MODE`, and a matching
+`BACKBONE_CHECKPOINT`; this performs the preflight and full formal train on
+a compute node. See `../V3_RELEASE_NOTES.md`.
+
+---
+
 # PCFT-STLA v2.0 — Time-coherent, Support-conditioned Future Transfer
 
 Complete standalone research project with train-only graph and latent index building, STLAformer, global/regional/propagation retrieval, coherent lagged future transfer, action-utility model, training, evaluation, diagnostics and Gadi PBS. It does **not** load PCFT v1 or Mask_RAST Full model weights.
@@ -43,3 +60,17 @@ PYTHONPATH=. python -m pytest -q
 ```
 
 This is source-only, with synthetic CPU module and end-to-end tests, compilation and Bash checks. Real Gadi/Net-06 training and superiority over Mask_RAST v2.3 are **not verified**. All prediction inputs at inference come from Query history + Mask, STLA predictions and temporally legal Train-only memory.
+
+## One-shot diagnosis (add-on)
+
+The companion `../OneShot_Diagnostics` directory in the combined v2 release
+provides a single PBS entry point for the four saved TCRR + PCFT checkpoints.
+It runs full-severity, same-checkpoint mechanism ablations and traces the
+Legacy / Propagation / None action weights and forecast/observed support in
+one frozen forward pass per query. No model retraining or checkpoint mutation.
+
+```bash
+qsub -N TCRR_PCFT_DIA OneShot_Diagnostics/pbs/one_shot.pbs
+```
+
+See `OneShot_Diagnostics/README.md`; retain `best_memory_index.npz` on Gadi.

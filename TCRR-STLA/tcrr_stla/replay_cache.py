@@ -44,6 +44,12 @@ class ReplayBank:
         return torch.from_numpy(np.array(self.array[ids],copy=True)).to(device,non_blocking=True).float()
 
 
+def replay_bank_dir(cfg, smoke=False):
+    """Version-isolated teacher evidence; smoke never shares the formal bank."""
+    return (Path(cfg['project']['retrieval_root']) / cfg['experiment']['dataset']
+            / 'v3' / ('formal_smoke' if smoke else 'formal') / 'teacher_replay_v2')
+
+
 def prepare_bank(cfg,split,dataset,cache,memory,teacher,checkpoint_path,retrieval_path,device,
                  num_queries=None, smoke=False):
     """Build/use a bank of shape [num_queries, candidates, horizon, nodes]."""
@@ -55,7 +61,7 @@ def prepare_bank(cfg,split,dataset,cache,memory,teacher,checkpoint_path,retrieva
     n=len(dataset) if num_queries is None else min(int(num_queries),len(dataset))
     h=int(cfg['experiment']['horizon']);nodes=int(memory.arrays['x'].shape[-1])
     name=f'{split}.teacher_replay_k{k}_{dtype}.npy'
-    folder=Path(cfg['project']['retrieval_root'])/cfg['experiment']['dataset']/'formal'/'teacher_replay_v2'
+    folder=replay_bank_dir(cfg, smoke=smoke)
     folder.mkdir(parents=True,exist_ok=True)
     path=folder/name;meta_file=folder/(name+'.json')
     source={
@@ -92,7 +98,7 @@ def prepare_bank(cfg,split,dataset,cache,memory,teacher,checkpoint_path,retrieva
                 qmask=torch.from_numpy(np.array(dataset.observed[s:e],np.float32,copy=True)).to(device)
                 res=counterfactual_residuals(teacher,candidate,qmask,chunk_size=chunk,replay='matched')
                 writer[s:e]=res.detach().cpu().numpy().astype(dtype,copy=False)
-                if (s//qb)%200==0:
+                if smoke or e==n or ((s//qb)%25==0):
                     print(f'REPLAY_BANK_PROGRESS split={split} queries_done={e}/{n} elapsed={time.time()-start:.1f}s',flush=True)
         writer.flush();del writer
         os.replace(tmp,path)

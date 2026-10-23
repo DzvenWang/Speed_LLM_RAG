@@ -11,6 +11,9 @@ from .stla import MaskSupportSTLAformer
 from .seasonal import seasonal_innovation
 from .propagation_v2 import PropagationSupportV2
 from .action_v2 import ForecastActionController
+from .v3.future import SupportAnchoredFuture
+from .v3.coherent import EpisodeCoherentPropagation
+from .v3.action import GainHarmEvolutionPolicy
 
 
 def stable_candidate_disagreement(weights: torch.Tensor, residual: torch.Tensor) -> torch.Tensor:
@@ -47,6 +50,12 @@ class PCFTSTLA(nn.Module):
                  tuple(cfg.get('propagation',{}).get('lags',[1,2,3,4,5,6])))
         self.propagation_enabled=bool(cfg.get('propagation',{}).get('enabled',True))
         self.action_controller=ForecastActionController(self.P,48,self.max_delta)
+        self.v3_enabled=str(cfg.get('version','')).startswith('3.')
+        self.v3_level=str(cfg.get('v3',{}).get('contribution','M3'))
+        if self.v3_enabled:
+            self.v3_future=SupportAnchoredFuture(self.P)
+            self.v3_episode=EpisodeCoherentPropagation(self.P)
+            self.v3_action=GainHarmEvolutionPolicy(self.P,limit=self.max_delta)
         mid=int(mc.get('node_hidden',16));hidden=int(mc.get('fusion_hidden',96))
         self.qsummary=nn.Sequential(nn.Linear(qd,mid),nn.GELU())
         self.horizon_embed=nn.Embedding(self.P,8)
@@ -92,8 +101,10 @@ class PCFTSTLA(nn.Module):
         B,H,N=x.shape
         self.memory_encoder.eval()
         self.propagation.force_global = (mode=='no_local_regime')
-        prop_on=self.propagation_enabled and mode not in ('legacy_v23','no_directional_graph')
-        prop_retrieval=prop_on and mode!='no_prop_retrieval'
+        prop_on=self.propagation_enabled and mode not in ('legacy_v23',)
+        if self.v3_enabled and self.v3_level in ('M0','M1'):
+            prop_on=False
+        prop_retrieval=(self.propagation_enabled if self.v3_enabled else prop_on) and mode!='no_prop_retrieval'
         # FP16 graph/key normalization can overflow after EMA updates even when
         # the STLA forecasting backbone is numerically stable. Preserve AMP for
         # the much larger STLA and fusion modules, but encode retrieval in FP32.
@@ -210,19 +221,27 @@ class PCFTSTLA(nn.Module):
             residual=residual[:,permutation]
             futures=futures[:,permutation]
         if mode=='no_future':residual=torch.zeros_like(residual)
+        anchor_scale=None
+        if self.v3_enabled and self.v3_level in ('M1','M2','M3'):
+            residual,anchor_scale=self.v3_future(residual,mask,neighcov,return_details=True)
+            candidate_pred=base[:,None]+residual
         prop_support=None;prop_beta=None;prop_utility=None;prop_field=None;prop_delta=None
         if prop_on and mode!='no_future':
-            prop_field=self.propagation.support_field(mask,P,query_x=x,base_forecast=base.detach())
+            prop_field=self.propagation.support_field(mask,P,query_x=x,base_forecast=base.detach(),
+                uniform_graph=(self.v3_enabled and mode=='no_directional_graph'),
+                lag_override=(0 if self.v3_enabled and mode=='no_lag_alignment' else None))
             if mode=='observed_support_only':
                 prop_field['forecast']=torch.zeros_like(prop_field['forecast'])
+                prop_field['uncertainty']=(1-prop_field['observed'].float()).clamp(0,1)
             prop_support=(prop_field['observed']+0.5*prop_field['forecast']).clamp(0,1)
             # One provenance identifier per node, not one ID for a composite region case.
             # Propagation can only join source/target histories of identical windows.
             region_prov=region_idx[:,region_for_node,:].permute(0,2,1)
             provenance=torch.cat([idx[:,:,None].expand(B,G,N),region_prov],1)
-            prop_delta=self.propagation.transfer(xs,futures,P,query_x=x,query_mask=mask,
-                                                   provenance=provenance)
-            prop_delta=torch.where(future_valid,torch.nan_to_num(prop_delta),torch.zeros_like(prop_delta))
+            if not self.v3_enabled:
+                prop_delta=self.propagation.transfer(xs,futures,P,query_x=x,query_mask=mask,
+                                                       provenance=provenance)
+                prop_delta=torch.where(future_valid,torch.nan_to_num(prop_delta),torch.zeros_like(prop_delta))
             if mode=='no_prop_support':
                 prop_field={key:(torch.ones_like(val) if key!='uncertainty' else torch.zeros_like(val))
                             for key,val in prop_field.items()}
@@ -273,11 +292,48 @@ class PCFTSTLA(nn.Module):
         if mode=='no_risk':risk_prob=torch.ones_like(risk_prob)
         ungated=self.max_delta*torch.tanh(evidence/self.max_delta)
         correction=risk_prob*ungated
-        action=None
-        if prop_on and prop_delta is not None:
-            prop_evidence=(weights[:,:C]*prop_delta).sum(1)
-            action=self.action_controller(base, evidence, prop_evidence, prop_field, mode=mode,
-                                          risk_prior=risk_logit)
+        action=None;prop_available=None;coherent=None
+        if self.v3_enabled and self.v3_level in ('M0','M1'):
+            # Crucial attribution control: M0/M1 and M2 use the SAME learned
+            # v2 action controller. Only the propagation evidence is removed;
+            # do not accidentally compare different controllers as C2.
+            prop_field=self.propagation.support_field(mask,P,query_x=x,
+                base_forecast=base.detach())
+            prop_support=(prop_field['observed']+.5*prop_field['forecast']).clamp(0,1)
+            action=self.action_controller(base,evidence,torch.zeros_like(evidence),
+                 prop_field,mode='legacy_only',risk_prior=risk_logit)
+            correction=action['correction']
+            risk_prob=(1-action['action_weights'][...,2]).clamp(1e-5,1-1e-5)
+            risk_logit=torch.logit(risk_prob)
+        if prop_on and mode!='no_future' and (prop_delta is not None or (self.v3_enabled and self.v3_level in ('M2','M3'))):
+            if self.v3_enabled and self.v3_level in ('M2','M3'):
+                # Wrong-evidence controls must perturb *both* the Legacy
+                # correction and the new coherent propagation episodes.
+                gp_future,rg_future=gf,rf
+                if mode in ('shuffled','random_future'):
+                    gp_future=gf.roll(1,dims=1)
+                    rg_future=rf.roll(1,dims=2)
+                if mode=='cross_history':
+                    from .wrong_evidence import legal_wrong_indices
+                    widx=legal_wrong_indices(batch['window_start'],G+R*K,repo.starts,
+                                              self.H+self.P,x.device)
+                    wf=repo.fetch_future(widx,x.device)
+                    gp_future=wf[:,:G]
+                    rg_future=wf[:,G:].reshape(B,R,K,P,N)
+                coherent=self.v3_episode(self.propagation,gx,gp_future,rx,rg_future,x,mask,
+                    weights[:,:C],region_for_node,region_idx,prop_field,mode=mode)
+                prop_evidence=coherent['propagation_correction']
+                prop_available=coherent['propagation_availability']
+                if self.v3_level=='M3':
+                    action=self.v3_action(base,evidence,prop_evidence,prop_field,
+                        availability=prop_available,mode=mode,risk_prior=risk_logit)
+                else:
+                    action=self.action_controller(base,evidence,prop_evidence,prop_field,
+                        availability=prop_available,mode=mode,risk_prior=risk_logit)
+            else:
+                prop_evidence=(weights[:,:C]*prop_delta).sum(1)
+                action=self.action_controller(base,evidence,prop_evidence,prop_field,mode=mode,
+                                              risk_prior=risk_logit)
             correction=action['correction']
             risk_prob=(1-action['action_weights'][...,2]).clamp(1e-5,1-1e-5)
             risk_logit=torch.logit(risk_prob)
@@ -295,6 +351,13 @@ class PCFTSTLA(nn.Module):
                 'candidate_expected_gain':prop_utility,
                 'propagation_support':prop_support, 'propagation_beta':prop_beta,
                 'propagation_support_field':prop_field,
+                'propagation_available':prop_available,
+                'support_anchor_scale':anchor_scale,
+                'episode_count':coherent['episode_count'] if coherent is not None else None,
+                'raw_coherent_propagation':coherent['raw_propagation'] if coherent is not None else None,
+                'v3_contribution':self.v3_level if self.v3_enabled else None,
+                'action_logits':action['action_logits'] if action is not None else None,
+                'action_expected_harm':action.get('action_expected_harm') if action is not None else None,
                 'action_weights': action['action_weights'] if action is not None else None,
                 'action_expected_gain':action['action_expected_gain'] if action is not None else None,
                 'legacy_action':action['legacy_correction'] if action is not None else None,

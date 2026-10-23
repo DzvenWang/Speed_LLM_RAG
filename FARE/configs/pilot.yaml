@@ -1,4 +1,4 @@
-version: 5.0.1
+version: 6.0.0
 experiment:
   dataset: TraffiDent_Net_06
   target: speed
@@ -81,3 +81,14 @@ analysis:
   counterfactual_split: s40
   max_counterfactual_queries: 64
   bootstrap_samples: 300
+innovation_audit:
+  required: true
+  stage_enabled: true
+  stage_queries: 4
+  validation_queries: 8
+  candidate_queries: 4
+  candidate_nodes: 4
+  candidate_slots: 2
+  bootstrap_samples: 100
+  seed: 10
+  require_independent_retraining_for_publication: true

@@ -82,10 +82,16 @@ def run(cfg,device,run_dir=None,backbone_file=None,memory_file=None,oos_forecast
         train=True,eval_only=False,analysis=True):
     seed_everything(cfg['experiment']['seed']);run_dir=create_run_dir(cfg,run_dir)
     if resume is not None:resume=project_path(resume,must_exist=True)
+    if train and resume is None and any((run_dir / name).exists() for name in ('best.pt', 'last.pt', 'training_complete.json')):
+        raise FileExistsError(f'Fresh FARE training cannot reuse an existing checkpoint run directory: {run_dir}')
     run_dir.mkdir(parents=True,exist_ok=True)
     model,memory,train_ds,val_ds,device,meta=prepare(cfg,device,backbone_file,memory_file,True,project_path(oos_forecast_file,must_exist=True) if oos_forecast_file else None,
                                                          cuda_safety=train)
-    dump_json(run_dir/'manifest.json',{'config':cfg,'metadata':meta,'run_dir':str(run_dir),'version':'5.0.3'})
+    dump_json(run_dir/'manifest.json',{'config':cfg,'metadata':meta,'run_dir':str(run_dir),'version':'6.0.0',
+        'initialization':{'fare':'fresh_random_seeded' if resume is None else 'explicit_v6_resume',
+                          'backbone':'frozen_pretrained_STLAformer',
+                          'historical_evidence':'prebuilt_chronological_OOF',
+                          'previous_fare_weights_reused':False if resume is None else None}})
     if train:
         best=fit(model,memory,train_ds,val_ds,device,cfg,run_dir,meta,resume)
     else:best=project_path(resume,must_exist=True) if resume else run_dir/'best.pt'
@@ -93,6 +99,10 @@ def run(cfg,device,run_dir=None,backbone_file=None,memory_file=None,oos_forecast
     if ck['metadata']['backbone_sha256']!=meta['backbone_sha256'] or ck['metadata']['memory_sha256']!=meta['memory_sha256']:
         raise RuntimeError('Backbone / Memory provenance differs from best checkpoint')
     model.load_state_dict(ck['state_dict'],strict=True)
+    # Required validation-only Innovation Audit. Test cannot be used to tune gates.
+    if cfg.get('innovation_audit',{}).get('required',True):
+        from .innovation_audit import audit
+        audit(model,memory,val_ds,device,cfg,run_dir/'innovation_audit')
     if cfg['evaluation']['auto_evaluate'] or eval_only:
         datasets=post_training_datasets(cfg,val_ds)
         print('FARE_POST_TRAINING_SPLITS '+json.dumps(list(datasets)),flush=True)
@@ -116,5 +126,5 @@ def run(cfg,device,run_dir=None,backbone_file=None,memory_file=None,oos_forecast
         if analysis and cfg['analysis']['enabled']:
             analyze(model,memory,datasets,device,cfg,run_dir/'analysis')
     dump_json(run_dir/'pipeline_complete.json',{'best_checkpoint':str(best),'finished':time.strftime('%Y-%m-%dT%H:%M:%S')})
-    print('FARE_V5_PIPELINE_COMPLETE',flush=True)
+    print('FARE_V6_PIPELINE_COMPLETE',flush=True)
     return run_dir

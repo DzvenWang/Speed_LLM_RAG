@@ -31,6 +31,47 @@ class HierarchicalRetriever(nn.Module):
         top=cat.topk(min(k,cat.shape[-1]),dim=-1)
         return top.values,idx.gather(-1,top.indices)
 
+
+    def score_teacher_candidates(self,x,mask,support,memory,candidate_ids):
+        """Differentiable scoring of fixed, legally checked candidate IDs.
+
+        Discrete discovery is NOT differentiated. This loss updates the actual
+        state/capability query maps and node matcher used by online recall.
+        """
+        from .memory import _episode_key
+        ids=candidate_ids.long();b,n,k=ids.shape
+        state=_episode_key(x,mask)
+        context=support['embedding'].mean(2)
+        state=state+self.gain.tanh()*self.state_query(context).tanh()
+        cap=F.normalize(self.cap_query(context).float(),dim=-1,eps=1e-6)
+        node_key=memory.fetch_node_keys(ids,x.device,'node_key_cpu')
+        cap_key=memory.fetch_node_keys(ids,x.device,'capability_cpu')
+        state_dist=-(state[:,:,None,:]-node_key).square().mean(-1)
+        compatibility=(cap[:,:,None,:]*F.normalize(cap_key.float(),dim=-1,eps=1e-6)).sum(-1)
+        cc=context[:,:,None,:].expand(b,n,k,-1)
+        features=torch.cat([cc,node_key,cap_key,(state[:,:,None,:]-node_key).abs()],-1)
+        return state_dist+.2*compatibility+.3*self.matcher(features).squeeze(-1)
+
+
+    def score_teacher_candidates_subset(self,x,mask,support,memory,candidate_ids,node_indices):
+        from .memory import _episode_key
+        nodes=node_indices.long().to(x.device)
+        ids=candidate_ids.long()
+        b,n,k=ids.shape
+        state=_episode_key(x,mask).index_select(1,nodes)
+        context=support['embedding'].mean(2)
+        state=state+self.gain.tanh()*self.state_query(context).tanh()
+        cap=F.normalize(self.cap_query(context).float(),dim=-1,eps=1e-6)
+        index=ids.detach().cpu().clamp(0,memory.m-1)
+        node_index=nodes.detach().cpu()[None,:,None]
+        node_key=memory.node_key_cpu[index,node_index].to(x.device)
+        cap_key=memory.capability_cpu[index,node_index].to(x.device)
+        state_dist=-(state[:,:,None,:]-node_key).square().mean(-1)
+        compat=(cap[:,:,None,:]*F.normalize(cap_key.float(),dim=-1,eps=1e-6)).sum(-1)
+        cc=context[:,:,None,:].expand(b,n,k,-1)
+        feat=torch.cat([cc,node_key,cap_key,(state[:,:,None,:]-node_key).abs()],-1)
+        return state_dist+.2*compat+.3*self.matcher(feat).squeeze(-1)
+
     def forward(self,x,mask,support,origin,memory,graph,purge=0,intervention=None):
         b,h,n=x.shape;device=x.device
         query=_episode_key(x,mask)

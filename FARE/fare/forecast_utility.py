@@ -98,7 +98,7 @@ class ConditionalSetSelector(nn.Module):
         self.null=nn.Sequential(nn.Linear(d+3,d),nn.GELU(),nn.Linear(d,1))
         nn.init.constant_(self.null[-1].bias,-1.0)
         self.redundancy=nn.Parameter(torch.tensor(.1))
-    def forward(self,short,proposal,support,rank,forced_positions=None,force_nonnull=False):
+    def forward(self,short,proposal,support,rank,forced_positions=None,force_nonnull=False,global_selection=False):
         values,avail=_evidence_tensor(proposal)
         b,n,k,t,p=values.shape
         available=rank['valid']
@@ -107,7 +107,7 @@ class ConditionalSetSelector(nn.Module):
             chosen=forced_positions.long().to(scores.device)
             if chosen.ndim==2:chosen=chosen[...,None]
         else:
-            aggregate=scores.mean(-1)
+            aggregate=scores.mean(-1) if global_selection else scores.max(-1).values
             # Greedy diversity-aware set selection; estimated overlap uses the ordered vectors.
             selected=[];active=torch.zeros_like(available)
             normalized=F.normalize(values.flatten(-2),dim=-1,eps=1e-6)
@@ -133,7 +133,7 @@ class ConditionalSetSelector(nn.Module):
         null_feature=torch.cat([support['embedding'].float(),demand[...,None],
                                 mean_score[...,None],support['forecast_deficit'][...,None]],-1)
         null_logit=self.null(null_feature).squeeze(-1)
-        if force_nonnull:null_logit=null_logit-6
+        if force_nonnull:null_logit=torch.full_like(null_logit,-1e7)
         # Softmax over candidate actions and NULL for each horizon; invalid candidates have zero mass.
         prob=torch.cat([sc/self.temperature,null_logit[:,:,None,:]/self.temperature],2)
         prob=prob.masked_fill(~torch.cat([valid_h,
@@ -148,30 +148,63 @@ class ConditionalSetSelector(nn.Module):
         return {'selected_positions':chosen,'selected_ids':short['ids'].gather(2,chosen),
                 'selected_values':z,'selected_valid':good,'weights':w,'null':null_mass,
                 'correction':correction,'predicted_gain':(rank['gain'].gather(2,chosen[...,None].expand(-1,-1,-1,p)) *candidate_mass).sum(2),
-                'rank':rank,'selected_mass':candidate_mass}
+                'rank':rank,'selected_mass':candidate_mass,
+                'predicted_harm':(rank['harm_logits'].gather(2,chosen[...,None].expand(-1,-1,-1,p)).sigmoid()*candidate_mass).sum(2),
+                'predicted_sigma':(rank['sigma'].gather(2,chosen[...,None].expand(-1,-1,-1,p))*candidate_mass).sum(2)}
 
 
-def utility_loss(pred,labels,valid,temperature=.1,margin=.02):
-    """Mask-safe gain regression + per-query listwise/pairwise + harm classification."""
-    good=valid.bool() & pred['valid'][...,None]
-    if not good.any():return pred['gain'].sum()*0
-    gain=pred['gain'].float();target=labels.float()
-    regression=F.smooth_l1_loss(gain[good],target[good])
-    harm=F.binary_cross_entropy_with_logits(pred['harm_logits'][good],(target[good]<-margin).float())
-    # Robust heteroscedastic calibration: high uncertainty must be earned,
-    # not used as an unsupervised score penalty.
-    sigma=pred['sigma'][good].float().clamp_min(1e-3)
-    uncertainty=.5*((gain[good]-target[good]).square()/sigma.square()+2*sigma.log()).mean()
-    score=pred['score'].float()
-    teach=target.masked_fill(~good,-1e6).softmax(2)
-    student=score.masked_fill(~good,-1e6).log_softmax(2)
+def candidate_ranking_loss(scores, gains, valid, margin=.02, temperature=.25):
+    """Pairwise train-only counterfactual utility supervision for coarse recall.
+
+    `scores`: [B,N,K]; `gains`/`valid`: [B,N,K,H].  Only
+    candidates with measured labels are compared; missing is not negative.
+    """
+    confidence=valid.float().sum(-1)
+    expected=(gains.float()*valid.float()).sum(-1)/confidence.clamp_min(1)
+    eligible=confidence>0
+    delta=expected.unsqueeze(-1)-expected.unsqueeze(-2)
+    comparisons=eligible.unsqueeze(-1)&eligible.unsqueeze(-2)&(delta>margin)
+    if not comparisons.any():return scores.sum()*0
+    differences=scores.float().unsqueeze(-1)-scores.float().unsqueeze(-2)
+    return F.softplus(-differences[comparisons]/temperature).mean()
+
+
+def utility_loss(pred,labels,valid,temperature=.25,margin=.02,return_parts=False):
+    """Stable, masked horizon gain/harm/ranking training.
+
+    Heteroscedastic calibration uses FP32 robust Student-t loss with bounded
+    sigma; the old 1/(1e-3)^2 amplification is deliberately removed.
+    """
+    good=valid.bool()&pred['valid'][...,None]
+    zero=pred['gain'].float().sum()*0
+    if not good.any():
+        return (zero,{'regression':zero,'uncertainty':zero,'harm':zero,
+                      'listwise':zero,'pairwise':zero}) if return_parts else zero
+    gain=pred['gain'].float(); target=labels.float()
+    residual=(gain-target).float()
+    regression=F.smooth_l1_loss(gain[good],target[good],beta=.1)
+    harm=F.binary_cross_entropy_with_logits(pred['harm_logits'].float()[good],(target[good]<-margin).float())
+    sigma=pred['sigma'].float().clamp(min=.05,max=10.)
+    nu=3.0
+    scaled=residual.float()/sigma
+    # log1p(x**2 / nu) avoids the unbounded inverse-variance quadratic.
+    uncertainty=(torch.log(sigma)+(.5*(nu+1))*torch.log1p(scaled.square()/nu))[good].mean()
+    # Stabilized listwise KL: only legal labeled candidates enter softmax.
     useful=good.any(2)
-    listwise=-(teach*student).sum(2)[useful].mean()
-    # Compare only utility pairs with nontrivial margins and both valid.
-    delta=target.unsqueeze(3)-target.unsqueeze(2)
-    eligible=good.unsqueeze(3)&good.unsqueeze(2)&(delta>margin)
+    if useful.any():
+        teach_logits=(target/temperature).clamp(-30,30).masked_fill(~good,-1e7)
+        score=pred['score'].float().masked_fill(~good,-1e7)
+        teach=teach_logits.softmax(2)
+        logp=score.log_softmax(2)
+        listwise=-(teach*logp).sum(2)[useful].mean()
+    else:listwise=zero
+    s=pred['score'].float(); d=target.unsqueeze(3)-target.unsqueeze(2)
+    eligible=good.unsqueeze(3)&good.unsqueeze(2)&(d>margin)
     if eligible.any():
-        diff=score.unsqueeze(3)-score.unsqueeze(2)
-        pair=F.softplus(-diff[eligible]/temperature).mean()
-    else:pair=score.sum()*0
-    return regression+.1*uncertainty+.2*harm+.1*listwise+.1*pair
+        difference=s.unsqueeze(3)-s.unsqueeze(2)
+        pair=F.softplus(-difference[eligible]/temperature).mean()
+    else:pair=zero
+    total=regression+.02*uncertainty+.2*harm+.1*listwise+.1*pair
+    parts={'regression':regression.detach(),'uncertainty':uncertainty.detach(),
+           'harm':harm.detach(),'listwise':listwise.detach(),'pairwise':pair.detach()}
+    return (total,parts) if return_parts else total

@@ -18,7 +18,7 @@ def main():
     graph=setup_graph(model,cfg,cache,force=a.force)
     repo=FullTrainRepository(cache,256 if a.smoke else None)
     index=build_memory_index(model.memory_encoder,repo,device,16 if a.smoke else int(cfg['retrieval']['store_batch_size']),propagation=model.propagation if model.propagation_enabled else None)
-    path=Path(cfg['project']['store_root'])/cfg['experiment']['dataset']/('initial_smoke_index.npz' if a.smoke else 'initial_index.npz')
+    path=Path(cfg['project']['store_root'])/cfg['experiment']['dataset']/'v3'/('initial_smoke_index.npz' if a.smoke else 'initial_index.npz')
     index.save(path,{'stage':'pretraining index only - formal model refreshes during training','rows':len(repo)})
     print(f'STORE_PASS graph={graph} index={path}',flush=True)
 if __name__=='__main__':main()

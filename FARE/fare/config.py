@@ -33,6 +33,8 @@ def read_config(path=None, dataset=None, target=None, seed=None, smoke=False):
     c.setdefault('analysis',{}).setdefault('counterfactual_split','s40')
     if not isinstance(c['evaluation']['include_val'], bool):
         raise ValueError('evaluation.include_val must be boolean')
+    if c.get('training',{}).get('initialize_from'):
+        raise ValueError('FARE v6 fresh-init policy forbids training.initialize_from; only OOF data and frozen STLAformer may be reused')
     e=c['experiment']
     if dataset:e['dataset']=dataset
     if target:e['target']=target
@@ -50,6 +52,9 @@ def read_config(path=None, dataset=None, target=None, seed=None, smoke=False):
         c['training']['stage_epochs']={k:1 for k in c['training']['stage_epochs']}
         c['teacher']['max_queries']=min(6,c['teacher']['max_queries'])
         c['analysis']['max_counterfactual_queries']=4
+        c.setdefault('innovation_audit',{})['validation_queries']=min(4,c.get('innovation_audit',{}).get('validation_queries',4))
+        c['innovation_audit']['candidate_queries']=min(2,c['innovation_audit'].get('candidate_queries',2))
+        c['innovation_audit']['candidate_nodes']=min(4,c['innovation_audit'].get('candidate_nodes',4))
     if c['retrieval']['final_k']>c['retrieval']['shortlist_k'] or c['retrieval']['shortlist_k']>c['retrieval']['coarse_k']:
         raise ValueError('Required: final_k <= shortlist_k <= coarse_k')
     return c
