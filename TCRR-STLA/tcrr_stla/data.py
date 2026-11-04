@@ -9,6 +9,7 @@ class SupportSplit(Dataset):
         def mm(name): return np.load(r/f'{split}_{name}.npy',mmap_mode='r')
         self.x_obs=mm('x_obs_norm'); self.y_norm=mm('y_norm'); self.y_raw=mm('y_raw')
         self.observed=mm('history_observed'); self.valid=mm('future_valid'); self.direct=mm('direct_mask')
+        self.original_valid=mm('artificial_missing') if (r/f'{split}_artificial_missing.npy').is_file() else None
         self.tod=mm('tod_hist'); self.dow=mm('dow_hist'); self.meta=pd.read_csv(r/f'{split}_manifest.csv')
         self.n=len(self.meta) if limit is None else min(int(limit),len(self.meta))
         self.window_starts=self.meta.window_start.to_numpy(np.int64)
@@ -31,19 +32,9 @@ class SupportSplit(Dataset):
             'tod':torch.from_numpy(np.array(self.tod[i],np.int64,copy=True)),
             'dow':torch.from_numpy(np.array(self.dow[i],np.int64,copy=True)),
             'window_start':int(self.window_starts[i]),
+            'original_valid': torch.from_numpy((np.asarray(self.observed[i],dtype=bool) | (np.asarray(self.original_valid[i],dtype=bool) if self.original_valid is not None else np.zeros_like(self.observed[i],dtype=bool))).copy()),
         }
         if self.x_full is not None:
             sample['x_full_training_only']=torch.from_numpy(np.array(self.x_full[i],np.float32,copy=True))
         return sample
 
-class RetrievalCache:
-    """New-format forecast-conditioned shortlist; incompatible with pre-v2.3 files."""
-    def __init__(self, path):
-        with np.load(path,allow_pickle=False) as z:
-            if int(z['version'])!=25:raise RuntimeError('Use TCRR v2 forecast pool cache')
-            self.selected_indices=np.asarray(z['indices'],np.int32)
-            self.selected_scores=np.asarray(z['scores'],np.float32)
-            self.selected_coverage=np.asarray(z['coverage'],np.float32)
-            if not (self.selected_indices.shape==self.selected_scores.shape==self.selected_coverage.shape):
-                raise ValueError('v2.3 shortlist arrays disagree')
-            self.candidate_count=self.selected_indices.shape[1]

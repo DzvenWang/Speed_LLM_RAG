@@ -1,0 +1,43 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=64GB
+#PBS -l walltime=08:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+set -euo pipefail
+ROOT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-}}"
+[[ -d "$ROOT/CoRSTA" ]] || { echo 'CoRSTA root not found' >&2; exit 2; }
+cd "$ROOT"
+source CoRSTA/pbs/runtime.sh
+: "${TARGET:?Set TARGET to speed or flow}"
+: "${BACKBONE_CHECKPOINT:?Set BACKBONE_CHECKPOINT to corresponding STLA best.pt}"
+DATASET="${DATASET:-TraffiDent_Net_06}"
+SEED="${SEED:-10}"
+export TRAFFIDENT_TARGET="$TARGET"
+LOG_DIR="$ROOT/CoRSTA_logs/diagnostics/D1/$TARGET/${BACKBONE_MODE:-incomplete}"
+mkdir -p "$LOG_DIR"
+LOG="$LOG_DIR/CoRSTA_D1.${TARGET}.${DATASET}.seed${SEED}.${PBS_JOBID:-local}.live.log"
+ARGS=(--target "$TARGET" --dataset "$DATASET" --seed "$SEED" \
+      --backbone-checkpoint "$BACKBONE_CHECKPOINT" \
+      --batch-initial "${BATCH_INITIAL:-64}" \
+      --grad-queries "${D1_GRAD_QUERIES:-128}" \
+      --grad-batch "${D1_GRAD_BATCH:-8}" \
+      --workers "${D1_WORKERS:-2}")
+[[ -z "${RUN_DIR:-}" ]] || ARGS+=(--run-dir "$RUN_DIR")
+[[ -z "${D1_OUTPUT_DIR:-}" ]] || ARGS+=(--output-dir "$D1_OUTPUT_DIR")
+[[ -z "${D1_MAX_SELECTION:-}" ]] || ARGS+=(--max-selection "$D1_MAX_SELECTION")
+set +e
+"$PYTHON" -u CoRSTA/diagnostics/run_d1.py "${ARGS[@]}" 2>&1 | \
+  "$PYTHON" -u CoRSTA/scripts/timestamp_filter.py | tee -a "$LOG"
+STATUS=("${PIPESTATUS[@]}")
+set -e
+for code in "${STATUS[@]}"; do
+  if [[ "$code" != 0 ]]; then
+    printf '[%s] CORSTA_D1_PBS_FAILED target=%s status=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$TARGET" "$code" | tee -a "$LOG"
+    exit "$code"
+  fi
+done
+printf '[%s] CORSTA_D1_PBS_PASS target=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$TARGET" | tee -a "$LOG"

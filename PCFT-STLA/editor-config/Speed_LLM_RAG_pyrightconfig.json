@@ -1,0 +1,9 @@
+{
+  "extraPaths": [
+    "./PCFT-STLA",
+    "./Backbone",
+    "./Base_SupportBench"
+  ],
+  "reportMissingImports": "warning",
+  "reportMissingModuleSource": "warning"
+}

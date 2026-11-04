@@ -1,4 +1,5 @@
-# Install PyTorch with the appropriate CUDA build separately (TFP environment).
 numpy
 pandas
 PyYAML
+torch
+pytest

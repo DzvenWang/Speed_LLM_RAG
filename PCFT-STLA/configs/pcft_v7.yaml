@@ -1,0 +1,59 @@
+version: '7.0.0'
+method: PCFT-STLA
+experiment:
+  dataset: TraffiDent_Net_06
+  target: speed
+  seed: 10
+  history: 12
+  horizon: 12
+  severities: [20, 40, 60, 90]
+  train_mask_mode: fixed_s40
+  train_severities: [20, 40, 60, 90]
+  train_families: [entry_random, sensor_outage, temporal_outage, regional_outage, directional_outage]
+backbone:
+  name: STLAformer
+  mode: incomplete
+  shared_adapter_checkpoint: null
+graph:
+  max_geo_km: 15.0
+  max_pm_gap_km: 15.0
+  functional_topk: 8
+  functional_shortlist: 16
+  max_train_timestamps: 8192
+  min_corr_pairs: 64
+  min_abs_corr: 0.10
+model:
+  hidden_dim: 64
+  controller_dim: 32
+  max_lag: 6
+  use_functional_context: true
+training:
+  batch_size: 32
+  amp: true
+  grad_clip: 1.0
+  weight_decay: 0.0001
+  lr_new: 0.0003
+  lr_controller: 0.0005
+  lr_backbone: 0.00002
+  joint_unfreeze_stla_layers: 0
+  joint_refresh_utility: true
+  candidate_train_fraction: 0.8
+  temporal_embargo_steps: 24
+  min_delta: 0.0001
+  stages:
+    local: {max_epochs: 12, patience: 4}
+    propagation: {max_epochs: 15, patience: 5}
+    utility: {max_epochs: 8, patience: 3}
+    joint: {max_epochs: 5, patience: 3}
+  loss:
+    masked: 0.25
+    horizon: 0.10
+    correction_regularization: 0.001
+    gain: 0.10
+    risk: 0.05
+    action: 0.10
+runtime:
+  workers: 0
+  eval_batch: 16
+  print_every: 100
+  smoke_rows: 96

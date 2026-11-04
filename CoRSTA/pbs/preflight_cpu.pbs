@@ -1,0 +1,13 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q normal
+#PBS -l ncpus=4
+#PBS -l mem=16GB
+#PBS -l walltime=00:30:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+# CPU-only STLA/CoRSTA structural preflight. No GPU allocation.
+set -euo pipefail
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
+export MKL_NUM_THREADS="${MKL_NUM_THREADS:-4}"
+exec bash "${PBS_O_WORKDIR:-$PWD}/CoRSTA/pbs/preflight_job.sh" cpu

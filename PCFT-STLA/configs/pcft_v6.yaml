@@ -1,0 +1,54 @@
+version: 5.0.3
+method: PCFT-STLA
+experiment:
+  dataset: TraffiDent_Net_06
+  target: speed
+  seed: 10
+  history: 12
+  horizon: 12
+  severities: [20, 40, 60, 90]
+backbone:
+  name: STLAformer
+  mode: incomplete
+  shared_adapter_checkpoint: null
+graph:
+  max_geo_km: 15.0
+  max_pm_gap_km: 15.0
+  functional_topk: 8
+  functional_shortlist: 16
+  max_train_timestamps: 8192
+  min_corr_pairs: 64
+  min_abs_corr: 0.10
+model:
+  hidden_dim: 64
+  max_lag: 6
+training:
+  batch_size: 32
+  auto_batch_probe: true
+  candidate_batch_sizes: [32, 64, 96, 128]
+  unfreeze_last_stla_layers: 2
+  full_encoder_on_coupled: false
+  lr_encoder: 0.00002
+  lr_new: 0.0005
+  weight_decay: 0.0001
+  grad_clip: 1.0
+  amp: true
+  initial_amp_scale: 1024
+  min_delta: 0.0001
+  crossmask_interval: 4
+  loss:
+    rmse: 0.05
+    masked: 0.10
+    evolution: 0.05
+    crossmask: 0.02
+  stages:
+    - {name: direct, max_epochs: 20, patience: 6}
+    - {name: observability, max_epochs: 15, patience: 6}
+    - {name: transport, max_epochs: 20, patience: 7}
+    - {name: coupled, max_epochs: 25, patience: 7}
+runtime:
+  workers: 0
+  eval_batch: 16
+  print_every: 100
+  smoke_rows: 8
+  max_pipeline_hours: 40.0

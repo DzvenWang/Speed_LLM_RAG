@@ -1,0 +1,12 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=00:30:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+# Optional GPU STLA/CoRSTA preflight; still separated from formal training.
+set -euo pipefail
+exec bash "${PBS_O_WORKDIR:-$PWD}/CoRSTA/pbs/preflight_job.sh" gpu

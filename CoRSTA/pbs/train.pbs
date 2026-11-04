@@ -1,0 +1,39 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=64GB
+#PBS -l walltime=24:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+set -euo pipefail
+ROOT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-}}"
+[[ -d "$ROOT/CoRSTA" ]] || { echo "CoRSTA missing under project root" >&2; exit 2; }
+cd "$ROOT"
+source CoRSTA/pbs/runtime.sh
+: "${TARGET:?speed or flow}" 
+: "${BACKBONE_CHECKPOINT:?STLA best.pt is required}"
+DATASET="${DATASET:-TraffiDent_Net_06}"
+SEED="${SEED:-10}"
+export TRAFFIDENT_TARGET="$TARGET"
+LOG_DIR="$ROOT/CoRSTA_logs/$TARGET/${BACKBONE_MODE:-incomplete}"
+mkdir -p "$LOG_DIR"
+LOG="$LOG_DIR/CoRSTA.${TARGET}.${DATASET}.seed${SEED}.${PBS_JOBID:-local}.live.log"
+ARGS=(--target "$TARGET" --dataset "$DATASET" --seed "$SEED" --backbone-checkpoint "$BACKBONE_CHECKPOINT" --stage "${CORSTA_STAGE:-all}")
+[[ -z "${RUN_DIR:-}" ]] || ARGS+=(--run-dir "$RUN_DIR")
+if [[ "${CORSTA_STAGE:-all}" == "preflight" ]]; then ARGS+=(--require-cuda); fi
+[[ -z "${BATCH_INITIAL:-}" ]] || ARGS+=(--batch-initial "$BATCH_INITIAL")
+[[ -z "${BATCH_MODE:-}" ]] || ARGS+=(--batch-mode "$BATCH_MODE")
+[[ -z "${TRAIN_WORKERS:-}" ]] || ARGS+=(--workers "$TRAIN_WORKERS")
+set +e
+"$PYTHON" -u CoRSTA/scripts/run.py "${ARGS[@]}" 2>&1 | "$PYTHON" -u CoRSTA/scripts/timestamp_filter.py | tee -a "$LOG"
+STATUS=("${PIPESTATUS[@]}")
+set -e
+for code in "${STATUS[@]}"; do
+  if [[ "$code" != 0 ]]; then
+    printf '[%s] CORSTA_PBS_FAILED status=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$code" | tee -a "$LOG"
+    exit "$code"
+  fi
+done
+printf '[%s] CORSTA_PBS_PASS\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" | tee -a "$LOG"

@@ -1,0 +1,42 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q normal
+#PBS -l ncpus=12
+#PBS -l mem=24GB
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -l walltime=02:00:00
+#PBS -j oe
+#PBS -l wd
+set -Eeuo pipefail
+cd "${PBS_O_WORKDIR:?}"
+export SPEED_LLM_RAG_ROOT="$PWD"
+# Match the successful Backbone/PCFT-v6 PBS jobs: mount both project stores.
+# Do not rely on a login-node Python check to establish compute-node visibility.
+if [[ ! -d "$PWD/Backbone" || ! -d "$PWD/Base_SupportBench" || ! -f "$PWD/PCFT-STLA/diagnostics/propagation_identifiability/scripts/run_diagnostic.py" ]]; then
+  echo "FATAL_PROJECT_STORAGE_UNAVAILABLE: project files missing on compute node; PBS storage request must include scratch/mh20+gdata/mh20" >&2
+  exit 122
+fi
+export PYTHONPATH="$PWD/Backbone:$PWD/Base_SupportBench:${PYTHONPATH:-}"
+export OMP_NUM_THREADS=6 OPENBLAS_NUM_THREADS=6 MKL_NUM_THREADS=6
+# PBS jobs do NOT inherit interactive conda activation. Never call /bin/python.
+PYTHON_BIN="${TFP_PYTHON:-/g/data/mh20/zw1165/envs/TFP/bin/python}"
+if [[ ! -x "$PYTHON_BIN" ]]; then
+  echo "FATAL_TFP_PYTHON_NOT_EXECUTABLE: $PYTHON_BIN" >&2
+  exit 120
+fi
+if [[ "$PYTHON_BIN" != /* ]]; then
+  echo "FATAL_TFP_PYTHON_NOT_ABSOLUTE: $PYTHON_BIN" >&2
+  exit 121
+fi
+export PYTHONUNBUFFERED=1
+
+: "${TARGET:?Provide TARGET=speed or TARGET=flow}"
+LOGDIR="$PWD/PCFT-STLA_logs/propagation_identifiability"
+mkdir -p "$LOGDIR"
+{
+  "$PYTHON_BIN" - <<'PY_CHECK'
+import sys,torch,numpy,pandas
+print('PYTHON_EXECUTABLE',sys.executable,flush=True)
+PY_CHECK
+  "$PYTHON_BIN" -u PCFT-STLA/diagnostics/propagation_identifiability/scripts/run_diagnostic.py --target "$TARGET" --phase stats --repo "$PWD"
+} 2>&1 | awk '{ if ($0 ~ /^\[20[0-9][0-9]-[0-9][0-9]-[0-9][T ]/) print $0; else print strftime("[%Y-%m-%d %H:%M:%S]"),$0; fflush(); }' | tee "$LOGDIR/stats.${TARGET}.${PBS_JOBID:-manual}.live.log"

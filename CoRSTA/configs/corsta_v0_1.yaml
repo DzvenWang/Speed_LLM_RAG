@@ -1,0 +1,40 @@
+version: 0.1.0
+method: CoRSTA
+experiment:
+  seed: 10
+  target: speed
+  dataset: TraffiDent_Net_06
+  severities: [20, 40, 60, 90]
+model:
+  stla_tail_layers: 2
+  token_dim: 32
+  graph_dim: 32
+  bridge_heads: 4
+  student_train_phase: partial
+  direct_residual_head: false
+  legacy_c1_init: best_c1
+training:
+  batch_mode: auto
+  batch_initial: 64
+  batch_choices: [16, 32, 64, 128]
+  batch_capacity_fraction: 0.85
+  effective_batch: 64
+  eval_batch_size: 16
+  worker_count: 4
+  amp: true
+  warmup_epochs: 5
+  joint_epochs: 20
+  patience: 5
+  lr_stla_tail: 0.000005
+  lr_stla_head: 0.00001
+  lr_mask_proj: 0.00001
+  lr_c1: 0.00005
+  lr_c2: 0.0001
+  lr_bridge: 0.0001
+  max_grad_norm: 1.0
+  c1_aux_weight: 0.1
+  base_aux_weight: 0.1
+  anchor_weight: 0.02
+  weight_decay: 0.0001
+runtime:
+  require_cuda_formal: true

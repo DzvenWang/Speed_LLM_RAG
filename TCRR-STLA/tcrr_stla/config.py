@@ -17,7 +17,7 @@ def project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 def load_config(path: str|Path|None=None) -> dict:
-    if path is None: path=Path(__file__).resolve().parents[1]/'configs'/'tcrr_stla.yaml'
+    if path is None: path=Path(__file__).resolve().parents[1]/'configs'/'tcrr_stla_v7.yaml'
     with open(path,'r',encoding='utf-8') as f: cfg=yaml.safe_load(f)
     cfg=_expand(cfg)
     root=project_root(); cfg['project']['root']=str(root)

@@ -39,6 +39,11 @@ _find_python() {
 }
 _find_root
 export SPEED_LLM_RAG_ROOT="$ROOT" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
-export PYTHONPATH="$ROOT/TCRR-STLA:$ROOT/Base_SupportBench:${PYTHONPATH:-}"
+# Avoid BLAS/OpenMP oversubscription across multiple Python DataLoader workers.
+# A caller can override these if measured throughput benefits from more threads.
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
+export MKL_NUM_THREADS="${MKL_NUM_THREADS:-1}"
+export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-1}"
+export PYTHONPATH="$ROOT/TCRR-STLA:$ROOT/Backbone:$ROOT/Base_SupportBench:${PYTHONPATH:-}"
 _find_python
 cd "$ROOT"

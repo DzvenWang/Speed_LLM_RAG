@@ -1,0 +1,26 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=00:45:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+set -euo pipefail
+ROOT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}"
+ROOT="$(cd "$ROOT" && pwd -P)"
+[[ -f "$ROOT/PCFT-STLA/scripts/run_v7.py" ]] || exit 2
+PYTHON="${TFP_ENV_ROOT:-/g/data/mh20/zw1165/envs/TFP}/bin/python"
+[[ -x "$PYTHON" ]] || exit 2
+export SPEED_LLM_RAG_ROOT="$ROOT" PYTHONUNBUFFERED=1
+export PYTHONPATH="$ROOT/PCFT-STLA:$ROOT/Backbone:$ROOT/Base_SupportBench:${PYTHONPATH:-}"
+cd "$ROOT"
+TARGET="${TARGET:-speed}";DATASET="${DATASET:-TraffiDent_Net_06}";SEED="${SEED:-10}"
+CHECKPOINT="${CHECKPOINT:-}"
+[[ -n "$CHECKPOINT" ]] || { echo 'CHECKPOINT required';exit 2; }
+[[ "$CHECKPOINT" == /* ]] || CHECKPOINT="$ROOT/$CHECKPOINT"
+[[ -f "$CHECKPOINT" ]] || exit 2
+args=(--target "$TARGET" --dataset "$DATASET" --seed "$SEED" --backbone-checkpoint "$CHECKPOINT" --gpu-smoke-only)
+[[ -z "${TRAIN_MASK_MODE:-}" ]] || args+=(--train-mask-mode "$TRAIN_MASK_MODE")
+"$PYTHON" -u PCFT-STLA/scripts/run_v7.py "${args[@]}"

@@ -130,11 +130,16 @@ PCFT-STLA_exps/
 PCFT-STLA_logs/
 PCFT-STLA_cache/
 PCFT-STLA_store/
+PCFT-STLA_diagnostics/
 
 TCRR-STLA_exps/
 TCRR-STLA_logs/
 TCRR-STLA_cache/
 
+CoRSTA_diagnostics/
+CoRSTA_exps/
+CoRSTA_logs/
+CoRSTA_preflight/
 
 model_cache/
 

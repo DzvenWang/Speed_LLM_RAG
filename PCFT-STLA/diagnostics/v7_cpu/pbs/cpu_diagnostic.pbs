@@ -1,0 +1,59 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q normal
+#PBS -l ncpus=8
+#PBS -l mem=32GB
+#PBS -l walltime=04:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+set -euo pipefail
+
+ROOT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}"
+ROOT="$(cd "$ROOT" && pwd -P)"
+[[ -f "$ROOT/PCFT-STLA/diagnostics/v7_cpu/run.py" ]] || { echo "CPU_DIAGNOSTIC_INVALID_PROJECT_ROOT $ROOT"; exit 2; }
+PYTHON="${TFP_ENV_ROOT:-/g/data/mh20/zw1165/envs/TFP}/bin/python"
+[[ -x "$PYTHON" ]] || { echo "CPU_DIAGNOSTIC_MISSING_PYTHON $PYTHON"; exit 2; }
+export SPEED_LLM_RAG_ROOT="$ROOT" CUDA_VISIBLE_DEVICES='' PYTHONUNBUFFERED=1
+export PYTHONPATH="$ROOT/PCFT-STLA:$ROOT/Backbone:$ROOT/Base_SupportBench:${PYTHONPATH:-}"
+export OMP_NUM_THREADS="${CPU_THREADS:-8}" MKL_NUM_THREADS="${CPU_THREADS:-8}" OPENBLAS_NUM_THREADS=1
+cd "$ROOT"
+TARGET="${TARGET:?TARGET=speed or flow is required}"
+[[ "$TARGET" == 'speed' || "$TARGET" == 'flow' ]] || { echo 'TARGET must be speed|flow'; exit 2; }
+DATASET="${DATASET:-TraffiDent_Net_06}"
+SEED="${SEED:-10}"
+MODE="${MODE:-behavior}"
+SPLIT="${SPLIT:-val}"
+MAX_WINDOWS="${MAX_WINDOWS:-512}"
+BATCH_SIZE="${BATCH_SIZE:-8}"
+CPU_THREADS="${CPU_THREADS:-8}"
+MAX_FRESH_AGE="${MAX_FRESH_AGE:-3}"
+
+if [[ "$TARGET" == speed ]]; then
+  RUN_DEFAULT="20261103_032842_seed10"
+  BASE_DEFAULT="20260930_215233_seed10"
+else
+  RUN_DEFAULT="20261103_033807_seed10"
+  BASE_DEFAULT="20260930_220624_seed10"
+fi
+RUN="${RUN:-$RUN_DEFAULT}"
+BASE="${BASE:-$BASE_DEFAULT}"
+CHECKPOINT="${CHECKPOINT:-PCFT-STLA_exps/$TARGET/incomplete/$DATASET/v7/formal/$RUN/joint_best.pt}"
+BACKBONE="${BACKBONE:-Backbone_exps/$TARGET/STLAformer/$DATASET/formal/$BASE/best.pt}"
+[[ "$CHECKPOINT" == /* ]] || CHECKPOINT="$ROOT/$CHECKPOINT"
+[[ "$BACKBONE" == /* ]] || BACKBONE="$ROOT/$BACKBONE"
+[[ -f "$CHECKPOINT" && -f "$BACKBONE" ]] || { echo "CPU_DIAGNOSTIC_CHECKPOINT_MISSING $CHECKPOINT $BACKBONE"; exit 2; }
+STAMP="$(date +%Y%m%d_%H%M%S)"
+RUN_ID="${JOB_RUN_ID:-${STAMP}_${PBS_JOBID:-local}}"
+OUTPUT="${OUTPUT:-PCFT-STLA_diagnostics/v7_cpu/$DATASET/$TARGET/${MODE}_${RUN_ID}}"
+LOG_DIR="PCFT-STLA_logs/$TARGET/incomplete/v7_cpu"
+mkdir -p "$LOG_DIR"
+LOG="$LOG_DIR/${MODE}_${RUN_ID}.live.log"
+args=(--target "$TARGET" --dataset "$DATASET" --checkpoint "$CHECKPOINT" --backbone-checkpoint "$BACKBONE" \
+      --split "$SPLIT" --mode "$MODE" --max-windows "$MAX_WINDOWS" --batch-size "$BATCH_SIZE" \
+      --cpu-threads "$CPU_THREADS" --seed "$SEED" --max-fresh-age "$MAX_FRESH_AGE" --output "$OUTPUT")
+[[ "$SPLIT" != test_* ]] || args+=(--allow-test)
+{
+  echo "CPU_DIAGNOSTIC_JOB_START $(date -Is) target=$TARGET mode=$MODE split=$SPLIT output=$OUTPUT"
+  "$PYTHON" -u PCFT-STLA/diagnostics/v7_cpu/run.py "${args[@]}"
+  echo "CPU_DIAGNOSTIC_JOB_FINISHED $(date -Is)"
+} 2>&1 | tee "$LOG"
