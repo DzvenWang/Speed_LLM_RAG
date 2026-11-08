@@ -1,0 +1,52 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=48:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+set -euo pipefail
+
+# This is ONE independent TCRR job that runs Speed then Flow.
+# No Smoke, retraining, or optimizer steps. The existing M3 checkpoint is frozen.
+ROOT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-$PWD}}"
+ROOT="$(cd "$ROOT" && pwd -P)"
+[[ -f "$ROOT/TCRR-STLA/pbs/runtime.sh" ]] || { echo "ERROR wrong root $ROOT"; exit 2; }
+source "$ROOT/TCRR-STLA/pbs/runtime.sh"
+export PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 BACKBONE_MODE=incomplete
+
+JOBID="${PBS_JOBID:-local}";STAMP="$(date +%Y%m%d_%H%M%S)"
+mkdir -p "TCRR-STLA_logs/diagnostics_v3"
+LOG="TCRR-STLA_logs/diagnostics_v3/TCRR.oneshot_v3.${JOBID}.${STAMP}.live.log"
+exec > >(awk '{print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush()}' | tee -a "$LOG") 2>&1
+
+echo "TCRR_V3_ONESHOT_START job=$JOBID host=$(hostname) python=$PYTHON"
+"$PYTHON" -V
+nvidia-smi || true
+BATCH="${BATCH_SIZE:-16}"
+MAXQ="${MAX_QUERIES:-0}"
+SEEDS="${SEVERITIES:-20,40,60,90}"
+IFS=',' read -r -a SEV_ARR <<< "$SEEDS"
+for TARGET in speed flow; do
+  export TRAFFIDENT_TARGET="$TARGET"
+  echo "TCRR_V3_TARGET_START target=$TARGET max_queries=$MAXQ batch=$BATCH"
+  CK_VAR="${TARGET^^}_CHECKPOINT"
+  CKPT="${!CK_VAR:-}"
+  if [[ -z "$CKPT" ]]; then
+    if [[ "$TARGET" == speed ]]; then STAMP="20261021_160134_seed10_full_M3"; else STAMP="20261021_201318_seed10_full_M3"; fi
+    CKPT="$ROOT/TCRR-STLA_exps/$TARGET/incomplete/TraffiDent_Net_06/formal/$STAMP/best.pt"
+  fi
+  [[ -f "$CKPT" ]] || { echo "ERROR M3 checkpoint missing: $CKPT"; exit 3; }
+  EXTRA=()
+  EXTRA+=(--checkpoint "$CKPT")
+  [[ "$MAXQ" == 0 ]] || EXTRA+=(--max-queries "$MAXQ")
+  if [[ "${FORCE:-0}" == 1 ]]; then EXTRA+=(--force); fi
+  "$PYTHON" -u "TCRR-STLA/scripts/oneshot_v3.py" \
+    --target "$TARGET" --batch-size "$BATCH" --severities "${SEV_ARR[@]}" "${EXTRA[@]}"
+  echo "TCRR_V3_TARGET_PASS target=$TARGET"
+done
+printf '%s\n' '{"status":"PASS","method":"TCRR","note":"per-target manifests inside experiments"}' \
+  > "TCRR-STLA_exps/TCRR_V3_ONESHOT_PBS_PASS.json"
+echo "TCRR_V3_ONESHOT_PASS job=$JOBID"

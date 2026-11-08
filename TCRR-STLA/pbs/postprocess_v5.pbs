@@ -1,0 +1,46 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=48:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+# Combined postprocessing: diagnostics on validation, then locked test.
+# A failure in diagnostics prevents test execution; pipefail catches tee failures.
+set -euo pipefail
+source "${PBS_O_WORKDIR:?}/TCRR-STLA/pbs/runtime.sh"
+: "${RUN_DIR:?Set RUN_DIR to the completed v5 formal run}"
+# Formal v5.3 runs always train C12 (50 epochs) and C3 (10 epochs).
+# Fail before expensive diagnostics if finalization was incomplete. Previously
+# missing controller checkpoints were silently skipped and POST could pass
+# with C12-only results, even though C3 was required by the formal protocol.
+for required in best_c12.pt best_controller.pt summary.json validation_partitions.json; do
+  [[ -s "$RUN_DIR/$required" ]] || { echo "V53_POST_PREFLIGHT_FAILED missing=$RUN_DIR/$required" >&2; exit 2; }
+done
+mkdir -p "$RUN_DIR/postprocess_logs"
+
+echo 'V53_POSTPROCESS_START stage=diagnostics'
+"$PYTHON" -u TCRR-STLA/scripts/auto_diagnose_v5.py \
+  --run-dir "$RUN_DIR" \
+  --batch-size "${DIAGNOSTIC_BATCH_SIZE:-8}" \
+  --negative-max-batches "${DIAGNOSTIC_MAX_BATCHES:-64}" \
+  --primary-max-batches "${DIAGNOSTIC_PRIMARY_MAX_BATCHES:-0}" \
+  2>&1 | tee "$RUN_DIR/postprocess_logs/diagnostics.live.log"
+echo V53_DIAGNOSTICS_PASS
+
+echo 'V53_POSTPROCESS_START stage=test'
+"$PYTHON" -u TCRR-STLA/scripts/evaluate_v5.py \
+  --checkpoint "$RUN_DIR/best_c12.pt" --controller-mode fixed --diagnostics \
+  2>&1 | tee "$RUN_DIR/postprocess_logs/c12_test.live.log"
+for STAGE in controller joint; do
+  [[ -f "$RUN_DIR/best_${STAGE}.pt" ]] || continue
+  "$PYTHON" -u TCRR-STLA/scripts/evaluate_v5.py \
+    --checkpoint "$RUN_DIR/best_${STAGE}.pt" \
+    --modes M000 M001 M010 M011 M100 M101 M110 M111 \
+    --controller-mode auto --diagnostics \
+    2>&1 | tee "$RUN_DIR/postprocess_logs/${STAGE}_test.live.log"
+done
+echo V53_TEST_PASS
+echo V53_POSTPROCESS_PASS

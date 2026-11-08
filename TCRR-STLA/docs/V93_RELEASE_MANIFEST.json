@@ -1,0 +1,7 @@
+{
+  "release": "9.3.0",
+  "source_files_count": 209,
+  "v93_named_files_count": 16,
+  "tests": "52 passed (v9/v92 core + legacy compatibility + new v93 integration)",
+  "formal_gadi_training": "not performed"
+}

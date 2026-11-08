@@ -38,3 +38,14 @@ class SupportSplit(Dataset):
             sample['x_full_training_only']=torch.from_numpy(np.array(self.x_full[i],np.float32,copy=True))
         return sample
 
+class RetrievalCache:
+    """New-format forecast-conditioned shortlist; incompatible with pre-v2.3 files."""
+    def __init__(self, path):
+        with np.load(path,allow_pickle=False) as z:
+            if int(z['version'])!=25:raise RuntimeError('Use TCRR v2 forecast pool cache')
+            self.selected_indices=np.asarray(z['indices'],np.int32)
+            self.selected_scores=np.asarray(z['scores'],np.float32)
+            self.selected_coverage=np.asarray(z['coverage'],np.float32)
+            if not (self.selected_indices.shape==self.selected_scores.shape==self.selected_coverage.shape):
+                raise ValueError('v2.3 shortlist arrays disagree')
+            self.candidate_count=self.selected_indices.shape[1]

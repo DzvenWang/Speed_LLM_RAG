@@ -1,0 +1,74 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=96GB
+#PBS -l walltime=48:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+set -euo pipefail
+_RUNTIME=""
+for _p in "${SPEED_LLM_RAG_ROOT:-}" "${PBS_O_WORKDIR:-}" "${PWD:-}"; do
+  [[ -n "$_p" && -d "$_p" ]] || continue
+  _p="$(cd "$_p" && pwd -P)"
+  while :; do
+    if [[ -f "$_p/TCRR-STLA/pbs/runtime.sh" ]]; then _RUNTIME="$_p/TCRR-STLA/pbs/runtime.sh";break 2;fi
+    [[ "$_p" == / ]] && break
+    _p="$(dirname "$_p")"
+  done
+done
+[[ -f "$_RUNTIME" ]] || { echo 'V92 ERROR: PBS runtime.sh missing' >&2;exit 2; }
+source "$_RUNTIME"
+TARGET="${TARGET:?TARGET=speed/flow required}"
+DATASET="${DATASET:-TraffiDent_Net_06}"
+SEED="${SEED:-10}"
+BACKBONE_CHECKPOINT="${BACKBONE_CHECKPOINT:?STLA best.pt required}"
+V92_STAGE="${V92_STAGE:-all}"
+case "$TARGET" in speed|flow) ;; *)echo 'Invalid TARGET' >&2;exit 2;;esac
+case "$V92_STAGE" in all|prepare|train|diagnose|evaluate) ;; *)echo 'Invalid V92_STAGE' >&2;exit 2;;esac
+case "$BACKBONE_CHECKPOINT" in /*) ;; *)BACKBONE_CHECKPOINT="$ROOT/$BACKBONE_CHECKPOINT";;esac
+[[ -f "$BACKBONE_CHECKPOINT" ]] || { echo "Missing backbone: $BACKBONE_CHECKPOINT" >&2;exit 2; }
+mkdir -p "TCRR-STLA_logs/$TARGET/v9_2"
+STAMP="${RUN_STAMP:-$(date +%Y%m%d_%H%M%S)}"
+LOG="TCRR-STLA_logs/$TARGET/v9_2/${TARGET}.${DATASET}.${V92_STAGE}.${PBS_JOBID:-local}.${STAMP}.live.log"
+export PYTHONUNBUFFERED=1 TRAFFIDENT_TARGET="$TARGET"
+cleanup(){ if [[ -n "${GPU_MON_PID:-}" ]];then kill "$GPU_MON_PID" 2>/dev/null || true;wait "$GPU_MON_PID" 2>/dev/null || true;fi; }
+trap cleanup EXIT
+if command -v nvidia-smi >/dev/null 2>&1;then
+ nvidia-smi --query-gpu=timestamp,index,name,utilization.gpu,memory.used,memory.total --format=csv -l 30 > "${LOG%.live.log}.gpu.csv" 2>&1 & GPU_MON_PID=$!
+fi
+logged(){ "$@" 2>&1 | awk '{print strftime("[%Y-%m-%d %H:%M:%S]"),$0;fflush();}' | tee -a "$LOG";return "${PIPESTATUS[0]}"; }
+COMMON=(--target "$TARGET" --dataset "$DATASET" --seed "$SEED" --backbone-checkpoint "$BACKBONE_CHECKPOINT")
+[[ -z "${V92_PHYSICAL_GRAPH:-}" ]] || COMMON+=(--physical-graph "$V92_PHYSICAL_GRAPH" --node-ids "${V92_NODE_IDS:?}")
+[[ -z "${V92_REGIONS:-}" ]] || COMMON+=(--regions "$V92_REGIONS")
+[[ -z "${V92_ADAPTER_CHECKPOINT:-}" ]] || COMMON+=(--adapter-checkpoint "$V92_ADAPTER_CHECKPOINT")
+[[ -z "${V92_RUN_DIR:-}" ]] || COMMON+=(--output "$V92_RUN_DIR")
+[[ -z "${V92_RESUME:-}" ]] || COMMON+=(--resume "$V92_RESUME")
+[[ "${SMOKE:-0}" != 1 ]] || COMMON+=(--smoke)
+if [[ "$V92_STAGE" == diagnose ]];then
+  [[ -n "${V92_RUN_IDENTITY:-}" ]] || { echo 'diagnose requires V92_RUN_IDENTITY' >&2;exit 2; }
+  logged "$PYTHON" -u TCRR-STLA/scripts/diagnose_v92.py --run-identity "$V92_RUN_IDENTITY" --max-queries "${V92_DIAGNOSTIC_QUERIES:-256}" --wrong-mask-queries "${V92_WRONG_MASK_QUERIES:-32}"
+elif [[ "$V92_STAGE" == evaluate ]];then
+  [[ -n "${V92_CHECKPOINT:-}" && -n "${V92_RUN_IDENTITY:-}" ]] || { echo 'evaluate requires V92_CHECKPOINT and V92_RUN_IDENTITY' >&2;exit 2; }
+  for severity in 20 40 60 90;do
+    ARGS=(--checkpoint "$V92_CHECKPOINT" --run-identity "$V92_RUN_IDENTITY" --severity "$severity" --batch-size "${EVAL_BATCH_SIZE:-16}")
+    [[ "${SMOKE:-0}" != 1 ]] || ARGS+=(--smoke)
+    logged "$PYTHON" -u TCRR-STLA/scripts/evaluate_v92.py "${ARGS[@]}"
+  done
+else
+  PF=(--target "$TARGET" --dataset "$DATASET" --backbone-checkpoint "$BACKBONE_CHECKPOINT" --require-gpu)
+  [[ -z "${V92_PHYSICAL_GRAPH:-}" ]] || PF+=(--physical-graph "$V92_PHYSICAL_GRAPH" --node-ids "${V92_NODE_IDS:?}")
+  logged "$PYTHON" -u TCRR-STLA/scripts/preflight_v92.py "${PF[@]}"
+  ARGS=("${COMMON[@]}" --stage "$V92_STAGE" --batch-size "${BATCH_SIZE:-32}" --prep-batch "${PREP_BATCH:-4}" --workers "${DATA_WORKERS:-4}" \
+    --normal-epochs "${NORMAL_EPOCHS:-12}" --align-epochs "${ALIGN_EPOCHS:-20}" --utility-epochs "${UTILITY_EPOCHS:-20}" --joint-epochs "${JOINT_EPOCHS:-12}" --paired-epochs "${PAIRED_EPOCHS:-6}")
+  [[ -z "${V92_GRAPH_MODE:-}" ]] || ARGS+=(--graph-mode "$V92_GRAPH_MODE")
+  [[ -z "${V92_ALIGNMENT_MODE:-}" ]] || ARGS+=(--alignment-mode "$V92_ALIGNMENT_MODE")
+  [[ -z "${V92_TEMPORAL_MODE:-}" ]] || ARGS+=(--temporal-mode "$V92_TEMPORAL_MODE")
+  [[ -z "${V92_NULL_MODE:-}" ]] || ARGS+=(--null-mode "$V92_NULL_MODE")
+  [[ -z "${V92_UTILITY_MODE:-}" ]] || ARGS+=(--utility-mode "$V92_UTILITY_MODE")
+  [[ "${V92_PAIRED_LOSS_OFF:-0}" != 1 ]] || ARGS+=(--paired-loss-off)
+  [[ "${V92_AUTO_DIAGNOSE:-1}" != 0 ]] || ARGS+=(--no-auto-diagnose)
+  logged "$PYTHON" -u TCRR-STLA/scripts/train_v92.py "${ARGS[@]}"
+fi
+printf 'V92_PBS_FINISH stage=%s target=%s\n' "$V92_STAGE" "$TARGET" | tee -a "$LOG"

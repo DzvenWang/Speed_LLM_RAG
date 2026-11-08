@@ -1,0 +1,34 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=64GB
+#PBS -l walltime=12:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+set -euo pipefail
+ROOT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-}}"
+cd "$ROOT"
+source CoRSTA/pbs/runtime.sh
+: "${TARGET:?}"
+: "${BACKBONE_CHECKPOINT:?}"
+: "${MASK_PROJ_CHECKPOINT:?}"
+DATASET="${DATASET:-TraffiDent_Net_06}"
+SEED="${SEED:-10}"
+FORMAL_CACHE="${FORMAL_CACHE:?Set FORMAL_CACHE to validated Backbone shared-cache path}"
+CF_GRAPH_PATH="${CF_GRAPH_PATH:-$ROOT/CoRSTA_v2_graphs/$TARGET/$DATASET/seed${SEED}/cf_graph.npz}"
+LOGDIR="$ROOT/CoRSTA_v2_logs/graph/$TARGET"
+mkdir -p "$LOGDIR"
+LOG="$LOGDIR/cf_graph.${TARGET}.${PBS_JOBID:-local}.live.log"
+set +e
+"$PYTHON" -u CoRSTA/scripts/v0_2/prepare_cf_graph.py \
+ --target "$TARGET" --dataset "$DATASET" --seed "$SEED" \
+ --backbone-checkpoint "$BACKBONE_CHECKPOINT" --mask-proj-checkpoint "$MASK_PROJ_CHECKPOINT" \
+ --formal-cache "$FORMAL_CACHE" --output "$CF_GRAPH_PATH" \
+ --windows "${CF_GRAPH_WINDOWS:-48}" --batch-size "${CF_GRAPH_BATCH:-8}" 2>&1 | \
+ "$PYTHON" -u CoRSTA/scripts/timestamp_filter.py | tee -a "$LOG"
+status=("${PIPESTATUS[@]}")
+set -e
+for code in "${status[@]}"; do [[ "$code" -eq 0 ]] || exit "$code"; done
+printf '[%s] CORSTA_V2_CF_GRAPH_PBS_PASS\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" | tee -a "$LOG"

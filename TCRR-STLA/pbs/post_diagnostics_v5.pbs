@@ -1,0 +1,21 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=96GB
+#PBS -l walltime=24:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+set -euo pipefail
+source "${PBS_O_WORKDIR:?}/TCRR-STLA/pbs/runtime.sh"
+: "${RUN_DIR:?Set RUN_DIR to the completed v5 formal run}"
+[[ -f "$RUN_DIR/best_c12.pt" ]] || { echo 'Missing best C12 checkpoint' >&2; exit 2; }
+mkdir -p "${RUN_DIR}/postprocess_logs"
+"$PYTHON" -u TCRR-STLA/scripts/auto_diagnose_v5.py \
+  --run-dir "$RUN_DIR" \
+  --batch-size "${DIAGNOSTIC_BATCH_SIZE:-8}" \
+  --negative-max-batches "${DIAGNOSTIC_MAX_BATCHES:-64}" \
+  --primary-max-batches "${DIAGNOSTIC_PRIMARY_MAX_BATCHES:-0}" \
+  2>&1 | tee "$RUN_DIR/postprocess_logs/diagnostics.live.log"
+echo V53_DIAGNOSTICS_PASS

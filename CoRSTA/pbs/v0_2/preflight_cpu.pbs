@@ -1,0 +1,30 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q normal
+#PBS -l ncpus=4
+#PBS -l mem=24GB
+#PBS -l walltime=01:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+set -euo pipefail
+ROOT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-}}"
+[[ -d "$ROOT/CoRSTA" ]] || { echo 'Missing project root'; exit 2; }
+cd "$ROOT"
+source CoRSTA/pbs/runtime.sh
+: "${TARGET:?TARGET required}"
+: "${BACKBONE_CHECKPOINT:?BACKBONE_CHECKPOINT required}"
+: "${MASK_PROJ_CHECKPOINT:?MASK_PROJ_CHECKPOINT required}"
+DATASET="${DATASET:-TraffiDent_Net_06}"
+SEED="${SEED:-10}"
+LOGDIR="$ROOT/CoRSTA_v022_logs/preflight/$TARGET/${BACKBONE_MODE:-incomplete}"
+mkdir -p "$LOGDIR"
+LOG="$LOGDIR/preflight.${TARGET}.${DATASET}.seed${SEED}.${PBS_JOBID:-local}.live.log"
+args=(--stage preflight --cpu --target "$TARGET" --dataset "$DATASET" --seed "$SEED"
+ --backbone-checkpoint "$BACKBONE_CHECKPOINT" --mask-proj-checkpoint "$MASK_PROJ_CHECKPOINT")
+[[ -z "${CORSTA_V2_CONFIG:-}" ]] || args+=(--config "$CORSTA_V2_CONFIG")
+set +e
+"$PYTHON" -u CoRSTA/scripts/v0_2/run.py "${args[@]}" 2>&1 | "$PYTHON" -u CoRSTA/scripts/timestamp_filter.py | tee -a "$LOG"
+status=("${PIPESTATUS[@]}")
+set -e
+for code in "${status[@]}"; do [[ "$code" -eq 0 ]] || exit "$code"; done
+printf '[%s] CORSTA_V2_CPU_PREFLIGHT_PBS_PASS\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" | tee -a "$LOG"

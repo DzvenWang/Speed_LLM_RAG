@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+from pathlib import Path
+import argparse,datetime,os,subprocess,sys
+ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
+from tcrr_stla.config import load_config,cache_path,resolve_stla_checkpoint
+from tcrr_stla.trainer import train
+from scripts.build_retrieval_cache import ensure_cache
+
+def main():
+    p=argparse.ArgumentParser()
+    p.add_argument('--contribution',choices=['M0','M1','M2','M3']);p.add_argument('--target',choices=['speed','flow']);p.add_argument('--seed',type=int,default=10)
+    p.add_argument('--dataset');p.add_argument('--backbone-checkpoint');p.add_argument('--config');p.add_argument('--smoke',action='store_true')
+    p.add_argument('--run-stamp');p.add_argument('--batch-size',type=int);p.add_argument('--num-workers',type=int)
+    p.add_argument('--ablation',choices=['full','no_retrieval','no_evidence','no_mask_replay','no_rerank','standard_future','shuffled','no_risk','legacy_v23','no_traffic_regime','no_traffic_retrieval','no_failure_transfer','no_utility','no_traffic_control','no_mask_matched_retrieval','no_failure_encoder','no_normal_residual','no_failure_residual','no_candidate_utility','no_mixture_utility','shuffled_cf_pairing','no_support_conditioning','no_gain_harm'])
+    p.add_argument('--resume',help='Path to last.pt from same source version and SAME contribution protocol')
+    p.add_argument('--skip-retrieval-audit',action='store_true')
+    p.add_argument('--skip-evaluate',action='store_true')
+    a=p.parse_args()
+    if a.target:os.environ['TRAFFIDENT_TARGET']=a.target
+    cfg=load_config(a.config)
+    if a.dataset:cfg['experiment']['dataset']=a.dataset
+    if a.contribution:cfg.setdefault('v3',{})['contribution']=a.contribution
+    cfg['experiment']['seed']=a.seed
+    if a.batch_size:cfg['training']['batch_size']=a.batch_size
+    if a.num_workers is not None:cfg['runtime']['num_workers']=a.num_workers
+    if a.ablation:cfg['training']['ablation']=a.ablation
+    cache=cache_path(cfg,'formal');backbone=resolve_stla_checkpoint(cfg,a.backbone_checkpoint)
+    backbone=resolve_stla_checkpoint(cfg,a.backbone_checkpoint)
+    os.environ['BACKBONE_CHECKPOINT']=str(backbone)
+    is_control=cfg['training'].get('ablation')=='no_retrieval'
+    rt=None if is_control else ensure_cache(cfg,cache,'train',smoke=a.smoke)
+    rv=None if is_control else ensure_cache(cfg,cache,'val',smoke=a.smoke)
+    stage='formal_smoke' if a.smoke else 'formal';stamp=a.run_stamp or datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    run=Path(a.resume).resolve().parent if a.resume else Path(cfg['project']['exp_root'])/cfg['experiment']['dataset']/stage/f'{stamp}_seed{a.seed}_{cfg["training"]["ablation"]+"_"+str(cfg.get("v3",{}).get("contribution","M3"))}'
+    best=train(cfg,cache,backbone,rt,rv,run,a.smoke,resume=a.resume);print(f'BEST_CHECKPOINT={best}',flush=True)
+    if not a.smoke and not a.skip_evaluate:
+        cmd=[sys.executable,'-u',str(ROOT/'scripts/evaluate.py'),'--checkpoint',str(best),
+             '--batch-size',str(cfg['runtime'].get('eval_batch_size',8)),'--num-workers','0',
+             '--severities',*[str(s) for s in cfg['experiment']['severities']]]
+        subprocess.check_call(cmd,cwd=ROOT)
+        print('AUTO_EVALUATE_PASS',best,flush=True)
+        if cfg['training'].get('ablation','full')=='full' and not a.skip_retrieval_audit:
+            subprocess.check_call([sys.executable,'-u',str(ROOT/'scripts/evaluate_retrieval.py'),
+                '--checkpoint',str(best),'--reuse','--severities',
+                *[str(s) for s in cfg['experiment']['severities']]],cwd=ROOT)
+            print('AUTO_RETRIEVAL_AUDIT_PASS',best,flush=True)
+    else:print('AUTO_EVALUATE_SKIP reason=smoke_or_cli',flush=True)
+if __name__=='__main__':main()

@@ -1,3 +1,5 @@
+> **最新无检索双主机制版本：** [CoRSTA v0.2.2 Normal-Anchored Multi-Failure CF](README_V022.md)；[历史 v0.2.1](README_V021.md)；本 README 原始内容描述 v0.1.0 Retrieval 研究线，作为历史版本保留。
+
 # CoRSTA v0.1.0
 
 **Counterfactual Retrieval-guided Spatio-Temporal Adaptation**  

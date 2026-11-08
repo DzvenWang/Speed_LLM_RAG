@@ -1,0 +1,122 @@
+version: 4.0.0
+method: TCRR-STLA
+traffic:
+  enabled: true
+  hidden: 48
+  memory_candidate_k: 16
+  mask_matched_rerank: true
+  horizon_utility: true
+  traffic_score_weight: 0.25
+  signature_chunk_size: 2048
+  graph_neighbors: 8
+
+project:
+  root: ${SPEED_LLM_RAG_ROOT}
+  backbone_root: ${SPEED_LLM_RAG_ROOT}/Backbone
+  supportbench_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench
+  exp_root: ${SPEED_LLM_RAG_ROOT}/TCRR-STLA_exps/${TRAFFIDENT_TARGET}
+  log_root: ${SPEED_LLM_RAG_ROOT}/TCRR-STLA_logs/${TRAFFIDENT_TARGET}
+  retrieval_root: ${SPEED_LLM_RAG_ROOT}/TCRR-STLA_cache/${TRAFFIDENT_TARGET}
+experiment:
+  dataset: TraffiDent_Net_06
+  target: ${TRAFFIDENT_TARGET}
+  seed: 10
+  history: 12
+  horizon: 12
+  severities: [20, 40, 60, 90]
+backbone:
+  model: STLAformer
+  checkpoint_env: TCRR_STLA_BACKBONE_CHECKPOINT
+  reference_seed: 10
+  mask_features: [observed, node_coverage, time_coverage, missing_age]
+retrieval:
+  periods: [4, 2, 1]
+  top_k: 12
+  shortlist_per_period: 4
+  final_candidates: 12
+  forecast_pool_batch_size: 16
+  history_similarity_weight: 0.55
+  replay_batch_size: 64
+  temperature: 0.10
+  coverage_gamma: 0.5
+  query_batch_size: 128
+  memory_chunk_size: 2048
+  overlap_exclusion: true
+  min_valid_features: 8
+model:
+  period_hidden: 32
+  latent_gate_dim: 8
+  fusion_hidden: 64
+  dropout: 0.10
+  none_bias: 1.0
+  latent_dim: 16
+  max_normalized_correction: 3.0
+training:
+  batch_size: 64
+  fallback_batch_sizes: [64, 48, 32, 16]
+  max_epochs: 80
+  schedule: frozen
+  ablation: full
+  patience: 20
+  warmup_epochs: 10
+  partial_epochs: 35
+  partial_last_layers: 2
+  lr_new: 0.001
+  lr_backbone: 0.00005
+  weight_decay: 0.0001
+  grad_clip: 5.0
+  forecast_loss: mae
+  rank_weight: 0.0
+  traffic_utility_weight: 0.0
+  utility_margin: 0.02
+  score_margin: 0.0
+  risk_weight: 0.0
+  utility_temperature: 0.25
+  rmse_weight: 0.05
+  retrieval_aux_weight: 0.20
+  gate_reg_weight: 0.0005
+  min_delta: 0.00000001
+runtime:
+  eval_batch_size: 8
+  num_workers: 0
+  pin_memory: true
+  persistent_workers: false
+  prefetch_factor: 2
+  preload_retrieval_memory_gpu: false
+  frozen_replay_teacher: true
+  base_cache_batch_size: 32
+  replay_bank_dtype: float32
+  replay_bank_on_gpu: false
+  normal_teacher_on_gpu: false
+  replay_query_batch_size: 12
+  gpu_monitor_interval_sec: 30
+  amp: true
+  amp_dtype: float16
+  save_each_epoch: true
+  print_every: 100
+
+# v3 TRC attribution: independently train M0, M1, M2, M3.
+v3:
+  contribution: M3
+  cf_weight: 0.02
+  ranking_weight: 0.03
+  harm_weight: 0.02
+  control_weight: 0.01
+
+# v4: a complete three-stage trainable counterfactual-transfer model.
+v4:
+  s0_epochs: 8
+  s0_lr: 0.0003
+  stages:
+    transfer: 40
+    controller: 10
+    joint: 30
+  rank_utility_weight: 0.35
+  utility_temperature: 1.0
+  label_temperature: 0.25
+  rank_weight: 0.03
+  utility_weight: 0.05
+  pair_weight: 0.005
+  control_weight: 0.03
+  tail_weight: 0.005
+  tail_fraction: 0.10

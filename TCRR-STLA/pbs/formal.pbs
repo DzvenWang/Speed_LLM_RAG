@@ -1,0 +1,112 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=32GB
+#PBS -l walltime=48:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+set -euo pipefail
+# Find runtime helper from the submission working directory (PBS scripts can be spooled).
+_RUNTIME=""
+for _dir in "${SPEED_LLM_RAG_ROOT:-}" "${PBS_O_WORKDIR:-}" "${PWD:-}"; do
+  [[ -n "$_dir" && -d "$_dir" ]] || continue
+  _dir="$(cd "$_dir" && pwd -P)"
+  while :; do
+    if [[ -f "$_dir/TCRR-STLA/pbs/runtime.sh" ]]; then
+      _RUNTIME="$_dir/TCRR-STLA/pbs/runtime.sh"; break 2
+    fi
+    [[ "$_dir" == / ]] && break
+    _dir="$(dirname "$_dir")"
+  done
+done
+[[ -n "$_RUNTIME" ]] || { echo 'ERROR: runtime.sh not found. Submit qsub from within repository tree or set SPEED_LLM_RAG_ROOT.' >&2; exit 2; }
+source "$_RUNTIME"
+
+TARGET=${TARGET:-${TRAFFIDENT_TARGET:-speed}}
+SEED=${SEED:-10}
+DATASET=${DATASET:-TraffiDent_Net_06}
+ABLATION=${ABLATION:-full}
+BACKBONE_MODE=${BACKBONE_MODE:?BACKBONE_MODE is required for dual-backbone formal jobs}
+BACKBONE_CHECKPOINT=${BACKBONE_CHECKPOINT:?BACKBONE_CHECKPOINT is required for dual-backbone formal jobs}
+case "$TARGET" in speed|flow) ;; *) echo "ERROR TARGET=$TARGET (expected speed|flow)"; exit 2;; esac
+case "$BACKBONE_MODE" in complete|incomplete) ;; *) echo "ERROR BACKBONE_MODE must be complete/incomplete"; exit 2;; esac
+[[ "$BACKBONE_CHECKPOINT" = /* ]] || BACKBONE_CHECKPOINT="$ROOT/$BACKBONE_CHECKPOINT"
+[[ -f "$BACKBONE_CHECKPOINT" ]] || { echo "ERROR missing STLA checkpoint: $BACKBONE_CHECKPOINT"; exit 2; }
+# Only permit a target-matched original Backbone/STLAformer checkpoint.
+case "$BACKBONE_CHECKPOINT" in
+  "$ROOT/Backbone_exps/$TARGET/STLAformer/$DATASET/"*) ;;
+  *) echo "ERROR: backbone checkpoint must belong to Backbone_exps/$TARGET/STLAformer/$DATASET/, not an old Mask project" >&2; exit 2;;
+esac
+# Fail fast on the common mistake of labeling the wrong STLA initialization.
+case "$BACKBONE_MODE:$BACKBONE_CHECKPOINT" in
+  complete:*/formal_complete/*|incomplete:*/formal/*) ;;
+  *) echo "ERROR checkpoint does not match BACKBONE_MODE=$BACKBONE_MODE: $BACKBONE_CHECKPOINT"; exit 2;;
+esac
+[[ "$SEED" =~ ^[0-9]+$ ]] || { echo "ERROR SEED must be a nonnegative integer"; exit 2; }
+
+
+export TRAFFIDENT_TARGET="$TARGET"
+export BACKBONE_MODE BACKBONE_CHECKPOINT
+export PYTHONUNBUFFERED=1
+export PYTHONDONTWRITEBYTECODE=1
+
+mkdir -p "TCRR-STLA_logs/$TARGET/$BACKBONE_MODE"
+STAMP=$(date +%Y%m%d_%H%M%S)
+JOBID=${PBS_JOBID:-local}
+LOG="TCRR-STLA_logs/$TARGET/$BACKBONE_MODE/TCRR-STLA.${TARGET}.${BACKBONE_MODE}.formal.seed${SEED}.${JOBID}.${STAMP}.live.log"
+
+# Prefix every line written to the main live log, including Python warnings/errors
+# and multi-line external command output. This keeps one canonical timestamp format.
+timestamp_stream() {
+  awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush(); }'
+}
+log_line() {
+  printf '%s\n' "$*" | timestamp_stream | tee -a "$LOG"
+}
+run_logged() {
+  "$@" 2>&1 | timestamp_stream | tee -a "$LOG"
+  local rc=${PIPESTATUS[0]}
+  return "$rc"
+}
+
+log_line "START model=TCRR-STLA backbone_mode=$BACKBONE_MODE checkpoint=$BACKBONE_CHECKPOINT target=$TARGET seed=$SEED job=$JOBID host=$(hostname)"
+log_line "ROOT=$ROOT PYTHON=$PYTHON"
+log_line "INIT_POLICY=backbone_only; mask_v23_full_initialization=forbidden; resume=disabled"
+log_line "OUTPUT_POLICY=isolated_project_directories"
+run_logged "$PYTHON" -V
+run_logged nvidia-smi || true
+
+# Gadi gpuvolta allocation requires 12 CPUs per V100; keep ncpus=12.
+GPU_LOG="${LOG%.live.log}.gpu.csv"
+GPU_MON_PID=""
+if command -v nvidia-smi >/dev/null 2>&1; then
+  nvidia-smi --query-gpu=timestamp,index,name,utilization.gpu,utilization.memory,memory.used,memory.total,power.draw --format=csv -l 30 > "$GPU_LOG" 2>&1 &
+  GPU_MON_PID=$!
+fi
+cleanup_gpu_monitor() {
+  if [[ -n "${GPU_MON_PID:-}" ]]; then kill "$GPU_MON_PID" 2>/dev/null || true; wait "$GPU_MON_PID" 2>/dev/null || true; fi
+}
+trap cleanup_gpu_monitor EXIT
+
+run_logged "$PYTHON" -u TCRR-STLA/scripts/preflight.py --target "$TARGET" --dataset "$DATASET" --backbone-checkpoint "$BACKBONE_CHECKPOINT"
+log_line "PERF_CONFIG project=TCRR-STLA ncpus=12"
+EXTRA_ARGS=()
+if [[ -n "${RESUME_CHECKPOINT:-}" ]]; then
+  echo 'ERROR: RESUME_CHECKPOINT is set. Fresh four-job submission must not resume an existing run.' >&2
+  exit 2
+fi
+# Never import a Mask_RAFT/Mask_RAST Full checkpoint in these independent jobs.
+if [[ -n "${V23_CHECKPOINT:-}" ]]; then
+  echo 'ERROR: V23_CHECKPOINT is set. Unset this inherited variable before submitting independent TCRR/PCFT training.' >&2
+  exit 2
+fi
+if [[ -n "${BATCH_SIZE:-}" ]]; then EXTRA_ARGS+=(--batch-size "$BATCH_SIZE"); fi
+CONTRIBUTION=${CONTRIBUTION:-M3}
+case "$CONTRIBUTION" in M0|M1|M2|M3) ;; *) echo "Invalid CONTRIBUTION=$CONTRIBUTION" >&2; exit 2;; esac
+EXTRA_ARGS+=(--contribution "$CONTRIBUTION")
+log_line "TRC_ATTRIBUTION contribution=$CONTRIBUTION frozen_backbone=true"
+run_logged "$PYTHON" -u TCRR-STLA/scripts/train.py --target "$TARGET" --seed "$SEED" --dataset "$DATASET" --ablation "$ABLATION" --run-stamp "$STAMP" --backbone-checkpoint "$BACKBONE_CHECKPOINT" "${EXTRA_ARGS[@]}"
+
+log_line "FINISH model=TCRR-STLA target=$TARGET seed=$SEED"

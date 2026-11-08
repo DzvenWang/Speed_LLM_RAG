@@ -1,0 +1,39 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=64GB
+#PBS -l walltime=24:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+set -euo pipefail
+_RUNTIME=""
+for _p in "${SPEED_LLM_RAG_ROOT:-}" "${PBS_O_WORKDIR:-}" "${PWD:-}"; do
+  [[ -n "$_p" && -d "$_p" ]] || continue
+  _p="$(cd "$_p" && pwd -P)"
+  while :; do
+    if [[ -f "$_p/TCRR-STLA/pbs/runtime.sh" ]]; then _RUNTIME="$_p/TCRR-STLA/pbs/runtime.sh";break 2;fi
+    [[ "$_p" == / ]] && break
+    _p="$(dirname "$_p")"
+  done
+done
+[[ -n "$_RUNTIME" && -f "$_RUNTIME" ]] || { echo 'Missing TCRR runtime';exit 2; }
+source "$_RUNTIME"
+TARGET="${TARGET:?TARGET is required}"
+DATASET="${DATASET:-TraffiDent_Net_06}"
+RUN_DIR="${V93_RUN_DIR:?V93_RUN_DIR is required}"
+CHECKPOINT="${V93_CHECKPOINT:?V93_CHECKPOINT is required}"
+BACKBONE="${BACKBONE_CHECKPOINT:?BACKBONE_CHECKPOINT is required}"
+ADAPTER="${V93_ADAPTER_CHECKPOINT:?V93_ADAPTER_CHECKPOINT is required}"
+LOG_DIR="TCRR-STLA_logs/$TARGET/v9_3";mkdir -p "$LOG_DIR"
+LOG="$LOG_DIR/${TARGET}.evaluation.${PBS_JOBID:-local}.$(date +%Y%m%d_%H%M%S).live.log"
+logged(){ "$@" 2>&1 | awk '{print strftime("[%Y-%m-%d %H:%M:%S]"),$0;fflush();}' | tee -a "$LOG";return "${PIPESTATUS[0]}"; }
+for sev in 20 40 60 90;do
+  logged "$PYTHON" -u TCRR-STLA/scripts/evaluate_v93.py \
+      --target "$TARGET" --dataset "$DATASET" --severity "$sev" \
+      --run-dir "$RUN_DIR" --checkpoint "$CHECKPOINT" \
+      --backbone-checkpoint "$BACKBONE" --adapter-checkpoint "$ADAPTER" \
+      --batch-size "${EVAL_BATCH_SIZE:-16}"
+done
+printf 'V93_EVALUATION_FINISHED target=%s\n' "$TARGET" | tee -a "$LOG"
