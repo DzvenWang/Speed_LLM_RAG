@@ -19,7 +19,7 @@ logs/
 *.err
 
 # Data
-data/
+/data/
 datasets/
 raw_data/
 videos/
