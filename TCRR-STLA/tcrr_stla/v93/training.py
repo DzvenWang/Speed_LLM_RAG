@@ -67,13 +67,39 @@ def make_loader(ds,batch_size,workers,shuffle,seed):
                       generator=gen,drop_last=False)
 
 
+
+def _safe_optimizer_step(opt,scaler,params,clip,stage,batch_index):
+    """Return (updated, old_scale, new_scale); AMP overflow is a skipped step.
+
+    AMP's unscale_ must already have been called for this optimizer. In FP32,
+    non-finite gradients remain fatal: no overflow recovery is appropriate.
+    """
+    finite_grads=all(p.grad is None or bool(torch.isfinite(p.grad).all()) for p in params)
+    amp_active=bool(scaler and scaler.is_enabled())
+    if not finite_grads and not amp_active:
+        raise RuntimeError(f'Non-finite gradient during {stage}, batch={batch_index} (FP32)')
+    if finite_grads:
+        nn.utils.clip_grad_norm_(params,float(clip))
+    if amp_active:
+        before=float(scaler.get_scale())
+        scaler.step(opt)
+        scaler.update()
+        after=float(scaler.get_scale())
+        updated=after>=before
+        if not finite_grads and updated:
+            raise RuntimeError('AMP saw non-finite gradients but did not back off its scale')
+        return updated,before,after
+    opt.step()
+    return True,None,None
+
 def _epoch(model,loader,stage,device,opt,scaler,conf,training,paired=False):
     model.train(training)
     # Frozen normal branch cannot drift via dropout/batchnorm or running stats.
     if stage!='residual':model.normal_query.eval();model.residual_head.eval()
     total=0.;norm=0.;base=0.;denom=0;losses=0.;steps=0;gain_positive=0.;gain_negative=0.
     start=time.perf_counter();num_grad=0
-    for raw in loader:
+    optimizer_steps=0; amp_skipped_steps=0; consecutive_amp_skips=0
+    for batch_index,raw in enumerate(loader):
         raw=to_device(raw,device)
         a=raw['a'] if paired else raw
         other=raw['b'] if paired else None
@@ -95,12 +121,23 @@ def _epoch(model,loader,stage,device,opt,scaler,conf,training,paired=False):
                     scaler.scale(loss).backward();scaler.unscale_(opt)
                 else:loss.backward()
                 params=[p for p in model.parameters() if p.requires_grad]
-                if not all(p.grad is None or torch.isfinite(p.grad).all() for p in params):
-                    raise RuntimeError(f'Non-finite gradient during {stage}')
-                num_grad+=sum(int(p.grad is not None and torch.count_nonzero(p.grad)>0) for p in params)
-                nn.utils.clip_grad_norm_(params,float(conf['training']['clip']))
-                if scaler and scaler.is_enabled():scaler.step(opt);scaler.update()
-                else:opt.step()
+                step_applied,scale_before,scale_after=_safe_optimizer_step(
+                    opt,scaler,params,conf['training']['clip'],stage,batch_index)
+                if not step_applied:
+                    amp_skipped_steps+=1;consecutive_amp_skips+=1
+                    if amp_skipped_steps<=8 or amp_skipped_steps%32==0:
+                        print('V93_AMP_OVERFLOW '+json.dumps(dict(stage=stage,
+                            batch=batch_index,scale_before=scale_before,
+                            scale_after=scale_after,consecutive=consecutive_amp_skips)),flush=True)
+                    if consecutive_amp_skips>=32:
+                        raise RuntimeError(f'Persistent AMP overflow: {stage}, batch={batch_index}, '
+                                           f'32 consecutive skipped optimizer steps; investigate input/gradients '
+                                           f'or train FP32 from a fresh run')
+                else:
+                    consecutive_amp_skips=0
+                if step_applied:
+                    optimizer_steps+=1
+                    num_grad+=sum(int(p.grad is not None and bool(torch.count_nonzero(p.grad))) for p in params)
         with torch.no_grad():
             valid=a['future_valid'].bool()
             y=a['y'].float()
@@ -116,7 +153,8 @@ def _epoch(model,loader,stage,device,opt,scaler,conf,training,paired=False):
                 base_mae_norm=base/max(denom,1),cf_gain_norm=(norm-total)/max(denom,1),
                 harm_rate=gain_negative/max(denom,1),benefit_rate=gain_positive/max(denom,1),
                 loss=losses/max(steps,1),samples=denom,seconds=time.perf_counter()-start,
-                effective_gradient_tensors=num_grad)
+                effective_gradient_tensors=num_grad,
+                optimizer_steps=optimizer_steps,amp_skipped_steps=amp_skipped_steps)
 
 
 def atomic_save(path,payload):

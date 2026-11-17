@@ -16,6 +16,22 @@ from tcrr_stla.v93.training import to_device
 from tcrr_stla.v93.teacher import atomic_json
 
 
+def valid_direct_mask(direct: torch.Tensor, future_valid: torch.Tensor) -> torch.Tensor:
+    """Intersection of direct-mask targets with valid future positions.
+
+    Some datasets store direct_mask as [B,N]. Expanding that mask to [B,H,N]
+    creates a shared-storage broadcast view, which must never be written in
+    place (e.g., `direct &= future_valid`).
+    """
+    valid = future_valid.bool()
+    direct = direct.bool()
+    if direct.ndim == 2:
+        direct = direct[:, None, :].expand_as(valid)
+    if direct.shape != valid.shape:
+        raise RuntimeError('Wrong direct mask shape')
+    return direct & valid
+
+
 def main():
     p=argparse.ArgumentParser()
     p.add_argument('--run-dir',required=True)
@@ -72,10 +88,7 @@ def main():
             pred={'base':out['base'],'normal':out['normal_prediction'],
                   'full':out['normal_prediction']+alpha*out['cf_increment']}
             y=b['y_raw'].to(device).float();fv=b['future_valid'].to(device).bool()
-            direct=b['direct_mask'].to(device).bool()
-            if direct.ndim==2:direct=direct[:,None,:].expand_as(fv)
-            if direct.shape!=fv.shape:raise RuntimeError('Wrong direct mask shape')
-            direct&=fv
+            direct=valid_direct_mask(b['direct_mask'].to(device),fv)
             errors={name:(pred[name].float()*std+mean-y) for name in metric}
             for name,e in errors.items():
                 z=metric[name]
