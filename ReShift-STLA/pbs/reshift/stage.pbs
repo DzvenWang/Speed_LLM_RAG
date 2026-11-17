@@ -1,0 +1,46 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=96GB
+#PBS -l walltime=48:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+# ReShift stage runner.  Required: TARGET, BACKBONE_CHECKPOINT.
+# Optional: STAGE (default train), RESHIFT_CONFIG, RUN_DIR, SHARED_ROOT, DATASET, SEED,
+#           BATCH_INITIAL, TRAIN_WORKERS, FORMAL_CACHE.
+set -euo pipefail
+ROOT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-}}"
+[[ -d "$ROOT/ReShift-STLA" ]] || { echo 'Missing ReShift-STLA under SPEED_LLM_RAG_ROOT'; exit 2; }
+cd "$ROOT"
+source ReShift-STLA/pbs/reshift/runtime.sh
+: "${TARGET:?TARGET required}"
+: "${BACKBONE_CHECKPOINT:?BACKBONE_CHECKPOINT required}"
+DATASET="${DATASET:-TraffiDent_Net_06}"
+SEED="${SEED:-10}"
+STAGE="${STAGE:-train}"
+RESHIFT_CONFIG="${RESHIFT_CONFIG:-$ROOT/ReShift-STLA/configs/reshift/reshift_full.yaml}"
+CFG_NAME="$(basename "$RESHIFT_CONFIG" .yaml)"
+LOGDIR="$ROOT/ReShift_logs/$TARGET/${BACKBONE_MODE:-incomplete}"
+mkdir -p "$LOGDIR"
+LOG="$LOGDIR/ReShift.${CFG_NAME}.${STAGE}.${TARGET}.${DATASET}.seed${SEED}.${PBS_JOBID:-local}.live.log"
+args=(--stage "$STAGE" --target "$TARGET" --dataset "$DATASET" --seed "$SEED"
+      --backbone-checkpoint "$BACKBONE_CHECKPOINT" --config "$RESHIFT_CONFIG")
+[[ -z "${RUN_DIR:-}" ]] || args+=(--run-dir "$RUN_DIR")
+[[ -z "${SHARED_ROOT:-}" ]] || args+=(--shared-root "$SHARED_ROOT")
+[[ -z "${FORMAL_CACHE:-}" ]] || args+=(--formal-cache "$FORMAL_CACHE")
+[[ -z "${CF_GRAPH_PATH:-}" ]] || args+=(--cf-graph-path "$CF_GRAPH_PATH")
+[[ -z "${BATCH_INITIAL:-}" ]] || args+=(--batch-initial "$BATCH_INITIAL")
+[[ -z "${TRAIN_WORKERS:-}" ]] || args+=(--workers "$TRAIN_WORKERS")
+set +e
+"$PYTHON" -u ReShift-STLA/scripts/reshift/run.py "${args[@]}" 2>&1 | "$PYTHON" -u ReShift-STLA/scripts/timestamp_filter.py | tee -a "$LOG"
+status=("${PIPESTATUS[@]}")
+set -e
+for code in "${status[@]}"; do
+  if [[ "$code" -ne 0 ]]; then
+    printf '[%s] RESHIFT_PBS_FAILED code=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$code" | tee -a "$LOG"
+    exit "$code"
+  fi
+done
+printf '[%s] RESHIFT_PBS_PASS\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" | tee -a "$LOG"
