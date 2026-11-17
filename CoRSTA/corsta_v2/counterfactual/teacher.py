@@ -9,6 +9,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 from corsta_v2.stla.backbone import base_features
+from corsta_v2.counterfactual.dose import nested_restore_masks
 
 
 class PairedTeacher(nn.Module):
@@ -17,6 +18,9 @@ class PairedTeacher(nn.Module):
         self.stla = frozen_stla
         self.stla.requires_grad_(False)
         self.stla.eval()
+        # Partial-restoration rungs (all < 1.0) for the Counterfactual Dose
+        # Ladder.  Empty means: no dose targets are produced (v0.2.2 behaviour).
+        self.dose_levels = ()
 
     def train(self, mode=True):
         super().train(False)
@@ -83,7 +87,25 @@ class PairedTeacher(nn.Module):
                 f'pf_dtype={pf.dtype} pm_dtype={pm.dtype}'
             )
 
-        return {
+        dose_p = None
+        if self.dose_levels:
+            # TRAIN-only: restore a nested random fraction d of the missing but
+            # originally observed entries and forecast with the same frozen
+            # weights.  P_full above is the d=1 rung, P0 the d=0 rung.
+            rungs = nested_restore_masks(batch['mask'], batch['original_valid'],
+                                         self.dose_levels)
+            x_full = batch['x_full']
+            forecasts = []
+            for j in range(rungs.shape[1]):
+                mj = rungs[:, j]
+                xj = torch.where(mj.bool(), x_full, torch.zeros_like(x_full))
+                _, _, pj = base_features(self.stla, xj, mj, batch['tod'], batch['dow'])
+                forecasts.append(pj.float())
+            dose_p = torch.stack(forecasts, dim=1)
+            if not torch.isfinite(dose_p).all():
+                raise RuntimeError('PairedTeacher non-finite dose-rung forecast')
+
+        result = {
             'p_full': pf.detach(),
             'p_masked': pm.detach(),
             'cf_target': cf.detach(),
@@ -91,3 +113,6 @@ class PairedTeacher(nn.Module):
             'latent_cf_target': (hf - hm).detach(),
             'cf_utility': ((pm - y).abs() - (pf - y).abs()).detach(),
         }
+        if dose_p is not None:
+            result['dose_p'] = dose_p.detach()  # [B, D, P, N], rungs d < 1
+        return result

@@ -233,6 +233,11 @@ def train_stage(model,train_ds,val_ds,sel_indices,device,cfg,mean,std,outdir,ide
                                   else (has_graph and stage in ('joint','control'))))
     model.to(device)
     teacher=PairedTeacher(model.stla).to(device)
+    if stage=='anchor_cf' and getattr(model,'dose_enabled',False):
+        # Counterfactual Dose Ladder: partial-restoration teacher rungs (d<1).
+        teacher.dose_levels=tuple(model.cf.dose_levels[:-1])
+        log('CORSTA_V023_DOSE_LADDER teacher_rungs='+json.dumps(list(teacher.dose_levels))
+            +' student_grid='+json.dumps(list(model.cf.dose_levels)))
     normal_partition=(normal_calibration_partition(train_ds,cfg)
                       if stage=='normal' else None)
     if stage=='normal' and normal_partition is None:

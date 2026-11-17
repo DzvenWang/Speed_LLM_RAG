@@ -24,7 +24,8 @@ class CrossTime(nn.Module):
 
 
 class CFBranch(nn.Module):
-    def __init__(self,hidden=64,failure=16,dim=32,horizon=12,heads=4,shift_scale=.35):
+    def __init__(self,hidden=64,failure=16,dim=32,horizon=12,heads=4,shift_scale=.35,
+                 dose_levels=(),consistency_dim=0):
         super().__init__()
         self.horizon=horizon;self.shift_scale=float(shift_scale)
         self.pos=nn.Embedding(horizon,dim)
@@ -55,6 +56,38 @@ class CFBranch(nn.Module):
         self.anchor_acceptance_head=nn.Sequential(nn.Linear(dim+4,dim),nn.GELU(),nn.Linear(dim,1))
         nn.init.zeros_(self.anchor_acceptance_head[-1].weight)
         nn.init.constant_(self.anchor_acceptance_head[-1].bias,6.0)
+
+        # ---- Counterfactual Dose Ladder (v0.2.3); absent unless dose_levels given.
+        self.dose_levels=tuple(float(v) for v in dose_levels)
+        self.consistency_dim=int(consistency_dim)
+        if self.dose_levels:
+            self.register_buffer('dose_grid',torch.tensor(self.dose_levels,dtype=torch.float32),
+                                 persistent=False)
+            # gamma = exp(head) in [0.25, 4.05]; zero init => linear dose response.
+            self.dose_head=nn.Linear(dim,1)
+            nn.init.zeros_(self.dose_head.weight);nn.init.zeros_(self.dose_head.bias)
+            # Predicts the REAL gain over the Normal anchor of applying dose d.
+            self.dose_policy=nn.Sequential(nn.Linear(dim+4+self.consistency_dim,dim),
+                                           nn.GELU(),nn.Linear(dim,1))
+            nn.init.zeros_(self.dose_policy[-1].weight);nn.init.zeros_(self.dose_policy[-1].bias)
+
+    def dose_gamma(self,tokens):
+        return torch.exp(self.dose_head(tokens).squeeze(-1).float().clamp(-1.4,1.4))
+
+    def dose_gain(self,tokens,delta,p_normal,psi,consistency=None):
+        """Predicted gain per dose, [B,D,P,N]. Inference-time inputs only."""
+        B,D,P,N=psi.shape
+        tok=tokens.float()[:,None].expand(B,D,P,N,tokens.shape[-1])
+        level=self.dose_grid.to(psi.dtype).view(1,D,1,1,1).expand(B,D,P,N,1)
+        delta=delta.float()
+        numeric=[level,(psi.float()*delta[:,None])[...,None],
+                 p_normal.float()[:,None,...,None].expand(B,D,P,N,1),
+                 delta.abs()[:,None,...,None].expand(B,D,P,N,1)]
+        if self.consistency_dim:
+            if consistency is None:
+                consistency=delta.new_zeros((B,P,N,self.consistency_dim))
+            numeric.append(consistency.float()[:,None].expand(B,D,P,N,self.consistency_dim))
+        return self.dose_policy(torch.cat([tok]+numeric,dim=-1)).squeeze(-1)
 
     def anchor_action(self,cf,p_normal,p_candidate):
         delta=p_candidate-p_normal

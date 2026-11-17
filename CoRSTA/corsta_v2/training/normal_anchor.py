@@ -27,6 +27,40 @@ def actual_anchor_gain(p_normal,p_candidate,y):
     return (p_normal.detach().float()-y.float()).abs()-(p_candidate.detach().float()-y.float()).abs()
 
 
+def _dose_gain_loss(out,y,valid,scale):
+    """Dose-policy regression onto the REAL gain over the Normal anchor.
+
+    For every rung d the candidate is P_N + psi_d * Delta_CF (both detached);
+    the label is |P_N-Y| - |candidate_d-Y|, measured against the true future.
+    TRAIN/selection only; the policy sees inference-time inputs.
+    """
+    psi=out['dose_psi'].detach().float()
+    delta=out['delta_cf_candidate'].detach().float()[:,None]
+    normal=out['normal_prediction'].detach().float()[:,None]
+    yy=y.float()[:,None]
+    actual=(normal-yy).abs()-(normal+psi*delta-yy).abs()
+    weights=valid[:,None].expand_as(actual)
+    predicted=out['dose_gain_pred'].float()
+    loss=masked_mean(F.smooth_l1_loss(predicted/scale,actual/scale,reduction='none'),weights)
+    return loss,actual
+
+
+def dose_response_loss(out,dose_p,valid):
+    """Teacher dose ladder: psi_d * Delta_CF should match P_d - P0 for d<1.
+
+    dose_p [B,D',P,N] are TRAIN-only partial-restoration forecasts from the
+    identical frozen STLA.  The student grid's first D' rungs are the same
+    doses (the top rung d=1 is the existing full-counterfactual response loss).
+    """
+    n=dose_p.shape[1]
+    if out['dose_psi'].shape[1]<n+1:
+        raise RuntimeError('student dose grid must contain every teacher rung plus d=1')
+    predicted=out['dose_psi'][:,:n].float()*out['delta_cf_candidate'].float()[:,None]
+    target=dose_p.detach().float()-out['backbone'].detach().float()[:,None]
+    weights=valid[:,None].expand_as(predicted)
+    return masked_mean(F.smooth_l1_loss(predicted,target,reduction='none'),weights)
+
+
 def _anchor_single(out,y,valid,p_full,cfg,stage,std):
     c=cfg['training'];P=out['backbone'].float()
     # Stage N: the teacher-forced forecast uses oracle CF only as TRAIN loss.
@@ -60,6 +94,16 @@ def _anchor_single(out,y,valid,p_full,cfg,stage,std):
                    anchor_candidate_actual_gain=masked_mean(actual,valid).detach(),
                    anchor_applied_gain=masked_mean((out['normal_prediction'].detach()-y).abs()-
                                    (out['prediction'].detach()-y).abs(),valid).detach())
+    if out.get('dose_gain_pred') is not None:
+        scale=float(c.get('dose_gain_scale',0.1))
+        if scale<=0:raise ValueError('dose_gain_scale must be positive')
+        dose_loss,actual_d=_dose_gain_loss(out,y,valid,scale)
+        loss=loss+float(c.get('dose_gain_weight',0.05))*dose_loss
+        details.update(dose_gain=dose_loss.detach(),
+                       dose_full_actual_gain=masked_mean(actual_d[:,-1],valid).detach())
+        if out.get('dose_selected_level') is not None:
+            details['dose_applied_level']=masked_mean(
+                out['dose_selected_level'].detach().float(),valid)
     if stage=='anchor_cf':
         # Candidate response is referenced to P0, not P_N.  P_N is frozen.
         cf_loss=_regression(delta,response,valid)
@@ -90,6 +134,12 @@ def normal_anchor_loss(out,b,targets,stage,mean,std,cfg,other_views=None):
     details={k:torch.stack([d[k].detach() for d in diagnostics]).mean()
              for k in diagnostics[0]}
     details['num_mask_views']=torch.tensor(float(len(views)),device=y.device)
+    if (stage=='anchor_cf' and targets.get('dose_p') is not None
+            and out.get('dose_psi') is not None):
+        # Mechanism B on the primary view, whose mask defines the rungs.
+        dose_resp=dose_response_loss(out,targets['dose_p'],v)
+        total=total+float(cfg['training'].get('dose_response_weight',0.04))*dose_resp
+        details['dose_response']=dose_resp.detach()
     if stage=='anchor_cf' and len(views)>1:
         # Compare fault-induced Teacher errors AND real Student candidate gains.
         t=float(cfg['training'].get('cf_error_temperature',0.35))

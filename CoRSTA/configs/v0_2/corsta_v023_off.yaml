@@ -1,0 +1,90 @@
+version: 0.2.3
+method: CoRSTA-MultiFailure-NormalAnchored-CFResidual-DoseLadder-ViewConsistency
+experiment:
+  target: speed
+  dataset: TraffiDent_Net_06
+  seed: 10
+  severities:
+  - 20
+  - 40
+  - 60
+  - 90
+  backbone_mode: incomplete
+  history: 12
+  horizon: 12
+model:
+  stla_tail_layers: 2
+  cf_dim: 32
+  residual_dim: 32
+  failure_dim: 16
+  attention_heads: 4
+  use_road_graph: true
+  use_cf_graph: false
+  road_neighbors_per_direction: 4
+  max_cf_neighbors: 8
+  latent_correction_scale: 0.35
+  use_failure_embedding: true
+  use_cf_error_gate: true
+  prediction_mode: normal_anchored
+  dose_ladder:
+    enabled: false
+  view_consistency:
+    enabled: false
+training:
+  stage_epochs:
+    normal: 10
+    anchor_cf: 20
+    anchor_control: 10
+  patience: 5
+  batch_mode: auto
+  batch_initial: 64
+  batch_choices:
+  - 16
+  - 32
+  - 64
+  - 128
+  batch_capacity_fraction: 0.83
+  effective_batch: 64
+  eval_batch_size: 32
+  worker_count: 2
+  amp: true
+  gradient_clip: 1.0
+  lr_cf: 0.0001
+  lr_residual: 0.0001
+  lr_graph: 0.0001
+  lr_controller: 0.0001
+  weight_decay: 0.0001
+  forecast_rmse_weight: 0.05
+  cf_response_weight: 0.06
+  cf_latent_weight: 0.01
+  residual_semantic_weight: 0.02
+  cf_utility_floor: 0.15
+  multimask_error_contrast: true
+  cf_error_temperature: 0.35
+  cf_error_gain_weight: 0.03
+  cf_error_rank_weight: 0.02
+  cf_contrast_response_weight: 0.025
+  cf_acceptance_weight: 0.02
+  selection_limit: 1200
+  augment_training_masks: true
+  failure_kinds:
+  - entry_random
+  - sensor
+  - temporal
+  - regional
+  - directional
+  validation_scenarios_from_val_raw: true
+  allow_partial_severity_selection: false
+  multimask_views: 4
+  normal_residual_weight: 0.1
+  normal_calibration_fraction: 0.12
+  normal_calibration_embargo: 24
+  normal_calibration_limit: 256
+  cf_anchor_gain_weight: 0.05
+  cf_anchor_rank_weight: 0.02
+  dose_response_weight: 0.04
+  dose_gain_weight: 0.05
+  dose_gain_scale: 0.1
+runtime:
+  require_cuda_formal: true
+  log_utc: true

@@ -15,6 +15,7 @@ from corsta_v2.util import atomic_json,atomic_torch,sha256,source_hash,seed_all,
 from corsta_v2.data.dataset import CoRSTASplit,resolve_shared_cache,SEVERITIES
 from corsta_v2.stla.backbone import make_stla
 from corsta_v2.model import CoRSTAv2
+from corsta_v2.mechanisms import mechanism_kwargs
 from corsta_v2.spatial.graph import build_road,add_cf_edges
 from corsta_v2.training.evaluation import evaluate,validation_partitions
 from corsta_v2.training.trainer import STAGES,stages_for,train_stage
@@ -45,8 +46,8 @@ def parser():
 
 def compose(a):
     cfg=yaml.safe_load(Path(a.config).read_text())
-    if cfg['version'] not in ('0.2.1','0.2.2'):
-        raise RuntimeError('Expected CoRSTA v0.2.1/v0.2.2 config')
+    if cfg['version'] not in ('0.2.1','0.2.2','0.2.3'):
+        raise RuntimeError('Expected CoRSTA v0.2.1/v0.2.2/v0.2.3 config')
     if a.prediction_mode is not None:cfg['model']['prediction_mode']=a.prediction_mode
     cfg['model'].setdefault('prediction_mode','cf_first')
     stages=stages_for(cfg)
@@ -106,7 +107,8 @@ def build_model(cfg,root,checkpoint,mask,cf_graph,device):
                    horizon=int(cfg['experiment']['horizon']),heads=int(cfg['model']['attention_heads']),
                    latent_scale=float(cfg['model']['latent_correction_scale']),
                    cf_error_gate=bool(cfg['model'].get('use_cf_error_gate',True)),
-                   prediction_mode=cfg['model'].get('prediction_mode','cf_first')).to(device)
+                   prediction_mode=cfg['model'].get('prediction_mode','cf_first'),
+                   **mechanism_kwargs(cfg)).to(device)
     return model,bc,physical
 
 

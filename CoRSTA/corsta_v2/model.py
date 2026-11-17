@@ -1,5 +1,14 @@
 """CoRSTA v0.2: exactly CF and Forecast Residual are prediction mechanisms.
 No retrieval, no query futures, no full-view history anywhere in forward().
+
+v0.2.3 (normal_anchored only) adds two OPTIONAL deployment mechanisms that sit
+on top of the CF shift and are off unless configured:
+  B  Counterfactual Dose Ladder: monotone dose-response psi_d=d**gamma over the
+     CF shift plus a dose policy picking, per forecast element, the dose with the
+     largest predicted real gain (or no correction).
+  A  View-consistency reliability: extra views drop further observed entries;
+     cross-view agreement of corrected vs uncorrected forecasts is a label-free
+     reliability feature for the dose policy.
 """
 from __future__ import annotations
 import torch
@@ -10,12 +19,28 @@ from corsta_v2.residual.branch import ResidualBranch
 from corsta_v2.spatial.graph import GraphEvidence
 from corsta_v2.control.controller import ResidualBenefitController
 from corsta_v2.stla.backbone import base_features,decode
+from corsta_v2.counterfactual.dose import (CONSISTENCY_DIM,validate_levels,dose_psi,
+                                           consistency_features,select_dose)
 
 
 class CoRSTAv2(nn.Module):
     def __init__(self,stla,graph,hidden=64,failure_dim=16,cf_dim=32,residual_dim=32,
-                 horizon=12,heads=4,latent_scale=.35,cf_error_gate=True,prediction_mode='cf_first'):
+                 horizon=12,heads=4,latent_scale=.35,cf_error_gate=True,prediction_mode='cf_first',
+                 dose_levels=(),dose_margin=0.0,dose_temperature=0.01,
+                 consistency_views=0,consistency_drop=0.2,consistency_seed=10):
         super().__init__()
+        dose_levels=validate_levels(dose_levels) if len(tuple(dose_levels)) else ()
+        if (dose_levels or int(consistency_views)>0) and prediction_mode!='normal_anchored':
+            raise ValueError('Dose ladder / view consistency require prediction_mode=normal_anchored')
+        if int(consistency_views)<0 or not 0.0<=float(consistency_drop)<1.0:
+            raise ValueError('consistency_views>=0 and 0<=consistency_drop<1 required')
+        if float(dose_temperature)<=0:raise ValueError('dose_temperature must be positive')
+        self.consistency_views=int(consistency_views)
+        self.consistency_drop=float(consistency_drop)
+        self.consistency_seed=int(consistency_seed)
+        self.dose_margin=float(dose_margin)
+        self.dose_temperature=float(dose_temperature)
+        self.dose_soft_training=True
         self.stla=stla
         self.stla.requires_grad_(False)
         self.stla.eval()
@@ -23,7 +48,10 @@ class CoRSTAv2(nn.Module):
         self.input_adapter=nn.Linear(failure_dim,hidden)
         nn.init.normal_(self.input_adapter.weight,std=1e-3)
         nn.init.zeros_(self.input_adapter.bias)
-        self.cf=CFBranch(hidden,failure_dim,cf_dim,horizon,heads,latent_scale)
+        self.cf=CFBranch(hidden,failure_dim,cf_dim,horizon,heads,latent_scale,
+                         dose_levels=dose_levels,
+                         consistency_dim=(CONSISTENCY_DIM if self.consistency_views>0 else 0))
+        self.dose_enabled=bool(dose_levels)
         self.residual=ResidualBranch(hidden,failure_dim,cf_dim,residual_dim,horizon,heads,latent_scale)
         self.graph_cf=GraphEvidence(graph,dim=cf_dim)
         self.graph_residual=GraphEvidence(graph,dim=residual_dim)
@@ -68,6 +96,10 @@ class CoRSTAv2(nn.Module):
             # candidate and frozen normal anchor are immutable.
             self.cf.anchor_gain_head.requires_grad_(True)
             self.cf.anchor_acceptance_head.requires_grad_(True)
+            if self.dose_enabled:
+                # The dose policy is a deployment head: trained here, on top of
+                # the immutable CF candidate and Normal anchor.
+                self.cf.dose_policy.requires_grad_(True)
         return [p for p in self.parameters() if p.requires_grad]
 
     def _no_graph(self,token):
@@ -149,20 +181,14 @@ class CoRSTAv2(nn.Module):
                 'cf_teacher_gain':cf['teacher_gain'] if cf is not None else None,
                 'control':control,'h0':h0,'cf_latent_delta':(h1-h0)}
 
-    def forward_normal_anchored(self,observed,enable_cf=True,enable_controller=True,
-                                enable_graph=None):
-        """Missing-input inference: Normal residual first, then mask-conditioned CF.
+    def _normal_core(self,x,mask,tod,dow,enable_graph,enable_cf):
+        """Normal anchor + (optionally) the full-dose CF candidate for ONE view.
 
-        Normal prediction P_N is an inference-time baseline, not oracle P_full.
-        All train-only oracle losses are computed OUTSIDE this module.
+        Pure function of the masked inputs; identical arithmetic to the v0.2.2
+        forward so that disabling the v0.2.3 mechanisms changes nothing.
         """
-        required={'x','mask','tod','dow'}
-        if set(observed)!=required:
-            raise ValueError(f'Only observed inputs allowed: {set(observed)-required} extra; {required-set(observed)} missing')
-        x=observed['x'];mask=observed['mask']
-        h0,context,p0=base_features(self.stla,x,mask,observed['tod'],observed['dow'])
+        h0,context,p0=base_features(self.stla,x,mask,tod,dow)
         failure=self.failure(x,mask)
-        if enable_graph is None:enable_graph=self.use_graph
         B,P,N=p0.shape
         blank_tokens=p0.new_zeros((B,P,N,self.cf.pos.embedding_dim))
         temporal_n=self.residual.temporal_tokens(h0,p0,p0,blank_tokens,failure)
@@ -175,7 +201,8 @@ class CoRSTAv2(nn.Module):
         # It also cannot be altered indirectly through shared failure features.
         if self.stage in ('anchor_cf','anchor_control'):
             p_normal=p_normal.detach()
-        cf=None;pred_gain=None;accept_logit=None
+        core={'h0':h0,'context':context,'p0':p0,'failure':failure,
+              'normal':normal,'p_normal':p_normal,'cf':None}
         if enable_cf:
             temporal_cf=self.cf.temporal_tokens(h0,p0,failure)
             spatial_cf=(self.graph_cf(temporal_cf,failure['obs_reliability'])
@@ -184,11 +211,76 @@ class CoRSTAv2(nn.Module):
             raw_shift=(cf['delta_h']+0.1*self.input_adapter(failure['tokens']))
             applied_shift=cf['latent_gate']*raw_shift
             p_cf_raw=decode(self.stla,h0+applied_shift,context)
-            delta_cf=p_cf_raw-p0
+            core.update(cf=cf,applied_shift=applied_shift,p_cf_raw=p_cf_raw,
+                        delta_cf=p_cf_raw-p0)
+        return core
+
+    def _view_consistency(self,x,mask,tod,dow,core,enable_graph):
+        """Mechanism A: label-free reliability from K further-degraded views.
+
+        Each view drops `consistency_drop` of the CURRENTLY OBSERVED entries.
+        Views are computed without gradient; the features are detached.  At
+        evaluation the drop pattern comes from a fixed seed, so results are
+        deterministic; in training the global RNG is used.
+        """
+        K=self.consistency_views
+        with torch.no_grad():
+            shape=(K,)+tuple(mask.shape)
+            if self.training:
+                u=torch.rand(shape,device=mask.device)
+            else:
+                gen=torch.Generator(device=mask.device)
+                gen.manual_seed(self.consistency_seed)
+                u=torch.rand(shape,device=mask.device,generator=gen)
+            keep=(u>=self.consistency_drop).to(mask.dtype)
+            xk=(x[None]*keep).reshape((K*x.shape[0],)+tuple(x.shape[1:]))
+            mk=(mask[None]*keep).reshape((K*mask.shape[0],)+tuple(mask.shape[1:]))
+            rep=lambda t:t.repeat((K,)+(1,)*(t.dim()-1))
+            view=self._normal_core(xk,mk,rep(tod),rep(dow),enable_graph,True)
+            B=x.shape[0]
+            basek=view['p_normal'].float().reshape((K,B)+tuple(view['p_normal'].shape[1:]))
+            deltak=view['delta_cf'].float().reshape((K,B)+tuple(view['delta_cf'].shape[1:]))
+            return consistency_features(core['p_normal'],core['delta_cf'],basek,deltak)
+
+    def forward_normal_anchored(self,observed,enable_cf=True,enable_controller=True,
+                                enable_graph=None):
+        """Missing-input inference: Normal residual first, then mask-conditioned CF.
+
+        Normal prediction P_N is an inference-time baseline, not oracle P_full.
+        All train-only oracle losses are computed OUTSIDE this module.
+        """
+        required={'x','mask','tod','dow'}
+        if set(observed)!=required:
+            raise ValueError(f'Only observed inputs allowed: {set(observed)-required} extra; {required-set(observed)} missing')
+        x=observed['x'];mask=observed['mask'];tod=observed['tod'];dow=observed['dow']
+        if enable_graph is None:enable_graph=self.use_graph
+        core=self._normal_core(x,mask,tod,dow,enable_graph,enable_cf)
+        h0=core['h0'];p0=core['p0'];p_normal=core['p_normal'];normal=core['normal']
+        cf=core['cf'];consistency=None;dose=None
+        pred_gain=None;accept_logit=None
+        if enable_cf:
+            applied_shift=core['applied_shift'];p_cf_raw=core['p_cf_raw']
+            delta_cf=core['delta_cf']
             p_candidate=p_normal+delta_cf
             pred_gain,accept_logit,accept_gate=self.cf.anchor_action(cf,p_normal,p_candidate)
             if not enable_controller:accept_gate=torch.ones_like(p_candidate)
             pred=p_normal+accept_gate*delta_cf
+            if self.dose_enabled:
+                if self.consistency_views>0:
+                    consistency=self._view_consistency(x,mask,tod,dow,core,enable_graph)
+                gamma=self.cf.dose_gamma(cf['tokens'])
+                psi=dose_psi(self.cf.dose_grid,gamma)
+                gains=self.cf.dose_gain(cf['tokens'],delta_cf,p_normal,psi,consistency)
+                if enable_controller:
+                    soft=self.training and self.stage=='anchor_control' and self.dose_soft_training
+                    psi_sel,level_sel=select_dose(
+                        gains.float(),psi.float(),self.cf.dose_grid,self.dose_margin,
+                        temperature=(self.dose_temperature if soft else None))
+                    accept_gate=psi_sel.to(p_candidate.dtype)
+                    pred=p_normal+accept_gate*delta_cf
+                else:
+                    level_sel=None
+                dose={'gamma':gamma,'psi':psi,'gain':gains,'selected_level':level_sel}
         else:
             applied_shift=torch.zeros_like(h0)
             p_cf_raw=p0
@@ -208,4 +300,9 @@ class CoRSTAv2(nn.Module):
             'cf_accept_gate':accept_gate,'gate_cf':accept_gate,
             'gate_residual':torch.ones_like(p0),
             'delta_residual':p_normal-p0,
+            'dose_gamma':dose['gamma'] if dose else None,
+            'dose_psi':dose['psi'] if dose else None,
+            'dose_gain_pred':dose['gain'] if dose else None,
+            'dose_selected_level':dose['selected_level'] if dose else None,
+            'consistency':consistency,
         }

@@ -38,6 +38,13 @@ def evaluate(model,datasets,device,mean,std,batch_size=32,indices=None,workers=0
               ('backbone','cf','cf_residual','final'))
         acc={k:[0.,0.,0.] for k in keys}
         cfdiag={'n':0.,'harm':0.,'raw_harm':0.,'gain':0.,'gate':0.,'pred_gain':0.}
+        dose_levels=tuple(model.cf.dose_levels) if getattr(model,'dose_enabled',False) else ()
+        dosediag={'n':0.,'sum':0.,'reject':0.,'levels':{v:0. for v in dose_levels}}
+        # Consistency-contraction bins: how harmful is the FULL-dose candidate
+        # as a function of the label-free view-consistency feature (mechanism A).
+        cons_edges=(-1e9,0.0,0.25,0.5,1e9)
+        consbins=[{'n':0.,'harm':0.,'gain':0.} for _ in range(len(cons_edges)-1)]
+        seen_dose=False;seen_cons=False
         for raw in dl:
             b=to_device(raw,device)
             with torch.autocast(device_type=device.type,dtype=torch.float16,
@@ -69,6 +76,22 @@ def evaluate(model,datasets,device,mean,std,batch_size=32,indices=None,workers=0
             cfdiag['gate']+=float((out['cf_accept_gate'].float()*valid).sum())
             if out['cf_teacher_gain'] is not None:
                 cfdiag['pred_gain']+=float((out['cf_teacher_gain'].float()*valid).sum())
+            level=out.get('dose_selected_level')
+            if level is not None:
+                seen_dose=True;level=level.float()
+                dosediag['n']+=float(valid.sum())
+                dosediag['sum']+=float((level*valid).sum())
+                dosediag['reject']+=float(((level==0).float()*valid).sum())
+                for dv in dose_levels:
+                    dosediag['levels'][dv]+=float((((level-dv).abs()<1e-6).float()*valid).sum())
+            consistency=out.get('consistency')
+            if consistency is not None:
+                seen_cons=True;contraction=consistency[...,2].float()
+                for bi in range(len(consbins)):
+                    sel=((contraction>=cons_edges[bi])&(contraction<cons_edges[bi+1])).float()*valid
+                    consbins[bi]['n']+=float(sel.sum())
+                    consbins[bi]['harm']+=float(((candidate<0).float()*sel).sum())
+                    consbins[bi]['gain']+=float((candidate*sel).sum())
             for k,vals in result.items():
                 for j,v in enumerate(vals):acc[k][j]+=float(v)
         totals[str(sev)]={k:{'mae':a/max(c,1),'rmse':(q/max(c,1))**.5,'n_elements':int(c)}
@@ -82,5 +105,18 @@ def evaluate(model,datasets,device,mean,std,batch_size=32,indices=None,workers=0
             'predicted_reference_gain_norm_mean':cfdiag['pred_gain']/cd,
             'n_elements':int(cfdiag['n']),
             'anchor_kind':('normal' if model.prediction_mode=='normal_anchored' else 'backbone')}
+        if seen_dose:
+            dn=max(dosediag['n'],1.)
+            totals[str(sev)]['cf_diagnostics']['dose']={
+                'mean_applied_level':dosediag['sum']/dn,
+                'reject_fraction':dosediag['reject']/dn,
+                'level_fraction':{str(v):c/dn for v,c in dosediag['levels'].items()}}
+        if seen_cons:
+            totals[str(sev)]['cf_diagnostics']['consistency_bins']=[
+                {'contraction_range':[max(cons_edges[i],-1e3),min(cons_edges[i+1],1e3)],
+                 'fraction':b['n']/cd,
+                 'candidate_harm_fraction':b['harm']/max(b['n'],1.),
+                 'candidate_gain_norm_mean':b['gain']/max(b['n'],1.)}
+                for i,b in enumerate(consbins)]
     macro={name:sum(totals[sev][name]['mae'] for sev in totals)/len(totals) for name in keys}
     return {'per_severity':totals,'macro_mae':macro,'selection_metric':macro['final']}
