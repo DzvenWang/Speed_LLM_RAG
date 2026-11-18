@@ -1,0 +1,4 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+We framed forecasting under sensor failures as estimating and removing the restoration shift, the systematic displacement that missing inputs cause in a forecaster's output. ReShift estimates this shift from three complementary sources, namely the anchored future evolution of retrieved complete historical windows, the replayed failure shift of the same windows under the query's own mask, and a parametric counterfactual estimate distilled from complete training histories, and allocates them per sensor and horizon according to label-free observability. The framework uses only training data as evidence and never the query's future or complete history. \todo{Summarise the empirical findings and future work (other networks, online memory updates, physical topology, non-recurrent events).}

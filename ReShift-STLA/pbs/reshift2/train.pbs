@@ -1,0 +1,61 @@
+#!/bin/bash
+#PBS -P mh20
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=64GB
+#PBS -l walltime=48:00:00
+#PBS -l storage=scratch/mh20+gdata/mh20
+#PBS -j oe
+# ReShift-STLA v0.2 runs (train -> evaluate s20/s40/s60/s90 -> audit for formal `full`).
+# Required: TARGET, BACKBONE_CHECKPOINT.
+# Optional: ABLATION (default full) or ABLATIONS="full base_only ..." (run sequentially in THIS job,
+#           so one queue wait covers several runs), SEED, DATASET, BATCH_SIZE,
+#           RESHIFT2_CONFIG (e.g. configs/reshift2/reshift2_fast.yaml), RESUME_CHECKPOINT,
+#           PROFILE_STEPS (time N steps and exit), PREPARE=1 (build the shared caches first in this job).
+# Queues: default gpuvolta (V100).  For the A100 queue override at submission, e.g.
+#   qsub -q dgxa100 -l ncpus=16,ngpus=1,mem=64GB ...
+set -euo pipefail
+ROOT="${SPEED_LLM_RAG_ROOT:-${PBS_O_WORKDIR:-}}"
+[[ -d "$ROOT/ReShift-STLA" ]] || { echo 'Missing ReShift-STLA under SPEED_LLM_RAG_ROOT'; exit 2; }
+cd "$ROOT"
+source ReShift-STLA/pbs/reshift/runtime.sh
+: "${TARGET:?TARGET required}"
+: "${BACKBONE_CHECKPOINT:?BACKBONE_CHECKPOINT required}"
+export TRAFFIDENT_TARGET="$TARGET" BACKBONE_MODE="${BACKBONE_MODE:-incomplete}"
+DATASET="${DATASET:-TraffiDent_Net_06}"; SEED="${SEED:-10}"
+read -r -a RUNS <<< "${ABLATIONS:-${ABLATION:-full}}"
+LOGDIR="$ROOT/ReShift_v2_logs/$TARGET/$BACKBONE_MODE"; mkdir -p "$LOGDIR"
+TS="$PYTHON -u ReShift-STLA/scripts/timestamp_filter.py"
+nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | sed 's/^/RESHIFT2_GPU /' || true
+
+run_logged() {  # run_logged <log> <cmd...>; fail the job on the first non-zero exit
+  local log="$1"; shift
+  set +e; "$@" 2>&1 | $TS | tee -a "$log"; local st=("${PIPESTATUS[@]}"); set -e
+  for code in "${st[@]}"; do
+    if [[ "$code" -ne 0 ]]; then
+      printf '[%s] RESHIFT2_PBS_FAILED code=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$code" | tee -a "$log"; exit "$code"
+    fi
+  done
+}
+
+if [[ "${PREPARE:-0}" == 1 ]]; then
+  PLOG="$LOGDIR/ReShift2.prepare.${TARGET}.${DATASET}.${PBS_JOBID:-local}.live.log"
+  run_logged "$PLOG" "$PYTHON" -u ReShift-STLA/scripts/reshift2/prepare.py --target "$TARGET" --dataset "$DATASET" \
+    --backbone-checkpoint "$BACKBONE_CHECKPOINT"
+fi
+
+for ABLATION in "${RUNS[@]}"; do
+  LOG="$LOGDIR/ReShift2.${ABLATION}.${TARGET}.${DATASET}.seed${SEED}.${PBS_JOBID:-local}.live.log"
+  args=(--target "$TARGET" --dataset "$DATASET" --seed "$SEED" --ablation "$ABLATION"
+        --backbone-checkpoint "$BACKBONE_CHECKPOINT")
+  [[ -z "${RESHIFT2_CONFIG:-}" ]] || args+=(--config "$RESHIFT2_CONFIG")
+  [[ -z "${BATCH_SIZE:-}" ]] || args+=(--batch-size "$BATCH_SIZE")
+  [[ -z "${RESUME_CHECKPOINT:-}" ]] || args+=(--resume "$RESUME_CHECKPOINT")
+  [[ -z "${PROFILE_STEPS:-}" ]] || args+=(--profile-steps "$PROFILE_STEPS")
+  run_logged "$LOG" "$PYTHON" -u ReShift-STLA/scripts/reshift2/preflight.py --target "$TARGET" --dataset "$DATASET" \
+    --backbone-checkpoint "$BACKBONE_CHECKPOINT"
+  run_logged "$LOG" "$PYTHON" -u ReShift-STLA/scripts/reshift2/train.py "${args[@]}"
+  printf '[%s] RESHIFT2_RUN_PASS ablation=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ABLATION" | tee -a "$LOG"
+done
+printf '[%s] RESHIFT2_PBS_PASS runs=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${RUNS[*]}"

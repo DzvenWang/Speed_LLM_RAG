@@ -1,0 +1,27 @@
+\section{Experimental design}
+\label{sec:experiments}
+
+\subsection{Data and failure protocol}
+\label{sec:data}
+We use network 06 of the TraffiDent benchmark \citep{traffident}, which contains $N=388$ detectors sampled at 5-minute resolution. \todo{Describe the region, period and raw data source of TraffiDent Net 06; add the other networks if they are included.} We forecast speed and flow separately, with history and horizon $L=P=12$ steps (one hour each). Windows are split chronologically into training, validation and test sets \todo{state the split boundaries}. The training split contains 50{,}000 windows and the validation split 5{,}000 windows; each test severity contains 5{,}000 windows.
+
+Missingness is imposed by a fixed benchmark protocol with five failure families: \emph{random entries}, \emph{sensor outages} (all steps of a set of sensors), \emph{temporal outages} (all sensors over an interval), \emph{regional outages} (a spatially contiguous group of sensors) and \emph{directional outages} (sensors of one travel direction). Training and validation masks have severity 40\%. Test masks are generated at severities 20\%, 40\%, 60\% and 90\%, so that 60\% and 90\% are more severe than anything seen during training. All masks are fixed and shared by all methods.
+
+\subsection{Compared models}
+\begin{itemize}[leftmargin=*]
+\item \textbf{STLAformer}: the pretrained backbone applied to zero-filled incomplete histories without fine-tuning.
+\item \textbf{Missing-aware STLAformer}: the backbone of Section~\ref{sec:backbone} fine-tuned with the same schedule and the forecasting and preservation losses, but without any correction branch (ablation \texttt{base\_only}).
+\item \todo{Impute-then-forecast baselines, e.g.\ a graph imputer \citep{cini2022grin} or a low-rank tensor imputer \citep{chen2019bayesian} followed by STLAformer.}
+\item \todo{Direct missing-aware forecasters, e.g.\ \citet{cui2020missing}, \citet{tang2020joint}.}
+\item \textbf{ReShift} (ours).
+\end{itemize}
+
+\subsection{Ablations and interventions}
+\emph{Independently trained ablations} remove one component and retrain from the same initialisation and schedule: no evolution retrieval (\texttt{no\_evolution}), no failure replay (\texttt{no\_replay}), no counterfactual restoration (\texttt{no\_cf}), summation instead of allocation (\texttt{fusion\_sum}), allocation with evidence statistics (\texttt{fusion\_learned}), no contrastive alignment (\texttt{no\_alignment}) and no risk gates (\texttt{no\_risk}).
+\emph{In-checkpoint interventions} change a single input of the trained full model at test time: replacing retrieved windows by unrelated but legal training windows while keeping their scores (\texttt{wrong\_evidence}), zeroing one allocation gate (\texttt{drop\_evolution}, \texttt{drop\_replay}, \texttt{drop\_cf}), and returning the backbone forecast only (\texttt{base}). Interventions test whether the trained model actually relies on correct evidence; ablations test whether a component is needed when the rest of the model can adapt.
+
+\subsection{Metrics}
+We report MAE and RMSE in raw units over valid future entries, and MAPE over entries with $|y|>1$. Results are given per severity and as the macro average over the four severities. We additionally report errors on directly masked sensors, per failure family and at horizons 3, 6 and 12. \todo{Number of seeds; report mean $\pm$ standard deviation over seeds and a paired block-bootstrap test.}
+
+\subsection{Implementation}
+The model is implemented in PyTorch and trained on one NVIDIA V100 (32\,GB) with mixed precision. We use AdamW with learning rates $8\times10^{-4}$ for new modules and $5\times10^{-5}$ for the backbone, weight decay $10^{-4}$, batch size 64 and gradient clipping at 5. The warm-up phase lasts 8 epochs, partial fine-tuning lasts until epoch 30, and training stops after at most 60 epochs or 15 epochs without validation improvement in the final phase. The checkpoint with the lowest validation MAE is evaluated once on the test sets. Retrieval uses $k=6$ candidates per key, replay uses $R=4$ candidates, the memory encoder momentum is 0.995 and the memory index is refreshed every 5 epochs. \todo{Hyper-parameter sensitivity for $k$, $R$ and the allocation inputs.}

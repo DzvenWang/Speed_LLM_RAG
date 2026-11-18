@@ -1,0 +1,11 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{Why three evidence sources}
+Equation~\eqref{eq:decomp} separates the error of an incomplete forecast into a failure-induced term and a complete-history term. Evolution retrieval mainly targets the second term (how similar situations actually evolved) and also part of the first through its anchoring at the last observation. Failure replay and counterfactual restoration target the first term directly: one empirically, from analogues under the same mask, the other parametrically, from the query itself. The allocation gates make the trade-off between them explicit and inspectable. \todo{Relate to the allocation analysis once results are available.}
+
+\paragraph{Teacher versus deployed backbone}
+The restoration shift is defined with respect to the frozen pretrained model, whereas the deployed backbone is fine-tuned to be missing-aware and therefore already compensates part of the shift. The risk and allocation gates are trained on the final forecasting loss and can down-weight the shift-based corrections accordingly. An alternative is to define the shift with the current backbone itself, at the cost of a moving target. \todo{Report whether this matters empirically.}
+
+\paragraph{Limitations}
+(i) Training masks come from a single severity (40\%); 60\% and 90\% are extrapolations, and allocation gates conditioned on coverage may not extrapolate monotonically. (ii) The statistical graph is derived from correlations of training data and is not a physical road topology. (iii) Retrieval assumes that the training period contains analogues of test situations; non-recurrent events and long-term demand shifts are outside this assumption. (iv) Replay adds $R$ teacher passes per query, which increases training and inference cost. (v) \todo{Single network / number of seeds, once final.}

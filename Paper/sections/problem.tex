@@ -1,0 +1,29 @@
+\section{Problem formulation}
+\label{sec:problem}
+
+\paragraph{Data and observation masks}
+Consider a detector network with $N$ sensors sampled every 5 minutes. A forecasting window consists of a history $\X\in\R^{L\times N}$ of $L$ steps and a future $\Y\in\R^{P\times N}$ of $P$ steps of the target variable (speed or flow), together with time-of-day and day-of-week indices. At deployment only a subset of the history is observed. We write the observation mask as $\M\in\{0,1\}^{L\times N}$, the observed history as $\X\odot\M$, and the forecasting task as
+\begin{equation}
+\widehat{\Y}=F\big(\X\odot\M,\ \M\big)\approx\Y .
+\label{eq:task}
+\end{equation}
+Masks follow structured failure families (Section~\ref{sec:data}): random entries, whole-sensor outages, temporal outages, regional outages and directional outages. The \emph{severity} of a mask is the fraction of history entries it removes.
+
+\paragraph{Training memory}
+The training split provides, for every window, the complete history $\X$, the future $\Y$ and one benchmark mask $\M$. We denote by $\Mem=\{(\X_j,\Y_j,\tau_j)\}_{j=1}^{|\Mem|}$ the set of complete training windows with start times $\tau_j$. $\Mem$ is the only source of retrieved evidence at training, validation and test time. A memory item is \emph{legal} for a query starting at $\tau$ if the two windows do not overlap, $|\tau_j-\tau|\geq L+P$.
+
+\paragraph{Restoration shift}
+Let $\Teach$ be a forecaster that accepts an incomplete history and its mask. The restoration shift of a window $\X$ under mask $\M$ is
+\begin{equation}
+\Shift_{\Teach}(\X,\M)=\Teach(\X,\mathbf{1})-\Teach(\X\odot\M,\M),
+\label{eq:shift}
+\end{equation}
+i.e.\ the change of the forecast that restoring the missing entries would cause. It decomposes the error of the incomplete forecast as
+\begin{equation}
+\Y-\Teach(\X\odot\M,\M)=\underbrace{\Shift_{\Teach}(\X,\M)}_{\text{failure-induced}}+\underbrace{\big(\Y-\Teach(\X,\mathbf{1})\big)}_{\text{complete-history error}} .
+\label{eq:decomp}
+\end{equation}
+The first term is caused by the failure and vanishes when nothing is missing; the second term is the error the forecaster would make anyway. In ReShift, $\Teach$ is a frozen copy of the pretrained backbone. Equation~\eqref{eq:shift} can be evaluated whenever a complete history is known, which is the case for every item in $\Mem$ and for every training query, but never for a validation or test query.
+
+\paragraph{Causality constraints}
+At inference, the model may use only $\X\odot\M$, $\M$, calendar indices, the query start time (to enforce legality) and $\Mem$. It may not use the query future, the complete query history or any validation or test window as evidence. Labels are used only in training losses and for evaluation.

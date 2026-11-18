@@ -1,0 +1,90 @@
+%% ReShift-STLA manuscript draft (Transportation Research Part C).
+%% Built on the Elsevier elsarticle template (v3.4) supplied in this folder.
+\documentclass[preprint,12pt,authoryear]{elsarticle}
+
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc,backgrounds}
+\usepackage[hidelinks]{hyperref}
+\usepackage{lineno}
+
+%% ---- drafting helpers (remove before submission) ----
+\newcommand{\tbd}{\textcolor{red}{--}}
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+%% ---- notation ----
+\newcommand{\X}{\mathbf{X}}
+\newcommand{\Y}{\mathbf{Y}}
+\newcommand{\M}{\mathbf{M}}
+\newcommand{\B}{\mathbf{B}}
+\newcommand{\Shift}{\mathbf{S}}
+\newcommand{\Teach}{\mathcal{T}}
+\newcommand{\Mem}{\mathcal{D}}
+\newcommand{\R}{\mathbb{R}}
+
+\journal{Transportation Research Part C: Emerging Technologies}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{ReShift: Restoring the forecast shift of sensor failures by coverage-allocated evolution retrieval, failure replay and counterfactual restoration}
+
+%% TODO: replace the placeholder author block.
+\author[aff1]{Author One\corref{cor1}}
+\ead{author.one@example.org}
+\author[aff1]{Author Two}
+\cortext[cor1]{Corresponding author.}
+\affiliation[aff1]{organization={Department, University},
+            city={City},
+            country={Country}}
+
+\begin{abstract}
+Network-wide traffic forecasters are trained on dense sensor histories but deployed on detector networks in which entries, whole sensors, time intervals, regions or travel directions routinely drop out. A forecaster that receives an incomplete history does not simply lose information; its output is displaced by a systematic, failure-specific bias that we call the \emph{restoration shift}, i.e.\ the difference between what the same model would predict from the complete history and what it predicts from the observed part. We propose ReShift, a correction framework that estimates and removes this shift, and instantiate it on a missing-aware spatio-temporal Transformer (STLAformer). ReShift combines three complementary evidence sources: (i) \emph{evolution retrieval}, which transfers the anchored future evolution of retrieved complete historical windows whose keys are aligned with incomplete queries by contrastive learning; (ii) \emph{failure replay}, which replays the query's own observation mask on similar complete historical windows through a frozen teacher and transfers their empirical restoration shifts; and (iii) \emph{counterfactual restoration}, a parametric estimate of the query's own restoration shift distilled from complete training histories. The three corrections are reranked per sensor and horizon against an explicit no-correction option, risk-gated, and combined by allocation gates that depend only on label-free observability descriptors such as local and neighbourhood coverage. All evidence comes from the training split and no query future or complete query history is used at inference. Experiments on the TraffiDent benchmark with five failure families and missing rates from 20\% to 90\% \todo{summarise headline results once the formal runs finish}.
+\end{abstract}
+
+\begin{highlights}
+\item Sensor failures shift forecasts systematically; we model and remove this restoration shift.
+\item Retrieved complete histories supply both future evolutions and replayed failure shifts.
+\item A distilled counterfactual head estimates the query's own shift without complete inputs.
+\item Coverage-conditioned gates allocate the three corrections per sensor and horizon.
+\item Leakage-safe protocol: Train-only memory, no query futures, temporal-overlap exclusion.
+\end{highlights}
+
+\begin{keyword}
+Traffic forecasting \sep Missing data \sep Sensor failure \sep Retrieval-augmented forecasting \sep Counterfactual restoration \sep Spatio-temporal Transformer
+\end{keyword}
+
+\end{frontmatter}
+
+\linenumbers
+
+\input{sections/introduction}
+\input{sections/related_work}
+\input{sections/problem}
+\input{sections/method}
+\input{sections/experiments}
+\input{sections/results}
+\input{sections/discussion}
+\input{sections/conclusion}
+
+\section*{CRediT authorship contribution statement}
+\todo{Fill in.}
+
+\section*{Declaration of competing interest}
+\todo{Fill in.}
+
+\section*{Data availability}
+\todo{State availability of the TraffiDent benchmark and of the code.}
+
+\bibliographystyle{elsarticle-harv}
+\bibliography{references}
+
+\end{document}

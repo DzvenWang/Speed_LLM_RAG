@@ -1,0 +1,93 @@
+\section{Results}
+\label{sec:results}
+
+\todo{All numbers in this section are placeholders (\tbd) to be filled from the formal runs. Do not interpret any table before then.}
+
+\subsection{Overall accuracy}
+Table~\ref{tab:main} reports MAE and RMSE per severity. \todo{Describe the main result: macro-average improvement over the pretrained and the missing-aware backbone, and how the improvement changes with severity.}
+
+\begin{table}[t]
+\centering
+\caption{Test MAE / RMSE on TraffiDent Net 06 by missing severity. Best in bold.}
+\label{tab:main}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llccccc}
+\toprule
+Target & Model & 20\% & 40\% & 60\% & 90\% & Macro \\
+\midrule
+Speed & STLAformer & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd \\
+ & Missing-aware STLAformer & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd \\
+ & \todo{baselines} & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd \\
+ & ReShift & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd \\
+\midrule
+Flow & STLAformer & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd \\
+ & Missing-aware STLAformer & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd \\
+ & \todo{baselines} & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd \\
+ & ReShift & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd & \tbd/\tbd \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Contribution of each component}
+Table~\ref{tab:ablation} reports the independently trained ablations. The design of Section~\ref{sec:method} leads to three testable expectations: (E1) removing evolution retrieval hurts mainly at low and moderate severity, where the observed neighbourhood still identifies good analogues; (E2) removing failure replay or counterfactual restoration hurts mainly at high severity, where the failure-induced term of Eq.~\eqref{eq:decomp} dominates; (E3) coverage-conditioned allocation is at least as accurate as summation and as evidence-conditioned allocation. \todo{Report whether E1--E3 hold.}
+
+\begin{table}[t]
+\centering
+\caption{Independently trained ablations: change of test MAE relative to the full model (\%, positive = worse).}
+\label{tab:ablation}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lcccccccccc}
+\toprule
+ & \multicolumn{5}{c}{Speed} & \multicolumn{5}{c}{Flow}\\
+\cmidrule(lr){2-6}\cmidrule(lr){7-11}
+Variant & 20 & 40 & 60 & 90 & Macro & 20 & 40 & 60 & 90 & Macro\\
+\midrule
+Missing-aware backbone only & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd\\
+w/o evolution retrieval & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd\\
+w/o failure replay & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd\\
+w/o counterfactual restoration & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd\\
+Summation ($g\equiv1$) & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd\\
+Evidence-conditioned allocation & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd\\
+w/o contrastive alignment & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd\\
+w/o risk gates & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Does the model use its evidence?}
+Table~\ref{tab:audit} applies the in-checkpoint interventions. If evolution retrieval and failure replay exploit the content of the retrieved windows, replacing them with unrelated legal windows should remove most of their benefit, and dropping a branch should cost accuracy mainly in the severity range where that branch is expected to help. \todo{Interpret.}
+
+\begin{table}[t]
+\centering
+\caption{In-checkpoint interventions on the trained full model: change of test MAE (\%, positive = worse).}
+\label{tab:audit}
+\small
+\begin{tabular}{llccccc}
+\toprule
+Target & Intervention & 20\% & 40\% & 60\% & 90\% & Macro\\
+\midrule
+Speed & wrong evidence & \tbd & \tbd & \tbd & \tbd & \tbd\\
+ & drop evolution & \tbd & \tbd & \tbd & \tbd & \tbd\\
+ & drop replay & \tbd & \tbd & \tbd & \tbd & \tbd\\
+ & drop counterfactual & \tbd & \tbd & \tbd & \tbd & \tbd\\
+ & backbone only & \tbd & \tbd & \tbd & \tbd & \tbd\\
+\midrule
+Flow & wrong evidence & \tbd & \tbd & \tbd & \tbd & \tbd\\
+ & drop evolution & \tbd & \tbd & \tbd & \tbd & \tbd\\
+ & drop replay & \tbd & \tbd & \tbd & \tbd & \tbd\\
+ & drop counterfactual & \tbd & \tbd & \tbd & \tbd & \tbd\\
+ & backbone only & \tbd & \tbd & \tbd & \tbd & \tbd\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{How the allocation depends on coverage}
+For every test element we record the three gate values, the magnitude of each applied correction and its marginal effect on the absolute error, binned by the node's coverage (unobserved, low, high, complete). \todo{Figure: gate value and marginal gain of each branch versus node coverage, per severity and target.}
+
+\subsection{Failure families, horizons and directly masked sensors}
+\todo{Table or figure with MAE per failure family (random, sensor, temporal, regional, directional), at horizons 3/6/12 and on directly masked sensors.}
+
+\subsection{Computational cost}
+\todo{Training time per epoch, inference latency per query and peak GPU memory for the backbone and for ReShift.}

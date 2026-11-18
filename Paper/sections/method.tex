@@ -1,0 +1,133 @@
+\section{Methodology}
+\label{sec:method}
+
+\subsection{Overview}
+ReShift (Fig.~\ref{fig:overview}) predicts
+\begin{equation}
+\widehat{\Y}=\B+g_E\odot\mathbf{C}_E+g_R\odot\mathbf{C}_R+g_S\odot\mathbf{C}_S ,
+\label{eq:reshift}
+\end{equation}
+where $\B$ is the forecast of a missing-aware backbone, $\mathbf{C}_E$, $\mathbf{C}_R$ and $\mathbf{C}_S$ are the evolution-retrieval, failure-replay and counterfactual-restoration corrections, and $g_E,g_R,g_S\in(0,1)^{P\times N}$ are allocation gates. All quantities are per sensor and per horizon. Each correction is bounded, $|\mathbf{C}|\le\Delta$ in normalised units ($\Delta=3$), and each is designed so that the model can fall back to $\B$ when the evidence is unreliable.
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\small,
+  box/.style={draw, rounded corners=2pt, align=center, minimum height=9mm, inner sep=3pt, fill=white},
+  data/.style={box, fill=gray!10}, mod/.style={box, fill=blue!6}, corr/.style={box, fill=orange!10},
+  arr/.style={-{Stealth[length=2mm]}, thick}, lab/.style={font=\scriptsize, fill=white, inner sep=1pt}]
+\node[data] (q)   at (0,0)     {Incomplete query\\$\X\odot\M,\ \M$};
+\node[mod]  (bb)  at (3.6,0)   {Missing-aware\\STLAformer};
+\node[box]  (B)   at (6.2,0)   {$\B$};
+\node[corr] (cf)  at (9.6,1.5) {Counterfactual\\restoration $\mathbf{C}_S$};
+\node[mod]  (enc) at (3.6,-1.7){Query encoder\\(keys, node queries)};
+\node[mod]  (ret) at (6.8,-1.7){Legal top-$k$\\retrieval};
+\node[corr] (evo) at (9.6,-1.7){Evolution\\retrieval $\mathbf{C}_E$};
+\node[data] (mem) at (0,-3.4)  {Train memory $\Mem$\\complete $(\X_j,\Y_j)$};
+\node[mod]  (tch) at (6.8,-5.0){Frozen teacher $\Teach$\\(cached replay shifts)};
+\node[corr] (rep) at (9.6,-3.4){Failure\\replay $\mathbf{C}_R$};
+\node[mod]  (al)  at (13.0,-1.7){Coverage-conditioned\\allocation $g(\bm\phi)$};
+\node[box]  (out) at (15.4,-1.7){$\widehat{\Y}$};
+\draw[arr] (q) -- (bb); \draw[arr] (bb) -- (B);
+\draw[arr] (q.south) |- (enc.west); \draw[arr] (enc) -- (ret); \draw[arr] (ret) -- (evo);
+\draw[arr] (mem.east) -| node[lab, pos=0.25]{learned keys} (ret.south);
+\draw[arr] (mem.south) |- node[lab, pos=0.75]{masked-similarity neighbours under $\M$} (tch.west);
+\draw[arr] (tch.east) -| node[lab, pos=0.7]{$\Shift_c$} (rep.south);
+\draw[arr] (bb.north) |- (cf.west);
+\draw[arr] (cf.east) -| ([xshift=6mm]al.north);
+\draw[arr] (B.east) -| ([xshift=-6mm]al.north);
+\draw[arr] (evo) -- (al); \draw[arr] (rep.east) -| (al.south);
+\draw[arr] (al) -- (out);
+\end{tikzpicture}}
+\caption{Overview of ReShift. The backbone forecast $\B$ is corrected by three bounded, risk-gated corrections that are combined by allocation gates depending only on observability descriptors. Replay shifts and counterfactual targets are computed once with the frozen teacher and cached; memory keys are produced by a momentum (EMA) copy of the query encoder.}
+\label{fig:overview}
+\end{figure}
+
+\subsection{Missing-aware backbone}
+\label{sec:backbone}
+The backbone is a pretrained STLAformer \citep{stlaformer} whose input embedding is augmented with an observation-pattern embedding $\mathrm{MLP}([m_{\ell n},\bar m_{\cdot n},\bar m_{\ell\cdot},a_{\ell n}])$ of the mask entry, the node's coverage over the history, the step's coverage over the network and the normalised time since the node was last observed. The last layer of this embedding is initialised at zero, so at initialisation the backbone reproduces the pretrained model exactly. The backbone is fine-tuned progressively: during a warm-up phase only the new modules are trained, then the last two spatio-temporal attention layers and the output projection are unfrozen, and finally the whole backbone. It produces the forecast $\B=f_\theta(\X\odot\M,\M)$ and a node representation $\mathbf{z}_n$ (the history average of the last hidden layer). A frozen copy of the \emph{unchanged} pretrained model serves as the teacher $\Teach$ in Eq.~\eqref{eq:shift}.
+
+\subsection{Query encoder and legal retrieval}
+\label{sec:retrieval}
+A light observation-state encoder describes each node by (a) an MLP over its history of values, mask, missing age and time of week, and (b) a summary of observed mean, standard deviation, last observed value, coverage and last missing age plus a learned node embedding. Spatial context is aggregated by multi-head attention over the $K=8$ neighbours of a Train-only statistical graph, obtained from positive, lag-aware correlations of complete training histories; neighbours without observations are masked out, so a fully unobserved node is still described by its observed neighbours. Coverage-weighted pooling over nodes yields two normalised global keys, a temporal key $\mathbf{k}^T$ and a spatial key $\mathbf{k}^S$, and the encoder also outputs a node query $\mathbf{q}_n$.
+
+The same architecture, updated as an exponential moving average of the query encoder \citep{he2020moco}, encodes every complete window in $\Mem$. For each query we retrieve the top-$k$ legal items by cosine similarity for each key ($k=6$), giving $C=2k$ candidates with global scores $s_c$. Memory keys are re-encoded every few epochs and before every validation pass.
+
+\subsection{Evolution retrieval}
+\label{sec:evolution}
+A candidate's future cannot be copied directly, because its level may differ from the query. Instead we transfer its \emph{evolution} relative to the last time the query was observed. For node $n$ let $\ell^\ast_n$ be the last observed history step and $a_n$ the anchor: the last observed value of the node; if the node is never observed, the mean last observed value of its observed graph neighbours; if none exists, the first backbone step. The candidate forecast is
+\begin{equation}
+\widehat{\Y}_c[p,n]=a_n+\Y_c[p,n]-\X_c[\ell^\ast_n,n] .
+\end{equation}
+For a node with no observation at all we instead transfer the candidate's innovation with respect to a Train-only hour-of-week mean, $\widehat{\Y}_c=\B+\Y_c-\bm\mu_{b(c)}$, which also allows a non-zero first-step correction. The candidate residual is $\mathbf{r}_c=\widehat{\Y}_c-\B$.
+
+Not every candidate is useful for every sensor and horizon. A scoring network maps element-wise features (backbone forecast, candidate forecast, residual, evolution increment, observed-history distance, global score, node-level similarity between $\mathbf{q}_n$ and the memory node query, local and neighbour coverage, node context and horizon embedding) to a logit $\lambda_c[p,n]$, to which $s_c$ is added. A separate network produces a \emph{no-correction} logit $\lambda_0[p,n]$ from the context alone. With weights $w=\mathrm{softmax}(\lambda_0,\lambda_1,\dots,\lambda_C)$ over the $C+1$ options, the aggregated evidence and its dispersion are
+\begin{equation}
+\mathbf{e}_E=\sum_{c=1}^C w_c\,\mathbf{r}_c,\qquad \bm\sigma_E=\Big(\sum_c w_c(\mathbf{r}_c-\mathbf{e}_E)^2\Big)^{1/2}.
+\end{equation}
+A risk gate $\rho_E=\mathrm{sigmoid}(\mathrm{MLP}([\text{context},\bm\sigma_E,1-w_0]))$ estimates the probability that applying the evidence improves the backbone, and
+\begin{equation}
+\mathbf{C}_E=\rho_E\odot\Delta\tanh(\mathbf{e}_E/\Delta).
+\end{equation}
+
+\subsection{Failure replay}
+\label{sec:replay}
+Evolution retrieval answers ``how did similar situations evolve?''. Failure replay answers a different question: ``how does \emph{this} failure pattern displace the forecast in similar situations?''. For each query we select $R=4$ legal training windows by cosine similarity computed only over the query's observed entries,
+\begin{equation}
+\kappa(\X\odot\M,\X_j)=\frac{\langle \X\odot\M,\ \X_j\odot\M\rangle}{\lVert\X\odot\M\rVert\,\lVert\X_j\odot\M\rVert},
+\end{equation}
+impose the query's mask on their complete histories, and compute their teacher restoration shifts
+\begin{equation}
+\Shift_c=\Teach(\X_c,\mathbf{1})-\Teach(\X_c\odot\M,\M) .
+\end{equation}
+Because $\Shift_c$ is measured under exactly the query's failure pattern, it carries information about the failure-induced error term of Eq.~\eqref{eq:decomp} that the candidate's future does not. The replay shortlist is deliberately label-free and independent of the learned retrieval keys. As a consequence, and because benchmark masks are fixed per window, the shifts of every training, validation and test query can be computed once with the frozen teacher and cached; training then requires no teacher pass at all. For training queries the shortlist additionally excludes windows within one day of the query, so that training neighbours are not systematically closer in time than test neighbours. The shifts are reranked against a no-correction option, aggregated and risk-gated as in Section~\ref{sec:evolution} (element features $\Shift_c$ and $|\Shift_c|$; candidate features the horizon-average of $|\Shift_c|$ and $\kappa$; the same context features), giving $\mathbf{C}_R$.
+
+\subsection{Counterfactual restoration}
+\label{sec:cf}
+The third correction estimates the query's own restoration shift parametrically. A head $h_\psi$ maps the backbone forecast, observability descriptors, the projected node representation $\mathbf{z}_n$, the projected node query $\mathbf{q}_n$ and a horizon embedding to
+\begin{equation}
+\mathbf{C}_S=\Delta\tanh\big(h_\psi(\cdot)/\Delta\big).
+\end{equation}
+For training queries the complete history is known, so the target $\Shift_\Teach(\X,\M)$ of Eq.~\eqref{eq:shift} can be computed; the head is trained with a Huber loss towards it. Its last layer is initialised at zero. At inference the head only sees the incomplete input.
+
+\subsection{Coverage-conditioned allocation}
+\label{sec:allocation}
+The three corrections are expected to be useful under different observability conditions. We therefore make the allocation gates depend only on label-free observability descriptors,
+\begin{equation}
+(g_E,g_R,g_S)=\mathrm{sigmoid}\big(\mathrm{MLP}(\bm\phi)\big),\qquad
+\bm\phi[p,n]=\big(\bar m_{\cdot n},\ \bar m_{\mathcal N(n)},\ a_{Ln},\ \bar m,\ \mathbf{h}_p\big),
+\end{equation}
+namely the node's coverage, the coverage of its graph neighbours, its time since the last observation, the overall coverage of the query and a horizon embedding. Restricting $\bm\phi$ to observability has two purposes: it keeps the allocation interpretable (the learned gates can be plotted against coverage) and it prevents the allocation from re-learning the reliability that the risk gates already estimate from the evidence. We compare this choice with two alternatives: summation ($g\equiv1$) and a learned allocation that additionally sees correction magnitudes, no-correction weights and dispersions. The output layer is initialised with biases $(1.5,1.5,0)$, i.e.\ the counterfactual correction starts at half weight and with zero output.
+
+\subsection{Training objective}
+\label{sec:loss}
+Let $\mathcal{L}_{\mathrm{MAE}}$ and $\mathcal{L}_{\mathrm{RMSE}}$ be the errors of $\widehat{\Y}$ in raw units on valid future entries. The objective is
+\begin{equation}
+\begin{aligned}
+\mathcal{L}={}&\mathcal{L}_{\mathrm{MAE}}+\lambda_1\mathcal{L}_{\mathrm{RMSE}}+\lambda_2\mathcal{L}_{\mathrm{MAE}}(\B)
++\lambda_3\!\!\sum_{b\in\{E,R\}}\!\!\mathcal{L}^{b}_{\mathrm{rank}}+\lambda_4\!\!\sum_{b\in\{E,R\}}\!\!\mathcal{L}^{b}_{\mathrm{risk}}\\
+&+\lambda_5\,\mathrm{Huber}\big(\mathbf{C}_S,\Shift_\Teach(\X,\M)\big)+\lambda_6\mathcal{L}_{\mathrm{align}} .
+\end{aligned}
+\end{equation}
+The \emph{backbone-preservation} term keeps $\B$ accurate on its own, so that corrections remain corrections. For the \emph{ranking} terms, the utility of candidate $c$ at an element is $u_c=|\B-\Y|-|\B+\mathbf{r}_c-\Y|$ (normalised units); candidates with $u_c>\epsilon$ are pushed above the no-correction logit and those with $u_c<-\epsilon$ below it with a softplus loss ($\epsilon=0.02$). The \emph{risk} terms are binary cross-entropies whose targets indicate whether the ungated correction improves the backbone by more than $\epsilon$. The \emph{alignment} term is an InfoNCE loss \citep{oord2018cpc} between the keys of each incomplete training query and the memory-encoder keys of its own complete window, with temporally overlapping windows excluded from the negatives. We use $(\lambda_1,\dots,\lambda_6)=(0.05,0.15,0.05,0.03,0.10,0.10)$.
+
+\begin{algorithm}[t]
+\caption{One ReShift training step}
+\label{alg:train}
+\begin{algorithmic}[1]
+\REQUIRE batch of incomplete training queries $(\X\odot\M,\M,\Y)$; memory $\Mem$; memory index; cached replay shifts and counterfactual targets
+\STATE $\B,\mathbf{z}\leftarrow f_\theta(\X\odot\M,\M)$;\quad keys, node queries $\leftarrow$ query encoder
+\STATE retrieve $C=2k$ legal candidates from $\Mem$ by temporal and spatial keys
+\STATE $\mathbf{C}_E\leftarrow$ anchored evolutions, reranked against no-correction, risk-gated
+\STATE look up the cached replay shifts $\Shift_c$ of the query's $R$ masked-similarity neighbours
+\STATE $\mathbf{C}_R\leftarrow$ replayed shifts, reranked against no-correction, risk-gated
+\STATE $\mathbf{C}_S\leftarrow h_\psi(\cdot)$;\quad cached target $\Shift_\Teach(\X,\M)$ from the query's complete Train history
+\STATE $g\leftarrow\mathrm{sigmoid}(\mathrm{MLP}(\bm\phi))$;\quad $\widehat{\Y}\leftarrow\B+\sum_b g_b\odot\mathbf{C}_b$
+\STATE update all trainable parameters with $\nabla\mathcal{L}$; update the memory encoder by EMA
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Leakage safeguards and cost}
+\label{sec:leakage}
+The forward pass receives only the observed history, the mask, calendar indices and the query start time, which is used solely to exclude overlapping memory items. Every future used as evidence belongs to the training split, and the counterfactual target is constructed outside the model and only for training queries. A unit test perturbs all labels of a batch and verifies that predictions are unchanged. Per query, inference costs one backbone pass, two similarity searches over $|\Mem|$ normalised keys, encoding and scoring of $C$ candidates, and, for replay, one masked similarity search and $R$ teacher passes; the replay part is computed once per window and cached, so it is paid once and shared by all training runs. The candidate scorers are factorised: since their first layer is linear, element-, candidate- and context-level features are projected separately and only summed on the $[C,P,N]$ grid, which avoids materialising the concatenated feature tensor. \todo{Report measured training time per epoch, inference latency and GPU memory.}

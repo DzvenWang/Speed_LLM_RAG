@@ -144,6 +144,15 @@ CoRSTA_v022_diagnostics/
 CoRSTA_v022_exps/
 CoRSTA_v022_Hotfix1_exps/
 CoRSTA_v022_logs/
+CoRSTA_v023_exps/
+CoRSTA_v023_logs/
+
+ReShift_exps/
+ReShift_logs/
+
+ReShift_v2_exps/
+ReShift_v2_logs/
+ReShift_v2_store/
 
 model_cache/
 

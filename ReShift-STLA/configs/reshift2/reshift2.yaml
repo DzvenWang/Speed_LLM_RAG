@@ -1,0 +1,91 @@
+version: 0.2.0
+method: ReShift-STLA  # coverage-allocated evolution retrieval + failure replay + counterfactual restoration
+project:
+  root: ${SPEED_LLM_RAG_ROOT}
+  backbone_root: ${SPEED_LLM_RAG_ROOT}/Backbone
+  supportbench_root: ${SPEED_LLM_RAG_ROOT}/Base_SupportBench
+  exp_root: ${SPEED_LLM_RAG_ROOT}/ReShift_v2_exps/${TRAFFIDENT_TARGET}
+  log_root: ${SPEED_LLM_RAG_ROOT}/ReShift_v2_logs/${TRAFFIDENT_TARGET}
+  store_root: ${SPEED_LLM_RAG_ROOT}/ReShift_v2_store/${TRAFFIDENT_TARGET}
+experiment:
+  dataset: TraffiDent_Net_06
+  target: ${TRAFFIDENT_TARGET}
+  seed: 10
+  history: 12
+  horizon: 12
+  severities: [20, 40, 60, 90]
+backbone:
+  model: STLAformer
+  reference_seed: 10
+encoder:              # query / memory observation-state encoder
+  temporal_dim: 64
+  spatial_dim: 64
+  query_dim: 128
+  retrieval_dim: 128
+  spatial_heads: 4
+  dropout: 0.10
+retrieval:            # evolution retrieval over complete Train windows (global keys only)
+  top_k: 6            # per key (temporal, spatial) -> 12 candidates
+  temperature: 0.10
+  graph_neighbors: 8
+  graph_sampled_rows: 1200
+  graph_lag_steps: [0, 1, 2, 3]
+  store_refresh_epochs: 5
+  store_batch_size: 256
+replay:               # failure replay of the query mask on R Train windows (frozen teacher)
+  top_r: 4            # shifts are precomputed once per split and shared by all runs (banks/)
+  train_embargo_steps: 288   # Train queries: replay windows must be >= 1 day + span away
+counterfactual:       # parametric restoration shift distilled from the frozen teacher
+  target: frozen_teacher
+  hidden: 64
+fusion:               # allocation gates g(phi) over [evolution, replay, counterfactual]
+  mode: coverage      # coverage: phi = observability only | sum: g = 1 | learned: phi + branch statistics
+  hidden: 32
+  init_bias: [1.5, 1.5, 0.0]
+model:
+  branches: {evolution: true, replay: true, cf: true}
+  use_risk_gate: true
+  fusion_hidden: 96
+  node_hidden: 16
+  dropout: 0.10
+  none_bias: 0.8
+  max_normalized_correction: 3.0
+  scorer_hidden: 48   # hidden width of the factorised candidate scorers
+training:
+  ablation: full
+  train_limit: null   # int -> fixed random subset of Train queries (memory stays complete)
+  val_limit: null
+  val_every: 1
+  batch_size: 64
+  max_epochs: 60
+  schedule: progressive   # warmup (STLA frozen) -> partial (last layers) -> full
+  warmup_epochs: 8
+  partial_epochs: 30
+  partial_last_layers: 2
+  patience: 15
+  lr_new: 0.0008
+  lr_backbone: 0.00005
+  weight_decay: 0.0001
+  grad_clip: 5.0
+  rmse_weight: 0.05
+  base_preserve_weight: 0.15
+  rank_weight: 0.05
+  risk_weight: 0.03
+  utility_margin: 0.02
+  score_margin: 0.0
+  cf_weight: 0.10
+  cf_huber_beta: 0.1
+  alignment_weight: 0.10
+  alignment_temperature: 0.10
+  memory_momentum: 0.995
+  min_delta: 0.00000001
+runtime:
+  num_workers: 4
+  pin_memory: true
+  prefetch_factor: 2
+  preload_repository_gpu: true
+  amp: true
+  gpu_dataset: true   # keep Train/Val splits on the GPU (no DataLoader workers)
+  deterministic: true # false -> cudnn.benchmark for speed
+  eval_batch_size: 128
+  print_every: 100
